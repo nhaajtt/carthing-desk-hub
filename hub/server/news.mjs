@@ -5,16 +5,10 @@ import crypto from 'node:crypto';
 const GN = 'https://news.google.com/rss';
 const US = 'hl=en-US&gl=US&ceid=US:en';
 const VN = 'hl=vi&gl=VN&ceid=VN:vi';
-const search = (q) => `${GN}/search?q=${encodeURIComponent(q + ' when:1d')}&${US}`;
 export const NEWS_FEEDS = [
   { key: 'top', name: 'Top stories', url: `${GN}?${US}` },
   { key: 'vn', name: 'Việt Nam', url: `${GN}?${VN}` },
-  { key: 'world', name: 'World', url: `${GN}/headlines/section/topic/WORLD?${US}` },
-  { key: 'business', name: 'Business', url: `${GN}/headlines/section/topic/BUSINESS?${US}` },
-  { key: 'finance', name: 'Finance', url: search('stock market OR Federal Reserve OR earnings OR bonds') },
   { key: 'vnbiz', name: 'Kinh doanh VN', url: `${GN}/headlines/section/topic/BUSINESS?${VN}` },
-  { key: 'research', name: 'Research', url: search('researchers OR "new study" OR breakthrough') },
-  { key: 'science', name: 'Science', url: `${GN}/headlines/section/topic/SCIENCE?${US}` },
   { key: 'tech', name: 'Tech', url: `${GN}/headlines/section/topic/TECHNOLOGY?${US}` },
   { key: 'hn', name: 'Hacker News', hn: true },
 ];
@@ -87,6 +81,8 @@ async function articleText(url) {
 }
 
 const cache = new Map();
+// a summary already made for the screen, so Mei can talk about the story that is open
+export const cachedSummary = (id) => cache.get(id) || null;
 
 export async function summarize(item, { key, model }) {
   if (cache.has(item.id)) return cache.get(item.id);

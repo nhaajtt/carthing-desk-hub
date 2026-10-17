@@ -460,3 +460,54 @@ h3::before { display: none; }
 .nd-hint { font-size: 12px; color: var(--dim); }
 .portrait .nd-title { font-size: 21px; }
 .portrait .nd-sum { font-size: 16px; }
+
+/* ---------- Calendar: today's date and the next event on the left, the agenda on the right */
+.calendar { gap: 16px; padding: 14px 16px; }
+.cal-side { width: 290px; flex: none; display: flex; flex-direction: column; gap: 14px; }
+.cal-date { display: flex; align-items: center; gap: 14px; }
+.cal-date b { font-family: var(--display); font-weight: 800; font-size: 78px; line-height: 0.9; letter-spacing: -2px; color: var(--gold); }
+.cal-date span { font-family: var(--display); font-weight: 800; font-size: 24px; line-height: 1.1; }
+.cal-date small { display: block; font-family: Inter, sans-serif; font-weight: 500; font-size: 14px; color: var(--muted); margin-top: 3px; }
+.cal-views { display: flex; gap: 6px; margin-top: 12px; }
+.cal-next { flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 16px 18px; border-radius: 22px 22px 22px 6px; background: var(--panel); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07); min-height: 0; }
+.cal-next.live { background: linear-gradient(160deg, rgba(62, 230, 168, 0.22), rgba(44, 36, 96, 0.55)); box-shadow: inset 0 0 0 2px rgba(62, 230, 168, 0.55); }
+.cn-k { font-size: 12.5px; color: var(--gold); font-weight: 600; }
+.cal-next.live .cn-k { color: var(--up); }
+.cal-next b { font-family: var(--display); font-weight: 800; font-size: 25px; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.cn-t { font-size: 15px; color: var(--text); }
+.cn-l { font-size: 13px; color: var(--muted); }
+.cal-list { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; overflow: hidden; mask-image: linear-gradient(180deg, #000 90%, transparent); -webkit-mask-image: linear-gradient(180deg, #000 90%, transparent); }
+.cal-day { font-family: var(--display); font-weight: 600; font-size: 13.5px; color: var(--gold); margin-top: 4px; }
+.cal-day small { font-family: Inter, sans-serif; font-size: 12px; color: var(--dim); font-weight: 500; }
+.ce { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-radius: 14px; background: rgba(44, 36, 96, 0.4); box-shadow: inset 4px 0 0 var(--cal, var(--gold)); flex: none; }
+.ce.c1 { --cal: var(--sky); } .ce.c2 { --cal: var(--up); } .ce.c3 { --cal: var(--down); }
+.ce.now { background: rgba(62, 230, 168, 0.16); }
+.ce-t { width: 62px; flex: none; font-family: var(--display); font-weight: 600; font-size: 15px; color: var(--muted); }
+.ce.now .ce-t { color: var(--up); }
+.ce-x { min-width: 0; }
+.ce-x b { display: block; font-family: var(--display); font-weight: 600; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ce-x small { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-none { font-size: 16px; color: var(--muted); line-height: 1.5; padding: 14px 4px; }
+.alert-banner.cal { background: linear-gradient(90deg, #3d2a07, #6b4a0e); color: #ffe6ad; box-shadow: 0 0 0 2px var(--gold), 0 14px 40px rgba(0, 0, 0, 0.5); }
+.portrait .calendar { flex-direction: column; }
+.portrait .cal-side { width: 100%; }
+.portrait .cal-next { flex: none; }
+
+/* ---------- lost connection: Mei-style sleepy card over everything, gone as soon as data arrives */
+.offline { position: absolute; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center; background: rgba(12, 9, 34, 0.82); }
+.offline.on { display: flex; animation: fade 0.4s ease-out; }
+.off-card { width: 440px; max-width: 86%; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.off-card b { font-family: var(--display); font-weight: 800; font-size: 26px; }
+.off-card span { font-size: 15px; color: var(--muted); line-height: 1.5; }
+.off-card em { font-style: normal; color: var(--gold); }
+.off-zz { display: flex; gap: 6px; font-family: var(--display); font-weight: 800; color: var(--gold); height: 44px; align-items: flex-end; }
+.off-zz span { font-size: 22px; animation: zz 2.4s ease-in-out infinite; opacity: 0; }
+.off-zz span:nth-child(2) { font-size: 28px; animation-delay: 0.4s; }
+.off-zz span:nth-child(3) { font-size: 36px; animation-delay: 0.8s; }
+@keyframes zz { 30% { opacity: 1; } 100% { opacity: 0; transform: translateY(-14px); } }
+
+/* ---------- landscape turned upside down (the fourth rotation step) */
+body[data-orient="flip"] #app { transform: rotate(180deg); }
+
+/* the morning briefing is longer than an answer */
+.ask-bubble.briefing .ask-a { font-size: 19px; line-height: 1.38; }

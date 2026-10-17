@@ -2,8 +2,8 @@
 
 const $ = (id) => document.getElementById(id);
 const pages = [...document.querySelectorAll('.page')];
-// page order: News, Markets, Mei (Ask), Weather, Music, Servers, Focus. Settings is a pop-up menu, not a page.
-const NEWS = 0, MARKETS = 1, ASK = 2, MUSIC = 4, FOCUS = 6;
+// page order: News, Markets, Mei (Ask), Weather, Calendar, Music, Servers, Focus. Settings is a pop-up menu, not a page.
+const NEWS = 0, MARKETS = 1, ASK = 2, WEATHER = 3, CALENDAR = 4, MUSIC = 5, SERVERS = 6, FOCUS = 7;
 let page = 0;
 let editing = false;
 let S = null;
@@ -203,6 +203,8 @@ function presetButton(n) {
   if (setMode) return;
   if (page === NEWS) { const i = n === 4 ? newsCat + 1 : newsFeeds().findIndex((f) => f.key === NEWS_BUTTONS[n - 1]); return newsTopic(i); }
   if (page === MARKETS) return marketZoom(n);
+  if (page === ASK && n === 1) return briefingNow();
+  if (page === CALENDAR && n <= 3) { calView = n - 1; return renderCalendar(); }
   if (page === MUSIC) return spotifyAction(['prev', 'toggle', 'next', 'like'][n - 1]);
   if (page === FOCUS) return pomoSet([15, 25, 45, 60][n - 1]);
 }
@@ -283,7 +285,7 @@ function renderWeather() {
 let newsCat = 0, newsShownKey = '', newsShown = '', newsRotate = 0;
 let newsSel = -1;      // story highlighted while browsing with the knob (-1: not browsing)
 let newsDetail = null; // id of the story whose summary is open
-const NEWS_BUTTONS = ['top', 'research', 'business']; // presets 1-3; preset 4 = next topic
+const NEWS_BUTTONS = ['top', 'vn', 'tech']; // presets 1-3; preset 4 = next topic
 const summaries = new Map();
 function ago(t) {
   if (!t) return '';
@@ -373,6 +375,82 @@ $('newsList').addEventListener('click', (e) => { const el = e.target.closest('.n
 $('ndetail').addEventListener('click', closeDetail);
 // topics rotate on their own every 15 s while nobody is reading
 setInterval(() => { if (page === NEWS && newsSel < 0 && !newsDetail && S && Date.now() - newsRotate > 15000) { newsCat++; renderNews(); } }, 15000);
+
+// ---------------------------------------------------------------- calendar (read-only, from the hub)
+
+let calView = 0; // 0 today, 1 tomorrow, 2 next 7 days (buttons 1-3)
+const CAL_VIEWS = ['Today', 'Tomorrow', 'Week'];
+const dayKey = (ms) => new Intl.DateTimeFormat('en-CA', { timeZone: tz() }).format(new Date(ms));
+const timeOf = (ms) => new Intl.DateTimeFormat('en-US', { timeZone: tz(), hour: 'numeric', minute: '2-digit' }).format(new Date(ms)).replace(':00', '').replace(/\s/g, '').toLowerCase();
+function untilText(ms) {
+  const m = Math.round((ms - now()) / 60000);
+  if (m <= 0) return 'now';
+  if (m < 60) return `in ${m} min`;
+  const h = Math.floor(m / 60), r = m % 60;
+  return h < 24 ? `in ${h} h${r ? ` ${r} min` : ''}` : `in ${Math.round(h / 24)} days`;
+}
+const calEvents = () => (S.calendar && S.calendar.events) || [];
+// an event belongs to every day it touches (all-day events end at midnight after their last day)
+function onDay(e, key) {
+  return dayKey(e.start) <= key && key <= dayKey(Math.max(e.start, e.end - 1));
+}
+
+function renderCalendar() {
+  const c = S.calendar || {};
+  const t = now();
+  const d = new Date(t);
+  const part = (o) => new Intl.DateTimeFormat('en-US', { timeZone: tz(), ...o }).format(d);
+  const views = CAL_VIEWS.map((v, i) => `<span class="nc ${i === calView ? 'on' : ''}"><i class="kb">${i + 1}</i>${v}</span>`).join('');
+  const headHtml = `<div class="cal-date"><b>${part({ day: 'numeric' })}</b><span>${part({ weekday: 'long' })}<small>${part({ month: 'long', year: 'numeric' })}</small></span></div><div class="cal-views">${views}</div>`;
+  const head = $('calHead');
+  if (head._html !== headHtml) { head._html = headHtml; head.innerHTML = headHtml; }
+
+  if (!c.configured) {
+    $('calNext').className = 'cal-next';
+    $('calNext').innerHTML = '<span class="cn-k">Next up</span><b>No calendar linked</b><span class="cn-t">Run set-calendar-url.sh on server 2</span>';
+    $('calList').innerHTML = '<div class="cal-none">Paste the secret iCal address of your Google Calendar into set-calendar-url.sh on server 2, and your events show up here.</div>';
+    $('calList')._html = '';
+    return;
+  }
+  const evs = calEvents();
+  const next = evs.find((e) => !e.allDay && e.end > t);
+  const live = next && next.start <= t;
+  $('calNext').className = 'cal-next' + (live ? ' live' : '') + stale(c.at, 30 * 60000);
+  const nextHtml = next
+    ? `<span class="cn-k">${live ? 'Happening now' : 'Next up'}</span><b>${esc(next.title)}</b><span class="cn-t">${timeOf(next.start)} – ${timeOf(next.end)} · ${live ? `ends ${untilText(next.end)}` : untilText(next.start)}</span>${next.location ? `<span class="cn-l">${esc(next.location)}</span>` : ''}`
+    : '<span class="cn-k">Next up</span><b>Nothing else scheduled</b><span class="cn-t">Enjoy the free time</span>';
+  if ($('calNext')._html !== nextHtml) { $('calNext')._html = nextHtml; $('calNext').innerHTML = nextHtml; }
+
+  const days = calView === 2 ? 7 : 1;
+  const keys = Array.from({ length: days }, (_, i) => dayKey(t + (calView === 1 ? 1 : i) * 86400000));
+  const label = (k, i) => (calView === 2 && i > 1
+    ? new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'long', month: 'short', day: 'numeric' }).format(new Date(k + 'T12:00:00Z'))
+    : ['Today', 'Tomorrow'][calView === 1 ? 1 : i]);
+  let html = '';
+  keys.forEach((k, i) => {
+    const list = evs.filter((e) => onDay(e, k) && (calView !== 0 || e.allDay || e.end > t));
+    if (days > 1) html += `<div class="cal-day">${label(k, i)}${list.length ? '' : ' <small>· free</small>'}</div>`;
+    if (!list.length) { if (days === 1) html += `<div class="cal-none">${calView === 0 ? 'Nothing left today' : 'Nothing planned'}</div>`; return; }
+    html += list.map((e) => `<div class="ce c${e.cal % 4}${!e.allDay && e.start <= t && e.end > t ? ' now' : ''}"><span class="ce-t">${e.allDay ? 'all day' : timeOf(e.start)}</span><span class="ce-x"><b>${esc(e.title)}</b>${e.location ? `<small>${esc(e.location)}</small>` : ''}</span></div>`).join('');
+  });
+  const list = $('calList');
+  if (list._html !== html) { list._html = html; list.innerHTML = html; }
+}
+
+// a banner 10 minutes before each timed event, on whatever page is open
+const reminded = new Set();
+function calReminders() {
+  const t = now();
+  for (const e of calEvents()) {
+    if (e.allDay || reminded.has(e.id) || e.start - t > 10 * 60000 || e.start - t < -60000) continue;
+    reminded.add(e.id);
+    const b = $('alertBanner');
+    b.className = 'alert-banner on cal';
+    b.textContent = `${timeOf(e.start)} · ${e.title} · ${untilText(e.start)}`;
+    clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(() => b.classList.remove('on'), 60000);
+  }
+}
 
 // ---------------------------------------------------------------- servers
 
@@ -622,14 +700,14 @@ function renderAsk() {
   const phase = v.phase || 'idle';
   pages[ASK].dataset.phase = phase;
   const secs = phase === 'listening' && v.startedAt ? Math.min(v.maxSeconds, Math.floor((now() - v.startedAt) / 1000)) : 0;
-  $('askChip').textContent = v.configured === false ? 'needs a key' : { idle: 'ready', starting: 'getting ready', listening: `listening · ${secs}s`, thinking: 'thinking', answer: 'answered', error: 'oops' }[phase];
+  $('askChip').textContent = v.configured === false ? 'needs a key' : { idle: 'ready', starting: 'getting ready', listening: `listening · ${secs}s`, thinking: v.kind === 'briefing' ? 'writing your briefing' : 'thinking', answer: v.kind === 'briefing' ? 'briefing' : 'answered', error: 'oops' }[phase];
   $('askHint').textContent = v.configured === false
     ? 'Gemini API key not set on the hub yet'
-    : { idle: 'Press the knob and ask me anything', starting: 'Waking up the microphone… start talking when it says Listening', listening: `Press the knob when you are done · max ${v.maxSeconds}s`, thinking: 'Hmm, let me think…', answer: 'Press the knob to ask again', error: 'Press the knob to try again' }[phase];
+    : { idle: 'Press the knob and ask me anything · button 1 for today’s briefing', starting: 'Waking up the microphone… start talking when it says Listening', listening: `Press the knob when you are done · max ${v.maxSeconds}s`, thinking: 'Hmm, let me think…', answer: 'Press the knob to ask again · Back to close', error: 'Press the knob to try again · Back to close' }[phase];
   const bubble = $('askBubble');
   if (phase === 'answer' || phase === 'error') {
-    bubble.className = `ask-bubble on ${phase}`;
-    $('askQ').textContent = v.transcript ? `“${v.transcript}”` : '';
+    bubble.className = `ask-bubble on ${phase}${v.kind === "briefing" ? " briefing" : ""}`;
+    $('askQ').textContent = v.kind === 'briefing' ? 'Your briefing for today' : v.transcript ? `“${v.transcript}”` : '';
     $('askA').textContent = phase === 'error' ? v.error : v.answer;
     const src = phase === 'answer' ? [
       (v.searches || []).length ? `Searched Google: ${v.searches.join(' · ')}` : '',
@@ -643,11 +721,32 @@ function renderAsk() {
   $('askMeter').style.width = `${(100 * secs) / (v.maxSeconds || 15)}%`;
 }
 
+// the page the user came from before opening Mei (Mei answers about it)
+let ctxPage = NEWS;
+function briefingNow() {
+  fetch('/api/voice/briefing', { method: 'POST' })
+    .then((r) => { if (!r.ok) toast(r.status === 403 ? 'Briefings start on the Car Thing only' : 'Assistant unavailable'); })
+    .catch(() => toast('Could not reach the hub'));
+}
+
+// a new briefing (scheduled in the morning) brings Mei's page forward unless you are busy with something
+let briefSeen = null;
+function watchBriefing() {
+  const v = S.voice || {};
+  const key = v.kind === 'briefing' && v.phase === 'answer' ? v.at : 0;
+  if (briefSeen === null) { briefSeen = key; return; }
+  if (!key || key === briefSeen) return;
+  briefSeen = key;
+  if (page !== ASK && !setMode && !editing && !newsDetail && newsSel < 0 && !zoom) setPage(ASK);
+}
+
 function askToggle() {
   const phase = S && S.voice && S.voice.phase;
   if (phase === 'thinking') return;
   const act = phase === 'listening' || phase === 'starting' ? 'stop' : 'start';
-  fetch(`/api/voice/${act}`, { method: 'POST' })
+  // what was on screen, so "what does this story say?" works (Mei's page itself has no context)
+  const ctx = { page: pages[ctxPage].dataset.name, story: ctxPage === NEWS && newsDetail ? newsDetail : undefined };
+  fetch(`/api/voice/${act}`, { method: 'POST', body: act === 'start' ? JSON.stringify(ctx) : '' })
     .then((r) => { if (!r.ok) toast(r.status === 403 ? 'Mei only listens on the Car Thing' : 'Assistant unavailable'); })
     .catch(() => toast('Could not reach the hub'));
 }
@@ -737,11 +836,11 @@ $('overlay').addEventListener('click', (e) => {
 function odometer(el, text) {
   if (el.dataset.text === text) return;
   const chars = [...text];
-  if (el.children.length !== chars.length || el.dataset.shape !== text.replace(/d/g, '0')) {
-    el.innerHTML = chars.map((ch) => (/d/.test(ch)
+  if (el.children.length !== chars.length || el.dataset.shape !== text.replace(/\d/g, '0')) {
+    el.innerHTML = chars.map((ch) => (/\d/.test(ch)
       ? `<span class="d"><span class="reel">${'0123456789'.split('').map((n) => `<span>${n}</span>`).join('')}</span></span>`
       : `<span class="s">${ch}</span>`)).join('');
-    el.dataset.shape = text.replace(/d/g, '0');
+    el.dataset.shape = text.replace(/\d/g, '0');
   }
   chars.forEach((ch, k) => {
     const reel = el.children[k].firstElementChild;
@@ -772,13 +871,14 @@ function transition(from, to, dir) {
 
 // ---------------------------------------------------------------- screen orientation (landscape, portrait turned right, portrait turned left)
 
-const ORIENTS = ['land', 'cw', 'ccw'];
-const ORIENT_NAME = { land: 'Landscape', cw: 'Portrait ↻', ccw: 'Portrait ↺' };
+// each press turns the screen another 90° clockwise: 0°, 90°, 180°, 270°
+const ORIENTS = ['land', 'cw', 'flip', 'ccw'];
+const ORIENT_NAME = { land: 'Landscape', cw: 'Portrait ↻', flip: 'Landscape, upside down', ccw: 'Portrait ↺' };
 let orient = 'land';
 try { orient = ORIENTS.includes(localStorage.getItem('orient')) ? localStorage.getItem('orient') : 'land'; } catch {}
 function applyOrient() {
   document.body.dataset.orient = orient;
-  document.body.classList.toggle('portrait', orient !== 'land');
+  document.body.classList.toggle('portrait', orient === 'cw' || orient === 'ccw');
   $('rotLabel').textContent = ORIENT_NAME[orient];
   requestAnimationFrame(movePill);
 }
@@ -804,10 +904,12 @@ function setEditing(on) {
 function setPage(i) {
   const prev = page;
   page = (i + pages.length) % pages.length;
+  if (page === ASK && prev !== ASK) ctxPage = prev;
   setEditing(false);
   if (setMode) setModeTo(null);
   if (zoom) { zoom = 0; renderZoom(); }
-  if (newsSel >= 0 || newsDetail) { closeDetail(); newsSel = -1; }
+  // the open story stays open behind Mei's page, so you can ask her about it
+  if (page !== ASK && (newsSel >= 0 || newsDetail)) { closeDetail(); newsSel = -1; }
   const dir = page === prev ? 0 : (i > prev ? 1 : -1);
   pages.forEach((p, j) => p.classList.toggle('on', j === page));
   if (dir) transition(pages[prev], pages[page], dir);
@@ -840,6 +942,7 @@ function back() {
   if (setMode) return settingsBack();
   if (page === MARKETS && zoom) return marketZoom(zoom);
   if (page === NEWS && newsBack()) return;
+  if (page === ASK && S && ['answer', 'error'].includes(S.voice && S.voice.phase)) return void fetch('/api/voice/dismiss', { method: 'POST' }).catch(() => {});
   if (editing) setEditing(false); // Back only ever leaves a mode; the knob press enters one
 }
 
@@ -891,28 +994,53 @@ function tickClock() {
   pomoTick();
   musicProgress();
   if (S && page === ASK) renderAsk();
+  if (S && page === CALENDAR && new Date().getSeconds() === 0) renderCalendar();
+  checkLink();
 }
 
-const RENDER = { 0: () => renderNews(), 1: () => renderMarkets(), 2: () => renderAsk(), 3: () => renderWeather(), 4: () => renderMusic(), 5: () => renderServers() };
+const RENDER = { [NEWS]: renderNews, [MARKETS]: renderMarkets, [ASK]: renderAsk, [WEATHER]: renderWeather, [CALENDAR]: renderCalendar, [MUSIC]: renderMusic, [SERVERS]: renderServers };
 function render() {
   if (!S) return;
   try { RENDER[page] && RENDER[page](); } catch (e) { console.error(e); }
   if (zoom && page === MARKETS) try { renderZoom(); } catch (e) { console.error(e); }
   try { renderAlerts(); } catch (e) { console.error(e); }
+  try { watchBriefing(); calReminders(); } catch (e) { console.error(e); }
   if (setMode) renderBrightness();
   if (!render.sky && S.weather) { render.sky = true; try { renderWeather(); } catch {} } // sky colour on first load
 }
 
+// The hub sends data on every change and a heartbeat every 10 s. If both stop, say so on screen and
+// keep reconnecting; when the hub comes back with a new version (it restarted), reload to pick it up.
+let es = null, lastMsg = Date.now(), hubVersion = null;
+function heard(msg) {
+  lastMsg = Date.now();
+  clockOffset = msg.t - Date.now();
+  if (msg.v) {
+    if (hubVersion && msg.v !== hubVersion) return location.reload();
+    hubVersion = msg.v;
+  }
+}
 function connect() {
-  const es = new EventSource('/events');
+  if (es) es.close();
+  es = new EventSource('/events');
   es.onopen = () => $('conn').classList.add('ok');
   es.onmessage = (ev) => {
     const msg = JSON.parse(ev.data);
-    clockOffset = msg.t - Date.now();
+    heard(msg);
     S = msg.state;
     render();
   };
+  es.addEventListener('hb', (ev) => heard(JSON.parse(ev.data)));
   es.onerror = () => $('conn').classList.remove('ok');
+}
+function checkLink() {
+  const quiet = Date.now() - lastMsg;
+  const lost = quiet > 25000;
+  if (lost !== $('offline').classList.contains('on')) $('offline').classList.toggle('on', lost);
+  if (!lost) return;
+  $('offSince').textContent = quiet < 120000 ? `${Math.round(quiet / 1000)} s` : `${Math.round(quiet / 60000)} min`;
+  // EventSource retries on its own, but not after every kind of failure; start a fresh one every 30 s
+  if (Math.floor(quiet / 1000) % 30 === 0) connect();
 }
 
 renderSettings();

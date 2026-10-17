@@ -71,7 +71,16 @@
       <div class="wx-daily" id="wxDaily"></div>
     </section>
 
-    <!-- 5. Music -->
+    <!-- 5. Calendar -->
+    <section class="page calendar" data-name="Calendar">
+      <div class="cal-side">
+        <div class="cal-head" id="calHead"></div>
+        <div class="cal-next" id="calNext"></div>
+      </div>
+      <div class="cal-list" id="calList"></div>
+    </section>
+
+    <!-- 6. Music -->
     <section class="page music" data-name="Music" data-editable="1">
       <div class="edit-badge">Volume · turn the knob · Back when done</div>
       <div class="art" id="mArt"></div>
@@ -91,13 +100,13 @@
       </div>
     </section>
 
-    <!-- 6. Servers -->
+    <!-- 7. Servers -->
     <section class="page servers" data-name="Servers">
       <div class="srv" id="srv2"></div>
       <div class="srv" id="srv1"></div>
     </section>
 
-    <!-- 7. Focus -->
+    <!-- 8. Focus -->
     <section class="page focus" data-name="Focus" data-editable="1">
       <div class="edit-badge">Editing · turn knob to change minutes · Back to finish</div>
       <div class="pomo">
@@ -133,6 +142,14 @@
         <b id="brightVal">--%</b>
       </div>
       <div class="ov-hint" id="setHint"></div>
+    </div>
+  </div>
+  <!-- shown when nothing has arrived from the hub for a while; the screen keeps reconnecting by itself -->
+  <div class="offline" id="offline">
+    <div class="off-card">
+      <div class="off-zz"><span>z</span><span>z</span><span>z</span></div>
+      <b>Reconnecting to the hub…</b>
+      <span>No data for <em id="offSince">0 s</em>. The screen comes back on its own when server 2 answers.</span>
     </div>
   </div>
   <div class="alert-banner" id="alertBanner"></div>

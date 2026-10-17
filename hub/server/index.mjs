@@ -7,7 +7,8 @@ import crypto from 'node:crypto';
 import { createAlerts } from './alerts.mjs';
 import { createAssistant } from './assistant.mjs';
 import { createSpotify } from './spotify.mjs';
-import { NEWS_FEEDS, fetchFeed, summarize } from './news.mjs';
+import { NEWS_FEEDS, fetchFeed, summarize, cachedSummary } from './news.mjs';
+import { createCalendar } from './calendar.mjs';
 
 const PORT = Number(process.env.PORT || 8787);
 const LAT = Number(process.env.LAT || 37.3382);
@@ -21,6 +22,8 @@ const STATE_DIR = path.resolve('state');
 const PUBLIC_DIR = path.resolve('public');
 // Yahoo answers 429 to full browser UA strings but accepts this short form
 const UA = 'Mozilla/5.0';
+// changes on every hub start; the screen reloads itself when it sees a new one (picks up UI updates)
+const BOOT = Date.now().toString(36);
 
 // ---------------------------------------------------------------- config (edit config.json, then restart the hub)
 
@@ -57,7 +60,7 @@ function changed() {
   pending = true;
   setTimeout(() => {
     pending = false;
-    const msg = `data: ${JSON.stringify({ t: Date.now(), state })}\n\n`;
+    const msg = `data: ${JSON.stringify({ t: Date.now(), v: BOOT, state })}\n\n`;
     for (const res of clients) res.write(msg);
   }, 250);
 }
@@ -257,6 +260,10 @@ every(2 * 60000, 'news', async () => {
   if (newsItems.size > 2000) [...newsItems.keys()].slice(0, newsItems.size - 2000).forEach((k) => newsItems.delete(k));
 });
 
+// ---------------------------------------------------------------- calendar (secret iCal links, read-only)
+
+createCalendar({ state, changed, tz: WX_TZ, every });
+
 // ---------------------------------------------------------------- servers
 
 let prevCpu = null;
@@ -415,10 +422,53 @@ function snapshot() {
   if (s2) lines.push(`Server 2: CPU ${Math.round(s2.cpu || 0)}%, RAM ${(s2.memUsed / 2 ** 30).toFixed(1)} GB used`);
   if (s1) lines.push(`Server 1: ${s1.online ? 'online' : 'offline'}${s1.stats ? `, CPU ${Math.round(s1.stats.cpu || 0)}%` : ''}`);
   if (state.alerts?.length) lines.push(`Recent alerts: ${state.alerts.slice(0, 3).map((a) => a.text).join('; ')}`);
+  if (state.calendar?.configured) {
+    const day = (ms) => new Date(ms).toLocaleDateString('en-CA', tz);
+    const today = day(Date.now()), tomorrow = day(Date.now() + 86400000);
+    const when = (e) => (e.allDay ? 'all day' : new Date(e.start).toLocaleTimeString('en-US', { ...tz, hour: 'numeric', minute: '2-digit' }));
+    for (const [label, d] of [['today', today], ['tomorrow', tomorrow]]) {
+      const evs = state.calendar.events.filter((e) => day(e.start) === d || (e.allDay && e.start <= Date.now() && e.end > Date.now() && label === 'today'));
+      lines.push(`Calendar ${label}: ${evs.length ? evs.map((e) => `${when(e)} ${e.title}${e.location ? ` (${e.location})` : ''}`).join('; ') : 'nothing'}`);
+    }
+  }
   for (const f of state.news.feeds) if (f.items.length) lines.push(`Headlines, ${f.name}: ${f.items.slice(0, 4).map((h) => `${h.title} (${h.source})`).join(' | ')}`);
   return lines.join('\n');
 }
-const assistant = createAssistant({ state, changed, snapshot });
+
+// what the screen showed when the knob was pressed, so "what does this story say?" works
+function describe(ctx) {
+  if (!ctx) return '';
+  const out = [];
+  if (typeof ctx.page === 'string') out.push(`Page: ${ctx.page.slice(0, 20)}`);
+  const item = typeof ctx.story === 'string' ? newsItems.get(ctx.story) : null;
+  if (item) {
+    const sum = cachedSummary(item.id);
+    out.push(`Open story: "${item.title}" (${item.source})${sum?.summary ? `\nIts summary: ${sum.summary}` : ''}`);
+  }
+  return out.join('\n');
+}
+const assistant = createAssistant({ state, changed, snapshot, describe });
+
+// ---------------------------------------------------------------- morning briefing (once a day at BRIEFING_AT, local time)
+
+const BRIEFING_AT = process.env.BRIEFING_AT || '07:00'; // "off" to disable
+const BRIEFING_LANG = process.env.BRIEFING_LANG || 'English';
+const BRIEFING_FILE = path.join(STATE_DIR, 'briefing.json');
+let lastBriefing = '';
+try { lastBriefing = JSON.parse(fs.readFileSync(BRIEFING_FILE, 'utf8')).date || ''; } catch {}
+setInterval(() => {
+  const m = BRIEFING_AT.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return;
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: WX_TZ, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    .formatToParts(new Date()).map((x) => [x.type, x.value]));
+  const date = `${p.year}-${p.month}-${p.day}`;
+  const mins = Number(p.hour) * 60 + Number(p.minute), at = Number(m[1]) * 60 + Number(m[2]);
+  // only inside a two-hour window, so restarting the hub in the afternoon does not trigger it
+  if (date === lastBriefing || mins < at || mins > at + 120) return;
+  lastBriefing = date;
+  try { fs.writeFileSync(BRIEFING_FILE, JSON.stringify({ date })); } catch (e) { console.error('[briefing]', e.message); }
+  assistant.briefing(BRIEFING_LANG);
+}, 30000);
 
 // ---------------------------------------------------------------- display brightness (set from the Car Thing, applied there by a small sync script)
 
@@ -461,9 +511,10 @@ const server = http.createServer((req, res) => {
 
   if (url.pathname === '/events') {
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
-    res.write(`retry: 3000\ndata: ${JSON.stringify({ t: Date.now(), state })}\n\n`);
+    res.write(`retry: 3000\ndata: ${JSON.stringify({ t: Date.now(), v: BOOT, state })}\n\n`);
     clients.add(res);
-    const hb = setInterval(() => res.write(': hb\n\n'), 15000);
+    // a named event (not a comment) so the screen can tell a quiet hub from a dead connection
+    const hb = setInterval(() => res.write(`event: hb\ndata: ${JSON.stringify({ t: Date.now(), v: BOOT })}\n\n`), 10000);
     req.on('close', () => { clearInterval(hb); clients.delete(res); });
     return;
   }
@@ -537,7 +588,17 @@ const server = http.createServer((req, res) => {
     if (!fromCarThing(req)) { res.writeHead(403); return res.end(); }
     res.setHeader('Content-Type', 'text/plain');
     if (url.pathname === '/api/voice/cmd') return assistant.waitCommand(res);
-    if (url.pathname === '/api/voice/start' && req.method === 'POST') { assistant.start(); return res.end('ok'); }
+    if (url.pathname === '/api/voice/start' && req.method === 'POST') {
+      readRaw(req, 500).then((b) => {
+        let ctx = null;
+        try { ctx = JSON.parse(b.toString() || 'null'); } catch {}
+        assistant.start(ctx && typeof ctx === 'object' ? ctx : null);
+        res.end('ok');
+      }).catch(() => { res.writeHead(413); res.end(); });
+      return;
+    }
+    if (url.pathname === '/api/voice/briefing' && req.method === 'POST') { assistant.briefing(BRIEFING_LANG); return res.end('ok'); }
+    if (url.pathname === '/api/voice/dismiss' && req.method === 'POST') { assistant.dismiss(); return res.end('ok'); }
     if (url.pathname === '/api/voice/stop' && req.method === 'POST') { assistant.stop(); return res.end('ok'); }
     if (url.pathname === '/api/voice/started') { assistant.started(url.searchParams.get('id')); return res.end('ok'); }
     if (url.pathname === '/api/voice/audio' && req.method === 'POST') {

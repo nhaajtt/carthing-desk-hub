@@ -9,6 +9,7 @@ Reply in the same language the user spoke. Be concise: at most 70 words, no mark
 You are given live dashboard data (markets, weather, servers, today's headlines). Use it when the question is about those; never invent prices or numbers.
 For questions about today's news, research or business, answer from the headlines in the dashboard data and name the outlet. You cannot browse the web: if the answer is not in the data and may have changed recently, say so instead of guessing.
 Answer only what the user actually said in the audio; never invent a question from the dashboard data.
+When the user says "this", "this story", "tin này" or similar, they mean what is on the screen right now (given below the dashboard data).
 Always reply in exactly this format, with nothing before or after:
 Q: <what the user said, word for word, in their language; leave empty if there was no clear speech>
 A: <your answer>`;
@@ -79,11 +80,12 @@ function toSpeechWav(buf) {
   return { wav: Buffer.concat([hdr, pcm]), peak: Math.round(peak), noise: Math.round(noise), loud: Math.round(loud), speech, gain, seconds: n / 16000 };
 }
 
-export function createAssistant({ state, changed, snapshot }) {
+export function createAssistant({ state, changed, snapshot, describe }) {
   const KEY = process.env.GEMINI_API_KEY || '';
   // Google Search grounding needs a paid plan for current models (2.5 Flash is closed to new keys),
   // so fresh news comes from the headline feeds in the dashboard data instead.
   const MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
+  const FALLBACK = process.env.GEMINI_SUMMARY_MODEL || 'gemini-flash-lite-latest';
   const SEARCH = process.env.GEMINI_SEARCH === '1';
   state.voice = { configured: !!KEY, phase: 'idle', transcript: '', answer: '', error: '', at: 0, maxSeconds: MAX_SECONDS };
 
@@ -91,15 +93,17 @@ export function createAssistant({ state, changed, snapshot }) {
   let active = null;          // id of the recording in progress
   let waiter = null;          // long-poll response held for the Car Thing recorder
   const queue = [];           // commands waiting for the recorder
-  const history = [];         // last few exchanges, as text
+  const history = [];         // last few exchanges, so follow-up questions work ("and ETH?")
+  const HISTORY_MS = 10 * 60000;
+  let context = null;         // what the screen showed when the knob was pressed
   let stopTimer = null;
 
-  // answers and errors fade back to idle so Mei and Nhat can play again
+  // answers and errors fade back to idle so Mei and Nhat can play again; a briefing stays up longer
   let idleTimer = null;
   function set(patch) {
-    Object.assign(state.voice, patch, { at: Date.now() });
+    Object.assign(state.voice, { kind: '' }, patch, { at: Date.now() });
     clearTimeout(idleTimer);
-    const linger = { answer: 45000, error: 10000 }[state.voice.phase];
+    const linger = state.voice.kind === 'briefing' && state.voice.phase === 'answer' ? 15 * 60000 : { answer: 45000, error: 10000 }[state.voice.phase];
     if (linger) idleTimer = setTimeout(() => set({ phase: 'idle' }), linger);
     changed();
   }
@@ -118,9 +122,10 @@ export function createAssistant({ state, changed, snapshot }) {
   }
 
   // 'starting' until the Car Thing reports the microphone is really open, then 'listening'
-  function start() {
+  function start(ctx) {
     if (!KEY) return set({ phase: 'error', error: 'GEMINI_API_KEY is not set on the hub.' });
     if (['starting', 'listening', 'thinking'].includes(state.voice.phase)) return;
+    context = ctx || null;
     active = ++seq;
     queue.length = 0;
     send(`record ${active} ${MAX_SECONDS}`);
@@ -156,40 +161,55 @@ export function createAssistant({ state, changed, snapshot }) {
         return set({ phase: 'error', transcript: '', error: "Meow? I didn't hear anything. Hold the Car Thing closer and speak up, then press the knob again." });
       }
       const { transcript, answer, searches, sources } = await ask(clip.wav);
-      history.push({ q: transcript, a: answer });
-      if (history.length > 3) history.shift();
+      remember(transcript, answer);
       set({ phase: 'answer', transcript, answer, searches, sources });
     } catch (e) {
       set({ phase: 'error', error: String(e.message).slice(0, 200) });
     }
   }
 
-  async function ask(wav) {
-    const prior = history.map((h) => `User: ${h.q}\nAssistant: ${h.a}`).join('\n');
-    const body = {
-      systemInstruction: { parts: [{ text: SYSTEM }] },
-      contents: [{
-        role: 'user',
-        parts: [
-          { text: `Live dashboard data:\n${snapshot()}\n${prior ? `\nEarlier in this conversation:\n${prior}\n` : ''}\nThe user's spoken question is in the attached audio.` },
-          { inlineData: { mimeType: 'audio/wav', data: wav.toString('base64') } },
-        ],
-      }],
-      ...(SEARCH ? { tools: [{ google_search: {} }] } : {}),
-      generationConfig: { maxOutputTokens: 1200 },
-    };
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(MODEL)}:generateContent`, {
+  function remember(q, a) {
+    history.push({ q, a, at: Date.now() });
+    if (history.length > 4) history.shift();
+  }
+
+  // The free tier allows only about 20 requests a day for the main Flash model but far more for Flash-Lite,
+  // so when the main model says 429 (quota used up), the same request goes to the lite model instead.
+  async function gemini(body, model = MODEL) {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': KEY },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(45000),
     });
     const j = await r.json().catch(() => ({}));
+    if (r.status === 429 && model !== FALLBACK) {
+      console.log(`[voice] ${model} is over its free quota, using ${FALLBACK}`);
+      return gemini(body, FALLBACK);
+    }
     if (!r.ok) throw new Error(`Gemini ${r.status}: ${j.error?.message || 'request failed'}`);
-    const cand = j.candidates?.[0] || {};
+    return j.candidates?.[0] || {};
+  }
+
+  async function ask(wav) {
+    const recent = history.filter((h) => Date.now() - h.at < HISTORY_MS);
+    const prior = recent.map((h) => `User: ${h.q}\nAssistant: ${h.a}`).join('\n');
+    const screen = describe ? describe(context) : '';
+    const cand = await gemini({
+      systemInstruction: { parts: [{ text: SYSTEM }] },
+      contents: [{
+        role: 'user',
+        parts: [
+          { text: `Live dashboard data:\n${snapshot()}\n${screen ? `\nOn the screen right now:\n${screen}\n` : ''}${prior ? `\nEarlier in this conversation (the user may follow up on it):\n${prior}\n` : ''}\nThe user's spoken question is in the attached audio.` },
+          { inlineData: { mimeType: 'audio/wav', data: wav.toString('base64') } },
+        ],
+      }],
+      ...(SEARCH ? { tools: [{ google_search: {} }] } : {}),
+      generationConfig: { maxOutputTokens: 1200 },
+    });
     const text = (cand.content?.parts || []).map((p) => p.text || '').join('').trim();
-    const q = text.match(/^s*Q:s*(.*)$/m);
-    const a = text.match(/^s*A:s*([sS]*)$/m);
+    const q = text.match(/^\s*Q:\s*(.*)$/m);
+    const a = text.match(/^\s*A:\s*([\s\S]*)$/m);
     // shown under the answer: what Mei searched on Google and where the facts came from
     const g = cand.groundingMetadata || {};
     const searches = (g.webSearchQueries || []).slice(0, 2);
@@ -197,7 +217,7 @@ export function createAssistant({ state, changed, snapshot }) {
     if (searches.length) console.log('[voice] searched:', searches.join(' | '));
     return {
       transcript: q ? q[1].trim() : '',
-      answer: (a ? a[1] : text).replace(/**/g, '').trim() || 'No answer.',
+      answer: (a ? a[1] : text).replace(/\*\*/g, '').trim() || 'No answer.',
       searches, sources,
     };
   }
@@ -205,5 +225,36 @@ export function createAssistant({ state, changed, snapshot }) {
   // the same channel carries device commands (reboot / poweroff) to the Car Thing agent
   const command = (cmd) => send(cmd);
 
-  return { start, started, stop, audio, waitCommand, command };
+  // Morning briefing: a short spoken-style summary of the day, shown in Mei's bubble.
+  // Runs on a schedule from the hub, or from button 1 on Mei's page.
+  async function briefing(lang = 'English') {
+    if (!KEY) return set({ phase: 'error', error: 'GEMINI_API_KEY is not set on the hub.' });
+    if (['starting', 'listening', 'thinking'].includes(state.voice.phase)) return;
+    set({ phase: 'thinking', kind: 'briefing', transcript: '', answer: '', error: '', searches: [], sources: [] });
+    try {
+      const cand = await gemini({
+        systemInstruction: { parts: [{ text: SYSTEM.split('Always reply in exactly this format')[0] }] },
+        contents: [{ role: 'user', parts: [{ text: `Live dashboard data:\n${snapshot()}\n\n`
+          + `Write the user's briefing for today in ${lang}, at most 65 words, as one short paragraph of plain text with whole numbers where possible. `
+          + "Cover, in this order: today's weather (range and rain chance), the calendar for today if there is one (times and titles), "
+          + 'how BTC and gold moved, the USD/VND rate, and the two most important headlines. Use only the data above. '
+          + 'Start with a one-word cat greeting.' }] }],
+        generationConfig: { maxOutputTokens: 1200 },
+      });
+      const answer = (cand.content?.parts || []).map((p) => p.text || '').join('').replace(/\*\*/g, '').trim();
+      if (!answer) throw new Error('Gemini returned an empty briefing.');
+      remember('Give me my briefing for today.', answer);
+      set({ phase: 'answer', kind: 'briefing', transcript: '', answer });
+      return answer;
+    } catch (e) {
+      set({ phase: 'error', error: String(e.message).slice(0, 200) });
+    }
+  }
+
+  // Back on Mei's page closes the bubble so Mei and Nhat can play again
+  function dismiss() {
+    if (state.voice.phase === 'answer' || state.voice.phase === 'error') set({ phase: 'idle' });
+  }
+
+  return { start, started, stop, audio, waitCommand, command, briefing, dismiss };
 }
