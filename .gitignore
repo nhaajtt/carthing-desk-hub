@@ -1,0 +1,8 @@
+.env
+*.env
+!.env.example
+hub/state/
+node_modules/
+*.png.tmp
+.DS_Store
+Thumbs.db

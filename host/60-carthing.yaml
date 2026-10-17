@@ -1,0 +1,14 @@
+# /etc/netplan/60-carthing.yaml on the brain (chmod 600).
+# Car Thing (USB CDC-NCM). Static address, no routes/DNS/IPv6 accepted from the device.
+network:
+  version: 2
+  ethernets:
+    carthing:
+      match:
+        macaddress: "02:xx:xx:xx:xx:xx"   # the Car Thing's USB gadget MAC: `ip -br link` after plugging it in
+      dhcp4: false
+      dhcp6: false
+      accept-ra: false
+      link-local: []
+      addresses: [10.42.1.6/29]
+      optional: true

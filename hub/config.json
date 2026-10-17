@@ -1,0 +1,30 @@
+{
+  "crypto": ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE"],
+
+  "indices": [
+    { "key": "vnindex", "symbol": "^VNINDEX.VN", "name": "VN-Index", "sub": "HOSE · Vietnam", "decimals": 2 },
+    { "key": "spx", "symbol": "^GSPC", "name": "S&P 500", "sub": "US", "decimals": 2 },
+    { "key": "ndx", "symbol": "^IXIC", "name": "Nasdaq", "sub": "US", "decimals": 2 },
+    { "key": "dxy", "symbol": "DX-Y.NYB", "name": "DXY", "sub": "US Dollar Index", "decimals": 2 },
+    { "key": "oil", "symbol": "CL=F", "name": "WTI Oil", "sub": "USD / bbl", "decimals": 2 },
+    { "key": "gold", "symbol": "GC=F", "name": "Gold Fut.", "sub": "COMEX · USD", "decimals": 1 }
+  ],
+
+  "alerts": {
+    "cooldownMinutes": 60,
+    "moves": [
+      { "asset": "BTC", "window": "1h", "pct": 2 },
+      { "asset": "ETH", "window": "1h", "pct": 3 },
+      { "asset": "SOL", "window": "1h", "pct": 4 },
+      { "asset": "XAU", "window": "1h", "pct": 1 },
+      { "asset": "BTC", "window": "24h", "pct": 5 },
+      { "asset": "XAU", "window": "24h", "pct": 2 },
+      { "asset": "vnindex", "window": "24h", "pct": 2 },
+      { "asset": "spx", "window": "24h", "pct": 2 }
+    ],
+    "levels": [
+      { "asset": "BTC", "above": 90000 },
+      { "asset": "BTC", "below": 75000 }
+    ]
+  }
+}

@@ -1,0 +1,12 @@
+# Appended to /etc/ufw/after.rules on the brain.
+# Car Thing (USB) -> Docker: only the hub port, nothing else is forwarded.
+# Docker publishes ports through its own iptables chains and bypasses UFW's INPUT rules;
+# DOCKER-USER is the chain Docker leaves for us, so the USB rules live here.
+# Replace enxCARTHING with the Car Thing's interface name.
+*filter
+:DOCKER-USER - [0:0]
+-A DOCKER-USER -i enxCARTHING -m conntrack --ctstate RELATED,ESTABLISHED -j RETURN
+-A DOCKER-USER -i enxCARTHING -p tcp -m conntrack --ctorigdst 10.42.1.6 --ctorigdstport 8787 --ctdir ORIGINAL -j RETURN
+-A DOCKER-USER -i enxCARTHING -j DROP
+-A DOCKER-USER -j RETURN
+COMMIT

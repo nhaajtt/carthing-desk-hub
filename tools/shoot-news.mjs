@@ -1,0 +1,24 @@
+// Captures the News browse and summary views, then puts the device back the way it was (orientation included).
+import fs from 'node:fs';
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const list = await (await fetch('http://127.0.0.1:19223/json/list')).json();
+const pg = list.find((p) => p.type === 'page');
+const ws = new WebSocket(pg.webSocketDebuggerUrl.replace(/\/\/[^/]+/, '//127.0.0.1:19223'));
+let id = 0; const wait = {};
+const call = (method, params = {}) => new Promise((r) => { wait[++id] = r; ws.send(JSON.stringify({ id, method, params })); });
+ws.onmessage = (m) => { const d = JSON.parse(m.data); if (wait[d.id]) wait[d.id](d.result); };
+await new Promise((r) => (ws.onopen = r));
+const ev = (expression) => call('Runtime.evaluate', { expression, returnByValue: true }).then((r) => r.result?.value);
+const key = (k) => ev(`dispatchEvent(new KeyboardEvent('keydown', {key: '${k}'})), 1`);
+const shot = async (name) => { const r = await call('Page.captureScreenshot', { format: 'png' }); fs.writeFileSync(`/t/shots/${name}.png`, Buffer.from(r.data, 'base64')); console.log('saved', name); };
+const before = await ev("localStorage.getItem('orient') || 'land'");
+await ev("localStorage.setItem('orient', 'land'), location.reload(), 1"); await sleep(9000);
+await ev('setPage(0), 1'); await sleep(1200);
+await key('1'); await sleep(900); await shot('01-news');
+await key('Enter'); await ev("dispatchEvent(new WheelEvent('wheel', {deltaY: 100})), 1"); await sleep(800); await shot('15-news-browse');
+await key('Enter'); for (let i = 0; i < 20 && (await ev("document.getElementById('ndSum').classList.contains('loading')")); i++) await sleep(500);
+await sleep(600); await shot('16-news-summary');
+await key('Escape'); await key('Escape');
+await ev(`localStorage.setItem('orient', '${before}'), location.reload(), 1`);
+console.log('orientation restored to', before);
+process.exit(0);

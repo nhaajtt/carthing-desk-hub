@@ -1,0 +1,37 @@
+# Pushes host stats to the desk hub on 10.10.10.20. No published ports.
+services:
+  agent:
+    image: node:22-bookworm-slim
+    container_name: hub-stats-agent
+    restart: unless-stopped
+    command: ["node", "/app/agent.mjs"]
+    user: "node"
+    env_file: .env
+    volumes:
+      - ./agent.mjs:/app/agent.mjs:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 64m
+    pids_limit: 16
+    depends_on: [docker-status]
+
+  # Read-only container summary. Holds docker.sock so the agent does not have to.
+  # Not published on any host port; only reachable from the agent on this compose network.
+  docker-status:
+    image: node:22-bookworm-slim
+    container_name: hub-docker-status
+    restart: unless-stopped
+    command: ["node", "/app/docker-status.mjs"]
+    user: "node"
+    group_add: ["983"]
+    volumes:
+      - ../hub/server/docker-status.mjs:/app/docker-status.mjs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 64m
+    pids_limit: 16

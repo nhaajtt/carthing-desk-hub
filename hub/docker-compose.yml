@@ -1,0 +1,52 @@
+services:
+  hub:
+    image: node:22-bookworm-slim
+    container_name: carthing-hub
+    restart: unless-stopped
+    working_dir: /app
+    command: ["node", "server/index.mjs"]
+    user: "node"
+    env_file: .env
+    environment:
+      TZ: America/Los_Angeles
+    ports:
+      - "10.42.1.6:8787:8787"   # Car Thing (USB)
+      - "10.10.10.20:8787:8787" # LAN preview
+    volumes:
+      - ./server:/app/server:ro
+      - ./public:/app/public:ro
+      - ./config.json:/app/config.json:ro
+      - ./state:/app/state
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    pids_limit: 64
+    depends_on: [docker-status]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Read-only container summary for the Servers page. Holds docker.sock so the hub does not have to.
+  # Not published on any host port; only reachable from the hub on this compose network.
+  docker-status:
+    image: node:22-bookworm-slim
+    container_name: carthing-docker-status
+    restart: unless-stopped
+    command: ["node", "/app/docker-status.mjs"]
+    user: "node"
+    group_add: ["983"]
+    volumes:
+      - ./server/docker-status.mjs:/app/docker-status.mjs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 64m
+    pids_limit: 16
