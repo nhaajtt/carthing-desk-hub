@@ -39,5 +39,10 @@ while :; do
   if [[ "$pct" =~ ^[0-9]+$ ]] && [ "$pct" -ge 5 ] && [ "$pct" -le 100 ] && [ "$pct" != "$applied" ]; then
     apply "$pct" && applied=$pct
   fi
+  # nocturned drops the backlight to 0 whenever it restarts (the voice agent pauses it to use the mics)
+  if [ -n "$applied" ]; then
+    raw=$(( applied * MAX / 100 ))
+    [ "$(cat "$BL/brightness")" != "$raw" ] && echo "$raw" > "$BL/brightness"
+  fi
   sleep 2
 done
