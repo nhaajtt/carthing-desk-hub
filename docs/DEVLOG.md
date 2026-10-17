@@ -27,8 +27,9 @@
 18. [Mei & Nhat: sân khấu nhỏ](#18-mei--nhat)
 19. [News: 10 chủ đề và tóm tắt bài báo](#19-news)
 20. [Chế độ dọc, menu nổi, 4 nút theo trang](#20-chế-độ-dọc-menu-nổi-4-nút-theo-trang)
-21. [Bảng tổng hợp lỗi](#21-bảng-tổng-hợp-lỗi)
-22. [Những điều rút ra](#22-những-điều-rút-ra)
+21. [Màn hình tự tắt, và đợt nâng cấp thứ hai](#21-màn-hình-tự-tắt-và-đợt-nâng-cấp-thứ-hai)
+22. [Bảng tổng hợp lỗi](#22-bảng-tổng-hợp-lỗi)
+23. [Những điều rút ra](#23-những-điều-rút-ra)
 
 ---
 
@@ -376,7 +377,7 @@ Ban đầu chỉ có Mei đi dạo. Sau đó thêm **Nhat**, "cậu chủ" của
 
 ## 19. News
 
-* **10 chủ đề:** Top stories, Việt Nam, World, Business, Finance, Kinh doanh VN, Research, Science, Tech, Hacker News. Lấy từ Google News RSS (theo mục, hoặc theo từ khoá trong 24 giờ) và Hacker News API. Cập nhật **2 phút** một lần.
+* **10 chủ đề** (sau rút còn 5, xem mục 21)**:** Top stories, Việt Nam, World, Business, Finance, Kinh doanh VN, Research, Science, Tech, Hacker News. Lấy từ Google News RSS (theo mục, hoặc theo từ khoá trong 24 giờ) và Hacker News API. Cập nhật **2 phút** một lần.
 * **Chạm vào tin để xem tóm tắt:**
   1. Link trong RSS **không phải link bài gốc** mà là link của Google. Mình gọi lại đúng request `batchexecute` mà trang Google News dùng, để lấy link của báo.
   2. Đọc bài: `og:description` cộng các đoạn `<p>`.
@@ -390,12 +391,79 @@ Ban đầu chỉ có Mei đi dạo. Sau đó thêm **Nhat**, "cậu chủ" của
 * **Menu nổi** (nút tròn): nền phía sau mờ đi, có 4 ô (độ sáng, khởi động lại, tắt máy, xoay màn hình) và thanh kéo độ sáng. Khởi động lại và tắt máy phải bấm thêm một lần để xác nhận. Lệnh đi qua cùng kênh long-poll với micro.
 * **Chế độ dọc:** toàn bộ `#app` (kích thước 480 × 800) được xoay ±90° bằng `transform`, chạy trên GPU. Mỗi trang có bố cục dọc riêng. Lựa chọn hướng màn hình lưu trong `localStorage` của chính Car Thing.
 * **4 nút theo trang:**
-  * News: Top, Research, Business, chủ đề kế tiếp.
+  * News: Top, Việt Nam, Tech, chủ đề kế tiếp (lúc đầu là Top, Research, Business; xem mục 21).
   * Markets: phóng to BTC, Vàng, Tỷ giá (9 ngoại tệ Vietcombank), Chỉ số.
   * Music: ⏮ ⏯ ⏭ ♥.
   * Focus: 15, 25, 45, 60 phút.
 
-## 21. Bảng tổng hợp lỗi
+## 21. Màn hình tự tắt, và đợt nâng cấp thứ hai
+
+### Lỗi #14: "đôi khi máy tự tắt, đen màn hình, phải rút dây cắm lại"
+
+Triệu chứng: màn hình tắt hẳn, bấm gì cũng không lên, phải rút cáp USB cắm lại.
+
+Điều tra theo thứ tự:
+
+1. **Phía server 2:** log kernel cho thấy Car Thing bị ngắt USB lúc 20:14:58 và kết nối lại lúc 20:15:21. Khoảng cách 23 giây đúng bằng thời gian khởi động, tức là lần rút cắm đó là của người dùng, không phải thiết bị tự khởi động lại.
+2. **Phía Car Thing:** journal được lưu trên `/var`, mỗi lần khởi động là một thư mục riêng (vì `machine-id` đổi mỗi lần boot). Log của lần chạy bị lỗi **dừng đột ngột** lúc 20:14:32, không có dòng tắt máy nào. Thoạt nhìn giống máy bị treo. Nhưng journald chỉ ghi xuống đĩa **5 phút một lần** (`SyncIntervalSec=5m`), nên khi bị rút điện thì các dòng cuối mất hết. Log "dừng đột ngột" không chứng minh máy bị treo.
+3. **Manh mối:** ngay trước đó, `nocturned` vừa bị dừng rồi chạy lại. Đây là việc `voice-agent.sh` làm mỗi khi Mei thu âm (micro bị `nocturned` giữ). Log hub cũng có câu hỏi cho Mei lúc 20:14:33.
+4. **Tái hiện:** dừng rồi chạy lại `nocturned` y như voice agent, rồi đọc độ sáng mỗi giây:
+
+   ```
+   stopped: 160
+   t1: 0   t2: 0   t3: 0 … t10: 0
+   ```
+
+   Mỗi lần khởi động, **`nocturned` đặt đèn nền về 0** và giữ nguyên như vậy. `brightness-sync.sh` không sửa lại, vì nó chỉ ghi độ sáng khi người dùng **đổi** độ sáng.
+
+Vậy máy không hề tắt: **mỗi lần hỏi Mei là đèn nền tắt**. Rút cắm lại thì máy khởi động lại, đèn nền sáng lại.
+
+Cách sửa:
+
+* `brightness-sync.sh` giờ **kiểm tra đèn nền mỗi 2 giây** và ghi lại mức đã chọn nếu bị đổi. Đo lại: sau khi `nocturned` khởi động, màn hình sáng lại trong ≤ 2 giây.
+* Phòng trường hợp máy **treo thật**: bật **watchdog phần cứng** của chip Amlogic (`RuntimeWatchdogSec=30s` trong `/etc/systemd/system.conf.d/10-watchdog.conf`). Nếu systemd không "gõ" watchdog trong 30 giây, chip tự khởi động lại máy, không cần ai rút dây.
+* **`kiosk-watch.sh`:** nếu lúc Car Thing khởi động mà server 2 đang tắt, Chromium sẽ kẹt ở trang lỗi mãi mãi (code tự kết nối lại nằm trong trang của hub, mà trang đó chưa tải được). Script này hỏi DevTools trên loopback mỗi 15 giây xem trang đang mở là gì. Nếu không phải hub và hub đã trả lời thì khởi động lại kiosk. Thử bằng cách cố tình cho Chromium mở một địa chỉ sai: 15 giây sau đã tự quay về hub.
+
+### Lỗi #15 và #16: dấu `\` biến mất trong regex
+
+Trong lúc đọc code, mình thấy:
+
+```js
+text.match(/^s*Q:s*(.*)$/m)        // đúng ra là /^\s*Q:\s*(.*)$/m
+text.match(/^s*A:s*([sS]*)$/m)     // đúng ra là /^\s*A:\s*([\s\S]*)$/m
+.replace(/**/g, '')                 // đúng ra là /\*\*/g
+text.replace(/d/g, '0')             // đúng ra là /\d/g (đồng hồ số BTC)
+```
+
+Các dấu `\` đã bị mất khi file được ghi qua một lớp shell nhiều tầng. Hậu quả:
+
+* **#15:** câu trả lời của Mei không tách được phần `Q:` và `A:`. Riêng `/**/g` thì JavaScript hiểu là **một comment rỗng** theo sau là biến `g`, nên vẫn chạy mà không báo lỗi gì.
+* **#16:** "đồng hồ số" giá BTC không bao giờ cuộn, vì `/d/` tìm chữ `d` chứ không phải chữ số.
+
+Sửa cả bốn chỗ và rà lại toàn bộ code. Từ đó, mọi chỉnh sửa có regex đều dùng công cụ sửa file trực tiếp, không đi qua shell.
+
+### Lỗi #17: Gemini 429, mới hỏi vài câu đã hết lượt
+
+Khi thử bản tin buổi sáng, Gemini trả về `429 You exceeded your current quota`. Đọc chi tiết lỗi: `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, model `gemini-3.8-flash`, **giới hạn 20 lượt mỗi ngày**. Model `flash-latest` hiện trỏ tới bản này, và gói miễn phí của bản mới chỉ có 20 lượt một ngày. Bản `flash-lite-latest` thì vẫn chạy bình thường, hạn mức cao hơn nhiều.
+
+Cách sửa: khi model chính trả 429, hub **tự gửi lại cùng yêu cầu cho bản lite**. Mei không bao giờ "chết" vì hết lượt, và vẫn hoàn toàn miễn phí.
+
+### Những gì thêm vào
+
+* **Trang Lịch (Calendar).** Đọc lịch Google qua **địa chỉ iCal bí mật**: chỉ đọc, không cần OAuth, không cần app. Hub tự **giải chuỗi lặp lại** (`RRULE` hằng ngày, hằng tuần, hằng tháng, hằng năm, `BYDAY` như "thứ Ba thứ hai của tháng", `COUNT`, `UNTIL`, `EXDATE`, buổi bị dời qua `RECURRENCE-ID`), tính đúng giờ khi **đổi giờ mùa hè**. Có 5 bài test cho phần này, và đã chạy thử với lịch thật của Google (317 sự kiện). Nút 1 là hôm nay, 2 là ngày mai, 3 là cả tuần. Mười phút trước mỗi sự kiện, một banner hiện lên ở bất kỳ trang nào.
+  * **Bảo mật:** ai có link iCal bí mật là đọc được lịch, nên link chỉ nằm trong `.env` của hub. Nó không bao giờ được in ra log (lỗi chỉ ghi "calendar 1: HTTP 404") và không bao giờ gửi xuống Car Thing. Nhập bằng `set-calendar-url.sh` (hiện `*` khi dán, kiểm tra link trước khi lưu), để không lưu vào lịch sử shell.
+* **Mei nhớ ngữ cảnh.**
+  * Mei nhớ 4 câu hỏi gần nhất trong **10 phút**, nên hỏi tiếp được kiểu "còn ETH thì sao?".
+  * Khi bấm hỏi, màn hình gửi kèm **trang trước đó** và **tin đang mở**. Đang đọc tóm tắt một tin rồi chuyển sang Mei hỏi "tin này nói gì?" là Mei biết tin nào. Tin đang mở được giữ nguyên khi sang trang Mei.
+  * Nút Back trên trang Mei tắt bong bóng trả lời.
+* **Bản tin buổi sáng.** 7:00 mỗi sáng (giờ San Jose, đổi được bằng `BRIEFING_AT`), Mei viết một đoạn khoảng 65 từ gồm thời tiết, lịch hôm nay, BTC và vàng, tỷ giá USD/VND, 2 tin chính. Trang Mei tự bật lên, trừ khi bạn đang làm gì khác. Nút 1 trên trang Mei để xin bản tin bất cứ lúc nào. Ngày đã gửi được lưu lại, nên khởi động lại hub cũng không bị gửi hai lần. Bản tin chỉ chạy trong khoảng 2 giờ sau giờ hẹn, để khởi động lại hub vào buổi chiều không tự bật bản tin.
+* **Màn hình báo mất kết nối.** Hub gửi một sự kiện `hb` mỗi 10 giây. Trước đây heartbeat là một dòng comment SSE, mà trình duyệt không báo cho JavaScript biết comment, nên trang không phân biệt được "hub đang im" với "mất kết nối". Không nhận được gì trong 25 giây thì hiện thẻ "Reconnecting to the hub…" và cứ 30 giây mở lại kết nối một lần. Mỗi lần khởi động, hub có một mã phiên bản riêng; màn hình thấy mã mới là **tự tải lại trang**, nên cập nhật giao diện không cần đụng vào Car Thing.
+* **Xoay đủ 4 hướng.** Trước chỉ có ngang, dọc phải, dọc trái. Giờ thêm **ngang lộn ngược** (`rotate(180deg)`), mỗi lần bấm xoay thêm 90° theo chiều kim đồng hồ.
+* **News gọn lại:** chỉ giữ Top stories, Việt Nam, Kinh doanh VN, Tech, Hacker News. Nút 1 là Top, 2 là Việt Nam, 3 là Tech, 4 là chủ đề kế tiếp.
+* **GIF demo** ở đầu README: quay bằng `Page.startScreencast` của DevTools (671 khung hình trong 34 giây), ghép bằng ffmpeg trong một container dùng xong là xoá, ra GIF 560 px nặng 7,5 MB.
+* **GitHub:** bật Secret scanning và Push protection, thêm một workflow kiểm tra cú pháp và chạy test mỗi lần push.
+
+## 22. Bảng tổng hợp lỗi
 
 | # | Triệu chứng | Nguyên nhân gốc | Cách sửa |
 |---|---|---|---|
@@ -415,8 +483,13 @@ Ban đầu chỉ có Mei đi dạo. Sau đó thêm **Nhat**, "cậu chủ" của
 | 11 | Trang đứng hình | `id="stage"` tự thành `window.stage` | Đổi tên API |
 | 12 | Tóm tắt tin timeout | Model chính "suy nghĩ" lâu | Dùng `flash-lite` (0,8 giây) |
 | 13 | Tin tiếng Anh bị tóm tắt tiếng Việt | Câu lệnh ngôn ngữ mơ hồ | Hub tự nhận diện ngôn ngữ |
+| 14 | Màn hình đen sau khi hỏi Mei, phải rút cắm lại | `nocturned` đặt đèn nền về 0 mỗi lần khởi động lại | `brightness-sync` kiểm tra mỗi 2 giây; thêm watchdog phần cứng và `kiosk-watch` |
+| 15 | Mei không tách được Q/A | Dấu `\` trong regex bị mất khi ghi file qua shell | Sửa regex, không sửa code qua shell nữa |
+| 16 | Đồng hồ số BTC không cuộn | Cùng nguyên nhân: `/d/` thay vì `/\d/` | Như trên |
+| 17 | Gemini 429 sau vài câu hỏi | Gói miễn phí của model Flash mới chỉ có 20 lượt/ngày | Tự chuyển sang Flash-Lite khi gặp 429 |
+| 18 | Kẹt trang lỗi nếu hub tắt lúc Car Thing khởi động | Code tự kết nối lại nằm trong trang chưa tải được | `kiosk-watch.sh` khởi động lại kiosk khi hub trả lời |
 
-## 22. Những điều rút ra
+## 23. Những điều rút ra
 
 1. **Đo trên thiết bị thật, không đoán.** Font, FPS, mức âm thanh của micro, giờ hệ thống: lần nào thiết bị thật cũng khác với giả định.
 2. **"Không tin mặc định" là công cụ thiết kế, không chỉ là bảo mật.** Nó quyết định Car Thing không giữ key, hub không cầm `docker.sock`, agent chỉ đẩy dữ liệu đi, và firewall nằm trên đúng máy.

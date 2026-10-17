@@ -1,0 +1,39 @@
+name: check
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: JavaScript syntax
+        run: |
+          find hub agent tools -name '*.mjs' -o -name '*.js' -o -name '*.cjs' | sort | while read -r f; do
+            node --check "$f" || exit 1
+          done
+
+      - name: Shell syntax
+        run: |
+          for f in carthing/*.sh tools/*.sh host/*.sh; do bash -n "$f" || exit 1; done
+
+      - name: config.json parses
+        run: |
+          node -e "JSON.parse(require('fs').readFileSync('hub/config.json', 'utf8'))"
+
+      - name: Tests
+        env:
+          TZ: UTC
+        run: node --test hub/test/*.test.mjs

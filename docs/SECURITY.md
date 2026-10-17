@@ -20,7 +20,7 @@ So the Car Thing must not hold secrets, must not reach anything except the hub, 
 | **Car Thing → network** | Point-to-point USB link. UFW `DOCKER-USER` rules on the brain's USB interface allow only the hub port; NTP is the only other allowed packet. No forwarding to the LAN or the internet. |
 | **Car Thing → brain config** | The brain takes a static address on the USB link and accepts no routes, DNS or IPv6 from the device (`accept-ra: false`, `link-local: []`). |
 | **Car Thing access** | Root SSH by key only, from the brain only (`PasswordAuthentication no`, `PermitEmptyPasswords no`). |
-| **Secrets** | Gemini key, Spotify refresh token and the ingest token live only in the hub's `.env` / `state/` (mode 600). The Car Thing never sees them. Spotify uses PKCE, so there is no client secret at all. |
+| **Secrets** | Gemini key, Spotify refresh token, the ingest token and the secret iCal links live only in the hub's `.env` / `state/` (mode 600). The Car Thing never sees them. Spotify uses PKCE, so there is no client secret at all. The iCal links are never logged (errors name the calendar by number) and are entered through a script that masks them, so they stay out of shell history. |
 | **Hub container** | `read_only`, `cap_drop: ALL`, `no-new-privileges`, non-root user, memory and PID limits, no `docker.sock`. |
 | **Docker visibility** | Only the `docker-status` sidecar mounts `docker.sock` (read-only), answers a single `GET /` with names and states, and has no host port. |
 | **Actions** | State-changing endpoints (brightness, Mei, Spotify controls, reboot / power off) accept requests only from the Car Thing's address. |
@@ -28,6 +28,7 @@ So the Car Thing must not hold secrets, must not reach anything except the hub, 
 | **Spotify linking** | One-time `state`, 10-minute expiry, never started from the Car Thing; the callback stays on loopback through an SSH tunnel. |
 | **Album art proxy** | Only `https://i.scdn.co/`. |
 | **Inbound internet** | None. Every integration is an outbound request. |
+| **Repository** | GitHub secret scanning and push protection are on; CI checks syntax and runs the tests on every push. |
 
 ## Two traps worth knowing
 
@@ -38,6 +39,7 @@ So the Car Thing must not hold secrets, must not reach anything except the hub, 
 
 * Mei sends your recorded question and the dashboard snapshot to the Gemini API. On Google's free tier, inputs may be used to improve Google's products. Do not ask Mei anything sensitive, or use a paid tier.
 * Story summaries send the article text to Gemini in the same way.
+* The morning briefing and Mei's answers include **today's and tomorrow's calendar entries** (times, titles, locations) in what is sent to Gemini. Leave `CALENDAR_ICS` empty, or set `BRIEFING_AT=off`, if that is not acceptable for your calendar.
 * Recordings are not stored: the Car Thing deletes the WAV after upload, and the hub keeps it in memory only for the request.
 
 ## Reporting

@@ -57,14 +57,14 @@ The hub's helpers live on the data partition (`/var/lib/hub`), because Nocturne 
 ```bash
 CT=root@10.42.1.2          # default Nocturne password: nocturne (change access below)
 ssh $CT 'mkdir -p /var/lib/hub'
-scp carthing/brightness-sync.sh carthing/voice-agent.sh carthing/kiosk-env $CT:/var/lib/hub/
+scp carthing/brightness-sync.sh carthing/voice-agent.sh carthing/kiosk-watch.sh carthing/kiosk-env $CT:/var/lib/hub/
 ssh $CT 'chmod 755 /var/lib/hub/*.sh'
 
 # one-time edits on the read-only system partition
 ssh $CT 'mount -o remount,rw / &&
   cp -p /etc/default/chromium-kiosk /etc/default/chromium-kiosk.orig &&
   sed -i "s#^KIOSK_ENV_OVERRIDE_FILE=.*#KIOSK_ENV_OVERRIDE_FILE=/var/lib/hub/kiosk-env#" /etc/default/chromium-kiosk &&
-  mkdir -p /root/.ssh /etc/systemd/timesyncd.conf.d && sync && mount -o remount,ro /'
+  mkdir -p /root/.ssh /etc/systemd/timesyncd.conf.d /etc/systemd/system.conf.d && sync && mount -o remount,ro /'
 ```
 
 Key-only SSH (from the brain), NTP from the brain, then lock the partition again:
@@ -75,8 +75,11 @@ ssh $CT 'mount -o remount,rw /'
 scp ~/.ssh/carthing_ed25519.pub $CT:/root/.ssh/authorized_keys
 scp carthing/10-hub.conf $CT:/etc/systemd/timesyncd.conf.d/
 scp carthing/10-hardening.conf $CT:/etc/ssh/sshd_config.d/
-ssh $CT 'sshd -t && systemctl unmask systemd-timesyncd; systemctl enable systemd-timesyncd; sync; mount -o remount,ro /; systemctl reload sshd; systemctl restart systemd-timesyncd chromium-kiosk'
+scp carthing/10-watchdog.conf $CT:/etc/systemd/system.conf.d/   # reboot by itself if it ever freezes
+ssh $CT 'sshd -t && systemctl unmask systemd-timesyncd; systemctl enable systemd-timesyncd; sync; mount -o remount,ro /; systemctl daemon-reexec; systemctl reload sshd; systemctl restart systemd-timesyncd chromium-kiosk'
 ```
+
+Check the watchdog is armed: `journalctl -b | grep -i watchdog` should say `Watchdog running with a hardware timeout of 30s`.
 
 Test the key login **before** reloading sshd with the hardening file.
 
@@ -98,11 +101,31 @@ The hub only accepts it from `INGEST_FROM` with the right token.
 2. From a computer on the LAN: `ssh -N -L 127.0.0.1:8888:10.10.10.20:8787 user@brain` (keeps the callback on loopback, as Spotify requires).
 3. Open `http://10.10.10.20:8787/spotify/link`, sign in, press **Agree**. Close the tunnel.
 
+## 7. Optional: Calendar
+
+1. Google Calendar on the web: **Settings → (your calendar) → Integrate calendar → Secret address in iCal format**. Copy it. Anyone with this link can read that calendar, so treat it like a password.
+2. Copy `tools/set-calendar-url.sh` to the brain and run `ssh -t user@brain ~/set-calendar-url.sh`. Paste one link per prompt (shown as `*`), press Enter on an empty prompt to finish. Each link is checked before it is saved to `.env`, then the hub restarts.
+
+Several calendars are fine; each gets its own colour on the Calendar page.
+
+## 8. Optional: morning briefing
+
+On by default at 07:00 in `WX_TZ`. Change it with `BRIEFING_AT=06:30` (or `off`) and `BRIEFING_LANG=Vietnamese` in `hub/.env`, then restart the hub. Button 1 on Mei's page asks for one any time.
+
 ## Development helpers
 
-`tools/` holds the scripts used while building: `cdp.mjs` (screenshot / eval over DevTools), `errors.mjs` / `errors2.mjs` (reload and print exceptions), `shoot*.mjs` (the README screenshots). Open the tunnel first:
+`tools/` holds the scripts used while building: `cdp.mjs` (screenshot / eval over DevTools), `steps.mjs` (a list of key presses, evals and screenshots, printing every exception), `errors.mjs` / `errors2.mjs` (reload and print exceptions), `shoot*.mjs` (the README screenshots; `demo-calendar.js` supplies sample events), `record.mjs` (frames for the README GIF). Open the tunnel first:
 
 ```bash
 ssh -i ~/.ssh/carthing_ed25519 -f -N -L 127.0.0.1:19223:127.0.0.1:9223 root@10.42.1.2
 docker run --rm --network host -v "$PWD/tools:/t" -w /t node:22-bookworm-slim node cdp.mjs shot /t/screen.png
 ```
+
+The GIF: `node record.mjs /t/rec`, then in a throwaway container with ffmpeg:
+
+```bash
+ffmpeg -f concat -safe 0 -i frames.txt \
+  -vf "fps=12,scale=560:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle" tour.gif
+```
+
+Tests (no dependencies): `cd hub && node --test test/*.test.mjs`.
