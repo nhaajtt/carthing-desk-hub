@@ -52,26 +52,15 @@
       <div class="mzoom" id="mzoom"></div>
     </section>
 
-    <!-- 3. Mei, the desk cat (voice assistant) -->
-    <section class="page ask" data-name="Mei" data-phase="idle">
-      <div class="ask-head"><div class="ask-name">Mei <span class="ask-chip" id="askChip">ready</span></div><div class="ask-sub">your desk cat · powered by Gemini</div></div>
-      <div class="ask-hello" id="askHello">Hi! I'm Mei 🐾<small>Ask me about prices, the weather, your servers… or anything at all.</small></div>
-      <div class="ask-bubble" id="askBubble"><div class="ask-q" id="askQ"></div><div class="ask-a" id="askA"></div><div class="ask-src" id="askSrc"></div></div>
-      <div class="ask-think"><i></i><i></i><i></i></div>
-      <div class="ask-waves"><span></span><span></span><span></span></div>
-      <div class="floor"></div>
-      <div id="stage"><div id="props"></div><div class="actor mit sit" id="mit"></div><div class="actor nhat stand" id="nhat"></div></div>
-      <div class="ask-foot"><div class="ask-meter"><div id="askMeter"></div></div><div class="ask-hint" id="askHint"></div></div>
-    </section>
-
-    <!-- 4. Weather -->
+    <!-- 3. Weather -->
     <section class="page weather" data-name="Weather">
       <div class="wx-now" id="wxNow"></div>
+      <div class="wx-rain" id="wxRain"></div>
       <div class="wx-hourly" id="wxHourly"></div>
       <div class="wx-daily" id="wxDaily"></div>
     </section>
 
-    <!-- 5. Calendar -->
+    <!-- 4. Calendar -->
     <section class="page calendar" data-name="Calendar">
       <div class="cal-side">
         <div class="cal-head" id="calHead"></div>
@@ -80,7 +69,7 @@
       <div class="cal-list" id="calList"></div>
     </section>
 
-    <!-- 6. Music -->
+    <!-- 5. Music -->
     <section class="page music" data-name="Music" data-editable="1">
       <div class="edit-badge">Volume · turn the knob · Back when done</div>
       <div class="art" id="mArt"></div>
@@ -100,13 +89,14 @@
       </div>
     </section>
 
-    <!-- 7. Servers -->
+    <!-- 6. Servers -->
     <section class="page servers" data-name="Servers">
-      <div class="srv" id="srv2"></div>
-      <div class="srv" id="srv1"></div>
+      <div class="srv-views" id="srvViews"></div>
+      <div class="srv-grid" id="srvGrid"><div class="srv" id="srv2"></div><div class="srv" id="srv1"></div></div>
+      <div class="srv-alt" id="srvAlt"></div>
     </section>
 
-    <!-- 8. Focus -->
+    <!-- 7. Focus -->
     <section class="page focus" data-name="Focus" data-editable="1">
       <div class="edit-badge">Editing · turn knob to change minutes · Back to finish</div>
       <div class="pomo">
@@ -116,6 +106,18 @@
         <div class="pomo-hint">Press the knob to start or pause · buttons 1–4 set 15, 25, 45 or 60 minutes</div>
         <div class="pomo-count" id="pomoCount"></div>
       </div>
+    </section>
+
+    <!-- 8. Mei, the desk cat (voice assistant) -->
+    <section class="page ask" data-name="Mei" data-phase="idle">
+      <div class="ask-head"><div class="ask-name">Mei <span class="ask-chip" id="askChip">ready</span></div><div class="ask-sub">your desk cat · powered by Gemini</div></div>
+      <div class="ask-hello" id="askHello">Hi! I'm Mei 🐾<small>Ask me about prices, the weather, your servers… or anything at all.</small></div>
+      <div class="ask-bubble" id="askBubble"><div class="ask-q" id="askQ"></div><div class="ask-a" id="askA"></div><div class="ask-src" id="askSrc"></div></div>
+      <div class="ask-think"><i></i><i></i><i></i></div>
+      <div class="ask-waves"><span></span><span></span><span></span></div>
+      <div class="floor"></div>
+      <div id="stage"><div id="props"></div><div class="actor mit sit" id="mit"></div><div class="actor nhat stand" id="nhat"></div></div>
+      <div class="ask-foot"><div class="ask-meter"><div id="askMeter"></div></div><div class="ask-hint" id="askHint"></div></div>
     </section>
 
   </main>

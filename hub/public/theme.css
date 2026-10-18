@@ -511,3 +511,60 @@ body[data-orient="flip"] #app { transform: rotate(180deg); }
 
 /* the morning briefing is longer than an answer */
 .ask-bubble.briefing .ask-a { font-size: 19px; line-height: 1.38; }
+
+/* ---------- weather: rain in the next two hours */
+.wx-rain { display: none; align-items: center; gap: 14px; padding: 7px 14px; border-radius: 14px; background: rgba(44, 36, 96, 0.35); font-size: 13.5px; color: var(--muted); }
+.wx-rain.on { display: flex; }
+.wx-rain.wet { background: linear-gradient(90deg, rgba(124, 200, 255, 0.28), rgba(44, 36, 96, 0.45)); color: var(--text); font-weight: 600; }
+.wr-t { flex: 1; }
+.wr-bars { display: flex; align-items: flex-end; gap: 3px; height: 20px; width: 120px; }
+.wr-bars i { flex: 1; background: var(--sky); border-radius: 2px 2px 0 0; }
+.wr-k { font-size: 11px; color: var(--dim); }
+
+/* ---------- servers: four views */
+.servers { flex-direction: column; gap: 8px; }
+.srv-views { display: flex; gap: 6px; flex: none; }
+.srv-grid, .srv-alt { flex: 1; min-height: 0; display: flex; gap: 12px; }
+.srv-grid .srv { gap: 7px; padding: 10px 14px; }
+.srv-alt .srv { padding: 10px 14px; gap: 6px; min-width: 0; overflow: hidden; }
+.srv-empty { margin: auto; color: var(--muted); font-size: 16px; }
+.srv .kv small { color: var(--dim); font-weight: 500; font-size: 11.5px; }
+.srv .kv em { font-style: normal; color: var(--gold); }
+.srv.stale { opacity: 0.6; }
+.hg { display: flex; align-items: center; gap: 10px; flex: 1; min-height: 0; }
+.hg-k { width: 74px; flex: none; font-size: 12.5px; color: var(--muted); display: flex; flex-direction: column; }
+.hg-k b { font-family: var(--display); font-weight: 800; font-size: 21px; color: var(--text); line-height: 1.1; }
+.hg-k small { font-size: 11px; color: var(--dim); }
+.hg-c { flex: 1; height: 100%; min-height: 40px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+.hg-c svg { width: 100%; height: 100%; display: block; }
+.hg-x { display: flex; justify-content: space-between; margin-left: 84px; font-size: 10.5px; color: var(--dim); }
+.srv-alt.v2 .srv { flex: 1; }
+.srv-alt.v2 .ct-card { flex: 0.8; }
+.sec-k { font-size: 11.5px; color: var(--dim); margin-top: 3px; }
+.sec-top { font-size: 12px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: -3px; }
+.ports { display: flex; flex-wrap: wrap; gap: 4px; }
+.port { font-size: 11.5px; padding: 2px 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); color: var(--muted); white-space: nowrap; }
+.port.fresh { background: var(--down); color: #3a0f1f; font-weight: 700; }
+.sec-none { font-size: 12px; color: var(--up); }
+.sec-ok { font-family: var(--display); font-weight: 800; font-size: 19px; color: var(--up); margin-top: 6px; }
+.sec-bad { font-family: var(--display); font-weight: 800; font-size: 17px; color: var(--down); margin-top: 6px; }
+.srv .note { margin-top: 0; }
+.srv-alt.v3 .srv { flex: 1; }
+.up-s { display: flex; flex-direction: column; gap: 5px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.07); }
+.up-h { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.gh-r { display: grid; grid-template-columns: 12px auto 1fr; align-items: center; gap: 8px; font-size: 13.5px; }
+.gh-r span { font-size: 12px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+.gh-d { width: 10px; height: 10px; border-radius: 50%; background: var(--dim); }
+.gh-d.ok { background: var(--up); } .gh-d.bad { background: var(--down); } .gh-d.run { background: var(--gold); }
+.gh-o { font-size: 13.5px; color: var(--muted); margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.07); }
+.gh-o b { color: var(--text); }
+.portrait .srv-grid, .portrait .srv-alt { flex-direction: column; }
+.portrait .srv-alt.v2 .srv, .portrait .srv-alt.v3 .srv { flex: none; }
+
+/* ---------- banners from the servers, the weather and CI */
+.alert-banner.sec, .alert-banner.ci { background: linear-gradient(90deg, #4a1129, #6e1f3d); color: #ffd6e5; box-shadow: 0 0 0 2px var(--down), 0 14px 40px rgba(0, 0, 0, 0.5); }
+.alert-banner.rain { background: linear-gradient(90deg, #0d2c4a, #1d4f7a); color: #d8eeff; box-shadow: 0 0 0 2px var(--sky), 0 14px 40px rgba(0, 0, 0, 0.5); }
+
+/* ---------- night: backlight off, so stop every animation as well */
+body.night-dark *, body.night-dark *::before, body.night-dark *::after { animation-play-state: paused !important; }
+.portrait .nc-up .upd { display: none; }

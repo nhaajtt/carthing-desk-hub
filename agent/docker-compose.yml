@@ -9,6 +9,7 @@ services:
     env_file: .env
     volumes:
       - ./agent.mjs:/app/agent.mjs:ro
+      - ./report:/app/report:ro   # written by host-report.sh from cron
     read_only: true
     cap_drop: [ALL]
     security_opt:

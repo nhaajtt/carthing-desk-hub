@@ -237,6 +237,7 @@ h3 {
   transition: transform 0.15s, border-color 0.15s, background 0.15s;
 }
 .ov-tile svg { width: 52px; height: 52px; }
+.ov-tile span { max-width: 100%; padding: 0 10px; text-align: center; line-height: 1.2; }
 .ov-tile.sel { border-color: var(--accent); transform: scale(1.06); background: rgba(38, 48, 66, 0.95); }
 .ov-tile.confirm { border-color: var(--down); color: var(--down); background: rgba(60, 24, 28, 0.95); }
 .ov-slider {

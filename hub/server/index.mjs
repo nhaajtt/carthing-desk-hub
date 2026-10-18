@@ -9,6 +9,10 @@ import { createAssistant } from './assistant.mjs';
 import { createSpotify } from './spotify.mjs';
 import { NEWS_FEEDS, fetchFeed, summarize, cachedSummary } from './news.mjs';
 import { createCalendar } from './calendar.mjs';
+import { createHistory } from './history.mjs';
+import { createSecurity } from './security.mjs';
+import { createRegistry } from './registry.mjs';
+import { createGitHub } from './github.mjs';
 
 const PORT = Number(process.env.PORT || 8787);
 const LAT = Number(process.env.LAT || 37.3382);
@@ -20,6 +24,8 @@ const CARTHING_IP = process.env.CARTHING_IP || '10.42.1.2';
 const DOCKER_STATUS_URL = process.env.DOCKER_STATUS_URL || 'http://docker-status:8080/';
 const STATE_DIR = path.resolve('state');
 const PUBLIC_DIR = path.resolve('public');
+// read-only mount with this host's report (host/host-report.sh) and the Car Thing check (carthing/check-carthing.sh)
+const HOST_DIR = path.resolve(process.env.HOST_REPORT_DIR || 'host');
 // Yahoo answers 429 to full browser UA strings but accepts this short form
 const UA = 'Mozilla/5.0';
 // changes on every hub start; the screen reloads itself when it sees a new one (picks up UI updates)
@@ -45,6 +51,7 @@ const state = {
   metals: { xau: null, xag: null, at: 0 },
   yahoo: {},
   vngold: { items: [], at: 0 },
+  nowcast: null,
   fx: { rates: {}, at: 0 },
   weather: null,
   aqi: null,
@@ -53,16 +60,34 @@ const state = {
   sources: {},
 };
 
-const clients = new Set();
+// res -> true when the client may see everything (the Car Thing), false for the read-only LAN preview
+const clients = new Map();
 let pending = false;
 function changed() {
   if (pending) return;
   pending = true;
   setTimeout(() => {
     pending = false;
-    const msg = `data: ${JSON.stringify({ t: Date.now(), v: BOOT, state })}\n\n`;
-    for (const res of clients) res.write(msg);
+    const full = `data: ${JSON.stringify({ t: Date.now(), v: BOOT, state })}\n\n`;
+    let pub = null;
+    for (const [res, all] of clients) res.write(all ? full : (pub ??= `data: ${JSON.stringify({ t: Date.now(), v: BOOT, state: publicState() })}\n\n`));
   }, 250);
+}
+
+// The LAN preview is read-only but anyone on the LAN can open it, so it gets no calendar, no security or
+// update details, no GitHub and no Mei answers (those can quote the calendar). PREVIEW_FULL_FROM lists
+// addresses that may see everything anyway.
+const PREVIEW_FULL_FROM = (process.env.PREVIEW_FULL_FROM || '').split(/[\s,]+/).filter(Boolean);
+function publicState() {
+  const v = state.voice;
+  return {
+    ...state,
+    calendar: state.calendar && { configured: state.calendar.configured, events: [], at: state.calendar.at, hidden: true },
+    alerts: (state.alerts || []).filter((a) => ['up', 'down', 'rain'].includes(a.dir)),
+    security: null, updates: null,
+    github: { configured: false, hidden: true },
+    voice: v && { ...v, transcript: '', answer: v.answer ? 'Answers show on the Car Thing only.' : '' },
+  };
 }
 
 function markSource(name, ok, err) {
@@ -241,6 +266,35 @@ every(15 * 60000, 'open-meteo-aqi', async () => {
   state.aqi = { ...a.current, at: Date.now() };
 });
 
+// rain in the next two hours, in 15-minute steps (Open-Meteo minutely_15)
+let lastRainNote = 0;
+every(5 * 60000, 'nowcast', async () => {
+  const w = await getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&timezone=${encodeURIComponent(WX_TZ)}&minutely_15=precipitation,precipitation_probability&past_minutely_15=1&forecast_minutely_15=9`);
+  const m = w.minutely_15;
+  const toMs = (t) => Date.parse(t + ':00Z') - w.utc_offset_seconds * 1000;
+  const slots = m.time.map((t, i) => ({ t: toMs(t), mm: m.precipitation[i] ?? 0, prob: m.precipitation_probability?.[i] ?? 0 }));
+  const now = Date.now();
+  const ci = Math.max(0, slots.findLastIndex((x) => x.t <= now));
+  const wet = (x) => x.mm >= 0.1 || x.prob >= 60;
+  const ahead = slots.slice(ci + 1);
+  const mins = (t) => Math.max(5, Math.round((t - now) / 300000) * 5);
+  const cur = slots[ci];
+  let text = null, startsAt = null, endsAt = null;
+  if (wet(cur)) {
+    const end = ahead.find((x) => !wet(x));
+    endsAt = end ? end.t : null;
+    text = end ? `Rain now, easing in about ${mins(end.t)} min` : 'Rain now, for the next two hours';
+  } else {
+    const start = ahead.find(wet);
+    if (start) { startsAt = start.t; text = `Rain likely in about ${mins(start.t)} min`; }
+  }
+  state.nowcast = { text, wetNow: wet(cur), startsAt, endsAt, bars: slots.slice(ci, ci + 9).map(({ t, mm, prob }) => ({ t, mm, prob })), at: now };
+  if (startsAt && startsAt - now <= 30 * 60000 && now - lastRainNote > 3 * 3600000) {
+    lastRainNote = now;
+    alerts.notify('rain', `${text} in ${CITY}`);
+  }
+});
+
 // ---------------------------------------------------------------- headlines (Google News RSS + Hacker News, free)
 
 // every 2 minutes: fresh enough for breaking news without hammering the feeds
@@ -326,6 +380,9 @@ const cleanContainers = (list) => (Array.isArray(list) ? list.slice(0, 80).map((
   state: String(c.state || '').slice(0, 20),
   health: c.health ? String(c.health).slice(0, 12) : null,
   status: String(c.status || '').slice(0, 60),
+  image: c.image ? String(c.image).slice(0, 120) : null,
+  digest: /^sha256:[0-9a-f]{64}$/.test(c.digest || '') ? c.digest : null,
+  open: Array.isArray(c.open) ? c.open.slice(0, 10).map((p) => String(p).slice(0, 12)) : [],
 })) : null);
 
 every(15000, 'docker-server2', async () => {
@@ -382,6 +439,7 @@ function applyServer1Stats(b) {
     at: Date.now(),
   };
   state.servers.server1 = s1;
+  if (b.report) security.server1(b.report);
   changed();
 }
 
@@ -397,7 +455,14 @@ function priceOf(a) {
   if (a === 'XAG') return state.metals.xag;
   return state.yahoo[a]?.price ?? null;
 }
-createAlerts({ state, changed, config, priceOf, labelOf: assetLabel });
+const alerts = createAlerts({ state, changed, config, priceOf, labelOf: assetLabel });
+
+// ---------------------------------------------------------------- 24 h graphs, security, updates, GitHub
+
+createHistory({ state, stateDir: STATE_DIR });
+const security = createSecurity({ state, changed, stateDir: STATE_DIR, hostDir: HOST_DIR, notify: alerts.notify });
+createRegistry({ state, changed, every });
+createGitHub({ state, changed, notify: alerts.notify, every });
 
 // ---------------------------------------------------------------- voice assistant
 
@@ -477,11 +542,32 @@ try { Object.assign(state.display, JSON.parse(fs.readFileSync(DISPLAY_FILE, 'utf
 
 function setBrightness(pct) {
   state.display.brightness = Math.max(5, Math.min(100, Math.round(pct)));
-  try { fs.writeFileSync(DISPLAY_FILE, JSON.stringify(state.display)); } catch (e) { console.error('[display]', e.message); }
+  try { fs.writeFileSync(DISPLAY_FILE, JSON.stringify({ brightness: state.display.brightness })); } catch (e) { console.error('[display]', e.message); }
   changed();
 }
 
+// Night: the backlight goes off between NIGHT_DIM's two times (local, WX_TZ). Any knob turn or button press
+// lights it for WAKE_MINUTES; that first touch only wakes the screen.
+const NIGHT = (process.env.NIGHT_DIM || '23:00-06:30').match(/^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$/);
+const WAKE_MS = Number(process.env.WAKE_MINUTES || 2) * 60000;
+let wakeUntil = 0;
+function updateNight() {
+  if (!NIGHT) { state.display.night = null; return; }
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: WX_TZ, hourCycle: 'h23', hour: '2-digit', minute: '2-digit' }).formatToParts(new Date()).map((x) => [x.type, x.value]));
+  const mins = Number(p.hour) * 60 + Number(p.minute);
+  const from = Number(NIGHT[1]) * 60 + Number(NIGHT[2]), to = Number(NIGHT[3]) * 60 + Number(NIGHT[4]);
+  const active = from > to ? mins >= from || mins < to : mins >= from && mins < to;
+  const dark = active && Date.now() > wakeUntil;
+  const prev = state.display.night;
+  const next = { from: `${NIGHT[1].padStart(2, '0')}:${NIGHT[2]}`, to: `${NIGHT[3].padStart(2, '0')}:${NIGHT[4]}`, active, dark, wakeUntil: active ? wakeUntil : 0 };
+  state.display.night = next;
+  if (!prev || prev.active !== active || prev.dark !== dark || prev.wakeUntil !== next.wakeUntil) changed();
+}
+updateNight();
+setInterval(updateNight, 10000);
+
 const fromCarThing = (req) => (req.socket.remoteAddress || '').replace(/^::ffff:/, '') === CARTHING_IP;
+const fullView = (req) => fromCarThing(req) || PREVIEW_FULL_FROM.includes((req.socket.remoteAddress || '').replace(/^::ffff:/, ''));
 
 // ---------------------------------------------------------------- spotify
 
@@ -511,8 +597,9 @@ const server = http.createServer((req, res) => {
 
   if (url.pathname === '/events') {
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
-    res.write(`retry: 3000\ndata: ${JSON.stringify({ t: Date.now(), v: BOOT, state })}\n\n`);
-    clients.add(res);
+    const all = fullView(req);
+    res.write(`retry: 3000\ndata: ${JSON.stringify({ t: Date.now(), v: BOOT, state: all ? state : publicState() })}\n\n`);
+    clients.set(res, all);
     // a named event (not a comment) so the screen can tell a quiet hub from a dead connection
     const hb = setInterval(() => res.write(`event: hb\ndata: ${JSON.stringify({ t: Date.now(), v: BOOT })}\n\n`), 10000);
     req.on('close', () => { clearInterval(hb); clients.delete(res); });
@@ -521,13 +608,20 @@ const server = http.createServer((req, res) => {
 
   if (url.pathname === '/api/state') {
     res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ t: Date.now(), state }));
+    return res.end(JSON.stringify({ t: Date.now(), state: fullView(req) ? state : publicState() }));
   }
 
   // plain-text percentage, polled by the sync script on the Car Thing
   if (url.pathname === '/api/brightness' && req.method === 'GET') {
     res.setHeader('Content-Type', 'text/plain');
-    return res.end(String(state.display.brightness));
+    return res.end(String(state.display.night?.dark ? 0 : state.display.brightness));
+  }
+
+  // any input on the Car Thing during the night lights the screen for a while
+  if (url.pathname === '/api/display/wake' && req.method === 'POST') {
+    if (!fromCarThing(req)) { res.writeHead(403); return res.end(); }
+    if (state.display.night?.active) { wakeUntil = Date.now() + WAKE_MS; updateNight(); }
+    return res.end('ok');
   }
 
   if (url.pathname === '/api/brightness' && req.method === 'POST') {

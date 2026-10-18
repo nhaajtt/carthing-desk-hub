@@ -17,6 +17,7 @@ services:
       - ./public:/app/public:ro
       - ./config.json:/app/config.json:ro
       - ./state:/app/state
+      - ./host-report:/app/host:ro   # host-report.sh and check-carthing.sh write here from cron
     read_only: true
     tmpfs:
       - /tmp:size=16m

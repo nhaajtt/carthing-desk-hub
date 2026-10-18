@@ -2,8 +2,8 @@
 
 const $ = (id) => document.getElementById(id);
 const pages = [...document.querySelectorAll('.page')];
-// page order: News, Markets, Mei (Ask), Weather, Calendar, Music, Servers, Focus. Settings is a pop-up menu, not a page.
-const NEWS = 0, MARKETS = 1, ASK = 2, WEATHER = 3, CALENDAR = 4, MUSIC = 5, SERVERS = 6, FOCUS = 7;
+// page order: News, Markets, Weather, Calendar, Music, Servers, Focus, Mei (Ask). Settings is a pop-up menu, not a page.
+const NEWS = 0, MARKETS = 1, WEATHER = 2, CALENDAR = 3, MUSIC = 4, SERVERS = 5, FOCUS = 6, ASK = 7;
 let page = 0;
 let editing = false;
 let S = null;
@@ -201,10 +201,11 @@ function marketZoom(n) { zoom = zoom === n ? 0 : n; renderZoom(); }
 
 function presetButton(n) {
   if (setMode) return;
-  if (page === NEWS) { const i = n === 4 ? newsCat + 1 : newsFeeds().findIndex((f) => f.key === NEWS_BUTTONS[n - 1]); return newsTopic(i); }
+  if (page === NEWS && n <= 2) return newsTopic(newsCat + (n === 1 ? 1 : -1));
   if (page === MARKETS) return marketZoom(n);
   if (page === ASK && n === 1) return briefingNow();
   if (page === CALENDAR && n <= 3) { calView = n - 1; return renderCalendar(); }
+  if (page === SERVERS) { srvView = n - 1; return renderServers(); }
   if (page === MUSIC) return spotifyAction(['prev', 'toggle', 'next', 'like'][n - 1]);
   if (page === FOCUS) return pomoSet([15, 25, 45, 60][n - 1]);
 }
@@ -221,7 +222,7 @@ function renderAlerts() {
     alertSeen = newest.id;
     const b = $('alertBanner');
     b.className = `alert-banner on ${newest.dir}`;
-    b.textContent = `${newest.dir === 'up' ? '▲' : '▼'} ${newest.text}`;
+    b.textContent = `${{ up: '▲', down: '▼', sec: '⚠', rain: '☔', ci: '✖' }[newest.dir] || '•'} ${newest.text}`;
     clearTimeout(bannerTimer);
     bannerTimer = setTimeout(() => b.classList.remove('on'), 30000);
   }
@@ -272,6 +273,14 @@ function renderWeather() {
       Wind ${Math.round(cur.wind_speed_10m)} ${u.wind} · UV ${a.uv_index != null ? num(a.uv_index, 0) : '—'}<br>
       Today ${Math.round(w.daily[0].min)}° – ${Math.round(w.daily[0].max)}${u.temp}</div></div>
     <div class="aqi"><div class="l">AQI (US)</div><div class="n" style="color:${ac}">${a.us_aqi ?? '—'}</div><div class="l">${al} · PM2.5 ${a.pm2_5 != null ? num(a.pm2_5, 0) : '—'}</div></div>`;
+  const nc = S.nowcast;
+  const rain = $('wxRain');
+  if (nc && now() - nc.at < 30 * 60000) {
+    const top = Math.max(1, ...nc.bars.map((b) => b.mm));
+    const bars = nc.bars.map((b) => `<i style="height:${Math.max(6, Math.round((100 * b.mm) / top))}%;opacity:${b.mm >= 0.1 || b.prob >= 60 ? 1 : 0.25}"></i>`).join('');
+    rain.className = 'wx-rain on' + (nc.text ? ' wet' : '');
+    rain.innerHTML = `<span class="wr-t">${nc.text ? '☔ ' + esc(nc.text) : 'No rain in the next 2 hours'}</span><span class="wr-bars">${bars}</span><span class="wr-k">now · 2 h</span>`;
+  } else rain.className = 'wx-rain';
   $('wxHourly').innerHTML = w.hourly.map((h) => `<div>${hourLabel(h.t)}<span>${wmo(h.code)[1]}</span><b>${Math.round(h.temp)}°</b>${h.pop ?? 0}%</div>`).join('');
   const dn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   $('wxDaily').innerHTML = w.daily.map((d, i) => {
@@ -285,7 +294,6 @@ function renderWeather() {
 let newsCat = 0, newsShownKey = '', newsShown = '', newsRotate = 0;
 let newsSel = -1;      // story highlighted while browsing with the knob (-1: not browsing)
 let newsDetail = null; // id of the story whose summary is open
-const NEWS_BUTTONS = ['top', 'vn', 'tech']; // presets 1-3; preset 4 = next topic
 const summaries = new Map();
 function ago(t) {
   if (!t) return '';
@@ -300,9 +308,8 @@ function renderNews() {
   if (!feeds.length) return;
   newsCat = (newsCat + feeds.length) % feeds.length;
   const f = feeds[newsCat];
-  const btn = (k) => { const i = NEWS_BUTTONS.indexOf(k); return i >= 0 ? `<i class="kb">${i + 1}</i>` : ''; };
   const track = $('newsTrack');
-  const chips = feeds.map((x, i) => `<span class="nc ${i === newsCat ? 'on' : ''}">${btn(x.key)}${esc(x.name)}</span>`).join('') + '<span class="nc nc-next"><i class="kb">4</i>next topic</span>';
+  const chips = feeds.map((x, i) => `<span class="nc ${i === newsCat ? 'on' : ''}">${esc(x.name)}</span>`).join('');
   if (track._html !== chips) {
     track._html = chips;
     track.innerHTML = chips;
@@ -311,7 +318,9 @@ function renderNews() {
     const shift = Math.max(0, Math.min(on.offsetLeft - 70, track.scrollWidth - $('newsCats').clientWidth));
     track.style.transform = `translate3d(${-shift}px,0,0)`;
   }
-  $('newsUp').textContent = f.at ? `updated ${now() - f.at < 60000 ? 'just now' : ago(f.at)}` : '';
+  // buttons 1 and 2 step through the topics; the hint stays put while the strip of topics slides
+  const up = `<i class="kb">1</i>next <i class="kb">2</i>back${f.at ? `<span class="upd"> · updated ${now() - f.at < 60000 ? 'just now' : ago(f.at)}</span>` : ''}`;
+  if ($('newsUp')._html !== up) { $('newsUp')._html = up; $('newsUp').innerHTML = up; }
   const items = newsItems();
   if (newsSel >= items.length) newsSel = items.length - 1;
   const html = items.length
@@ -494,7 +503,123 @@ function containersBlock(c) {
   </div>`;
 }
 
+// buttons 1-4: now, the last 24 hours, security, updates & GitHub
+let srvView = 0;
+const SRV_VIEWS = ['Now', '24 h', 'Security', 'Updates'];
+
 function renderServers() {
+  const views = SRV_VIEWS.map((v, i) => `<span class="nc ${i === srvView ? 'on' : ''}"><i class="kb">${i + 1}</i>${v}</span>`).join('');
+  if ($('srvViews')._html !== views) { $('srvViews')._html = views; $('srvViews').innerHTML = views; }
+  $('srvGrid').style.display = srvView === 0 ? '' : 'none';
+  $('srvAlt').style.display = srvView === 0 ? 'none' : '';
+  $('srvAlt').className = 'srv-alt v' + srvView;
+  if (srvView === 0) return renderServersNow();
+  const html = [null, srvHistory, srvSecurity, srvUpdates][srvView]();
+  if ($('srvAlt')._html !== html) { $('srvAlt')._html = html; $('srvAlt').innerHTML = html; }
+}
+
+// area chart of 10-minute averages; nulls (no data) leave gaps
+function areaChart(values, w, h, lo, hi) {
+  const v = values || [];
+  const n = Math.max(v.length, 2);
+  const x = (i) => ((i / (n - 1)) * w).toFixed(1);
+  const y = (val) => (h - 1 - ((Math.min(hi, Math.max(lo, val)) - lo) / (hi - lo || 1)) * (h - 2)).toFixed(1);
+  let line = '', area = '', run = [];
+  const flush = () => {
+    if (run.length > 1) {
+      const pts = run.map(([i, val]) => `${x(i)},${y(val)}`).join(' ');
+      line += `<polyline points="${pts}" fill="none" stroke="var(--sky)" stroke-width="1.6" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
+      area += `<polygon points="${x(run[0][0])},${h} ${pts} ${x(run[run.length - 1][0])},${h}" fill="url(#hgFill)"/>`;
+    }
+    run = [];
+  };
+  v.forEach((val, i) => { if (val == null) flush(); else run.push([i, val]); });
+  flush();
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><defs><linearGradient id="hgFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(124,196,255,.45)"/><stop offset="1" stop-color="rgba(124,196,255,0)"/></linearGradient></defs>${area}${line}</svg>`;
+}
+
+function srvHistory() {
+  const h = S.history;
+  if (!h) return '<div class="srv-empty">No history yet.</div>';
+  const col = (key, name) => {
+    const d = h[key] || {};
+    const row = (k, label, fmt, lo, hi) => {
+      const vals = (d[k] || []).filter((x) => x != null);
+      const last = vals.length ? vals[vals.length - 1] : null;
+      const max = vals.length ? Math.max(...vals) : null;
+      const range = k === 'temp' && vals.length ? [Math.min(...vals) - 3, Math.max(...vals) + 3] : [lo, hi];
+      return `<div class="hg"><div class="hg-k">${label}<b>${last == null ? '—' : fmt(last)}</b><small>${max == null ? '' : 'peak ' + fmt(max)}</small></div><div class="hg-c">${areaChart(d[k], 300, 70, range[0], range[1])}</div></div>`;
+    };
+    return `<div class="srv hist"><div class="head"><div><b>${name}</b> <span>last 24 hours · 10-minute averages</span></div></div>
+      ${row('cpu', 'CPU', (v) => `${num(v, 0)}%`, 0, 100)}
+      ${row('mem', 'Memory', (v) => `${num(v, 0)}%`, 0, 100)}
+      ${row('temp', 'Temp', degF, 0, 100)}
+      <div class="hg-x"><span>24 h ago</span><span>12 h</span><span>now</span></div></div>`;
+  };
+  return col('server2', 'Server 2') + col('server1', 'Server 1');
+}
+
+function srvSecurity() {
+  const sec = S.security;
+  if (!sec) return '<div class="srv-empty">Security details show on the Car Thing only.</div>';
+  const card = (key, name) => {
+    const r = sec[key];
+    if (!r) return `<div class="srv sec"><div class="head"><div><b>${name}</b></div></div><div class="note">No report yet. host-report.sh runs from cron on this server (docs/SETUP.md).</div></div>`;
+    const fresh = [...r.listen, ...r.docker].filter((x) => x.fresh);
+    const loud = r.ssh.fail1h >= 5 || fresh.length;
+    const chips = (list) => list.map((x) => `<span class="port${x.fresh ? ' fresh' : ''}">${esc(x.p)}${x.fresh ? ' · new' : ''}</span>`).join('');
+    const old = now() - r.at > 20 * 60000;
+    return `<div class="srv sec${old ? ' stale' : ''}">
+      <div class="head"><div><b>${name}</b> <span>checked ${ago(r.at)}</span></div><span class="state ${loud ? 'down' : 'up'}">${loud ? 'Look' : 'Quiet'}</span></div>
+      <div class="kv"><span>Failed SSH logins</span><b>${r.ssh.fail1h} · ${r.ssh.fail24h}<small> 1 h · 24 h</small></b></div>
+      ${r.ssh.top[0] ? `<div class="sec-top">most from ${esc(r.ssh.top[0].ip)} (${r.ssh.top[0].n})</div>` : ''}
+      <div class="kv"><span>Blocked by the firewall</span><b>${r.ufw.block1h} · ${r.ufw.block24h}<small> 1 h · 24 h</small></b></div>
+      ${r.ufw.top.slice(0, 2).map((t) => `<div class="sec-top">${esc(t.what)} · ${t.n}×</div>`).join('')}
+      <div class="sec-k">Open on every interface</div>
+      <div class="ports">${chips(r.listen) || '<span class="sec-none">nothing</span>'}</div>
+      ${r.docker.length ? `<div class="sec-k">Docker, published on 0.0.0.0 (skips UFW)</div><div class="ports">${chips(r.docker)}</div>` : ''}
+    </div>`;
+  };
+  const c = sec.carthing;
+  const ct = !c
+    ? '<div class="note">Not checked yet. check-carthing.sh runs hourly from cron on server 2.</div>'
+    : !c.reachable
+      ? '<div class="sec-bad">No SSH access with the hub key. Run check-carthing.sh on server 2.</div>'
+      : c.problems.length
+        ? `<div class="sec-bad">${c.problems.length} thing${c.problems.length > 1 ? 's' : ''} to put back</div>${c.problems.slice(0, 4).map((p) => `<div class="sec-top">${esc(p)}</div>`).join('')}<div class="note">Run check-carthing.sh on server 2 to fix.</div>`
+        : '<div class="sec-ok">✓ Setup intact</div><div class="note">Key-only SSH, watchdog, time sync, kiosk and helpers all in place.</div>';
+  return card('server2', 'Server 2') + card('server1', 'Server 1') + `<div class="srv sec ct-card"><div class="head"><div><b>Car Thing</b></div></div>
+    ${c ? `<div class="kv"><span>Nocturne</span><b>${esc(c.version || '—')}</b></div><div class="kv"><span>Checked</span><b>${ago(c.at)}</b></div>` : ''}${ct}</div>`;
+}
+
+function srvUpdates() {
+  const u = S.updates;
+  if (!u) return '<div class="srv-empty">Update details show on the Car Thing only.</div>';
+  const server = (key, name, label) => {
+    const a = u[key];
+    // images built locally (or private) cannot be compared with a registry and are left out of the count
+    const imgs = (u.images || []).filter((i) => i.server === label && i.update !== null);
+    const newer = imgs.filter((i) => i.update === true);
+    return `<div class="up-s"><div class="up-h"><b>${name}</b>${a && a.reboot ? '<span class="port fresh">reboot needed</span>' : ''}</div>
+      <div class="kv"><span>apt packages</span><b>${a ? `${a.upgradable}${a.security ? ` <em>· ${a.security} security</em>` : ''}` : '—'}</b></div>
+      <div class="kv"><span>Images with a newer version</span><b>${imgs.length ? `${newer.length} of ${imgs.length}` : '—'}</b></div>
+      ${newer.slice(0, 3).map((i) => `<div class="sec-top">↑ ${esc(i.name)} · ${esc(i.image)}</div>`).join('')}${newer.length > 3 ? `<div class="sec-top">+${newer.length - 3} more</div>` : ''}</div>`;
+  };
+  const g = S.github || {};
+  let gh;
+  if (!g.configured) gh = '<div class="note">Set GITHUB_USER in the hub .env to see CI runs and open issues here.</div>';
+  else if (!g.at) gh = '<div class="note">Asking GitHub…</div>';
+  else {
+    const dot = (ci) => (!ci ? 'none' : ci.status !== 'completed' ? 'run' : ci.conclusion === 'success' ? 'ok' : ci.conclusion === 'failure' ? 'bad' : 'none');
+    gh = g.repos.map((r) => `<div class="gh-r"><i class="gh-d ${dot(r.ci)}"></i><b>${esc(r.name)}</b><span>${r.ci ? `${esc(r.ci.workflow)} · ${r.ci.status !== 'completed' ? 'running' : esc(r.ci.conclusion || '')} · ${ago(r.ci.at)}` : 'no workflows'}</span></div>`).join('')
+      + `<div class="gh-o">Open: <b>${g.open.prs}</b> pull request${g.open.prs === 1 ? '' : 's'} · <b>${g.open.issues}</b> issue${g.open.issues === 1 ? '' : 's'}</div>`
+      + g.open.items.slice(0, 3).map((i) => `<div class="sec-top">${i.pr ? '⇄' : '●'} ${esc(i.repo)} #${i.n} · ${esc(i.title)}</div>`).join('');
+  }
+  return `<div class="srv upd"><div class="head"><div><b>Updates</b> <span>${u.imagesAt ? `images checked ${ago(u.imagesAt)}` : 'images not checked yet'}</span></div></div>${server('server2', 'Server 2', 'server 2')}${server('server1', 'Server 1', 'server 1')}</div>
+    <div class="srv upd"><div class="head"><div><b>GitHub</b> <span>${esc(g.user || '')}</span></div></div>${gh}</div>`;
+}
+
+function renderServersNow() {
   const s2 = S.servers.server2;
   if (s2) {
     $('srv2').className = 'srv' + stale(s2.at, 30000);
@@ -814,8 +939,8 @@ $('overlay').addEventListener('click', (e) => {
   const tile = e.target.closest('.ov-tile');
   const track = e.target.closest('#ovTrack');
   if (track) {
-    const r = track.getBoundingClientRect();
-    const pct = Math.round(Math.max(5, Math.min(100, ((e.clientX - r.left) / r.width) * 100)) / 5) * 5;
+    const x = e.target === track || e.target.parentElement === track ? e.offsetX : track.offsetWidth / 2;
+    const pct = Math.round(Math.max(5, Math.min(100, (x / track.offsetWidth) * 100)) / 5) * 5;
     brightAdjust((pct - (brightPending ?? (S && S.display ? S.display.brightness : 80))) / 5);
     setIdx = 0;
     return setModeTo('bright');
@@ -873,7 +998,7 @@ function transition(from, to, dir) {
 
 // each press turns the screen another 90° clockwise: 0°, 90°, 180°, 270°
 const ORIENTS = ['land', 'cw', 'flip', 'ccw'];
-const ORIENT_NAME = { land: 'Landscape', cw: 'Portrait ↻', flip: 'Landscape, upside down', ccw: 'Portrait ↺' };
+const ORIENT_NAME = { land: 'Landscape', cw: 'Portrait ↻', flip: 'Upside down', ccw: 'Portrait ↺' };
 let orient = 'land';
 try { orient = ORIENTS.includes(localStorage.getItem('orient')) ? localStorage.getItem('orient') : 'land'; } catch {}
 function applyOrient() {
@@ -955,9 +1080,30 @@ function press() {
   else if (editing) setEditing(false);
 }
 
+// ---------------------------------------------------------------- night: the screen is off; the first touch only wakes it
+
+let wakeSent = 0, wokeAt = 0;
+function nightGate() {
+  const n = S && S.display && S.display.night;
+  if (!n || !n.active) return false;
+  const t = Date.now();
+  // while dark, ask once; while awake, keep extending the wake time as you use it
+  if ((n.dark && t - wakeSent > 3000) || (!n.dark && t - wakeSent > 20000)) {
+    wakeSent = t;
+    if (n.dark) wokeAt = t;
+    fetch('/api/display/wake', { method: 'POST' }).catch(() => {});
+  }
+  // the backlight needs up to 2 s to come on: input until then still belongs to the waking touch
+  return n.dark || t - wokeAt < 2500;
+}
+// taps on the dark screen must not press whatever is under the finger
+addEventListener('click', (e) => { const n = S && S.display && S.display.night; if (n && n.dark) { e.stopPropagation(); e.preventDefault(); } }, true);
+
 addEventListener('keydown', (e) => {
+  if (nightGate()) return;
   const k = e.key;
-  if (/^[1-4]$/.test(k)) return presetButton(Number(k));
+  // upside down, the preset buttons sit along the bottom in reverse order: keep 1 on the left
+  if (/^[1-4]$/.test(k)) return presetButton(orient === 'flip' ? 5 - Number(k) : Number(k));
   if (k === 'm' || k === 'M') return settingsButton(); // the round settings button, top right
   if (k === 'Escape' || k === 'Backspace' || k === 'BrowserBack' || k === 'GoBack') return back();
   if (k === 'Enter' || k === ' ') return press();
@@ -972,15 +1118,20 @@ addEventListener('wheel', (e) => {
   if (t - wheelAt > 400) wheelAcc = 0;
   wheelAt = t;
   wheelAcc += d;
-  if (Math.abs(wheelAcc) >= 1) { knob(wheelAcc > 0 ? 1 : -1); wheelAcc = 0; }
+  if (Math.abs(wheelAcc) >= 1) { const dir = wheelAcc > 0 ? 1 : -1; wheelAcc = 0; if (!nightGate()) knob(dir); }
 }, { passive: true });
 
-// touch: swipe left/right to change page; tap to talk to Mei or start/pause the focus timer
+// touch: swipe left/right to change page; tap to talk to Mei or start/pause the focus timer.
+// Touch points come in screen coordinates; turn them into the app's own (rotated) coordinates first.
+function appX(t) {
+  return { land: t.clientX, flip: 800 - t.clientX, cw: t.clientY, ccw: 480 - t.clientY }[orient];
+}
 let tx = null;
-addEventListener('touchstart', (e) => { tx = e.touches[0].clientX; }, { passive: true });
+addEventListener('touchstart', (e) => { tx = appX(e.touches[0]); }, { passive: true });
 addEventListener('touchend', (e) => {
   if (tx == null || setMode) { tx = null; return; }
-  const dx = e.changedTouches[0].clientX - tx;
+  if (nightGate()) { tx = null; return; }
+  const dx = appX(e.changedTouches[0]) - tx;
   tx = null;
   if (Math.abs(dx) > 60) setPage(page + (dx < 0 ? 1 : -1));
   else if (page === FOCUS) pomoToggle();
@@ -1006,6 +1157,7 @@ function render() {
   try { renderAlerts(); } catch (e) { console.error(e); }
   try { watchBriefing(); calReminders(); } catch (e) { console.error(e); }
   if (setMode) renderBrightness();
+  document.body.classList.toggle('night-dark', !!(S.display && S.display.night && S.display.night.dark));
   if (!render.sky && S.weather) { render.sky = true; try { renderWeather(); } catch {} } // sky colour on first load
 }
 

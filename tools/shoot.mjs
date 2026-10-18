@@ -21,23 +21,26 @@ const go = async (p) => { await ev(`setPage(${p}), 1`); await sleep(1600); };
 
 const before = await ev("localStorage.getItem('orient') || 'land'");
 await ev("localStorage.setItem('orient', 'land'), location.reload(), 1"); await sleep(9000);
-await go(0); await key('1'); await sleep(900); await shot('01-news');
+// page order: 0 News, 1 Markets, 2 Weather, 3 Calendar, 4 Music, 5 Servers, 6 Focus, 7 Mei
+await go(0); await ev('newsTopic(0), 1'); await sleep(900); await shot('01-news');
 await go(1); await sleep(1200); await shot('02-markets');
 for (const [n, name] of [[1, '03-markets-btc'], [2, '04-markets-gold'], [3, '05-markets-fx'], [4, '06-markets-indices']]) { await key(String(n)); await sleep(900); await shot(name); await key(String(n)); await sleep(400); }
-await go(2); await key('Escape'); await sleep(1500); await shot('07-mei'); // Back closes any answer bubble
+await go(7); await key('Escape'); await sleep(1500); await shot('07-mei'); // Back closes any answer bubble
 // wait for Mei and Nhat to start a scene, then catch a few frames
 for (let i = 0; i < 40 && !(await ev("document.getElementById('stage').dataset.busy === '1'")); i++) await sleep(1000);
 for (let i = 1; i <= 4; i++) { await sleep(1700); await shot(`08-mei-nhat-${i}`); }
-await go(3); await sleep(1500); await shot('10-weather');
-await go(5); await sleep(1500); await shot('11-music');
-await go(6); await sleep(1500); await shot('12-servers');
-await go(7); await sleep(1200); await shot('13-focus');
+await go(2); await sleep(1500); await shot('10-weather');
+await go(4); await sleep(1500); await shot('11-music');
+await go(5); await key('1'); await sleep(1500); await shot('12-servers');
+// 24 h and Security show addresses and open ports of the LAN, so they stay out of the public screenshots
+await key('4'); await sleep(900); await shot('25-servers-updates'); await key('1');
+await go(6); await sleep(1200); await shot('13-focus');
 // Calendar with sample events (the real one is private), then reload to get the live stream back
-await go(4); await ev(fs.readFileSync('/t/demo-calendar.js', 'utf8')); await sleep(800); await shot('17-calendar');
+await go(3); await ev(fs.readFileSync('/t/demo-calendar.js', 'utf8')); await sleep(800); await shot('17-calendar');
 await key('3'); await sleep(600); await shot('18-calendar-week'); await key('1');
 await ev('location.reload(), 1'); await sleep(9000);
 // Mei's briefing (button 1 on her page), written from the live dashboard data
-await go(2); await key('1');
+await go(7); await key('1');
 for (let i = 0; i < 40 && (await ev("S.voice.phase + S.voice.kind")) !== 'answerbriefing'; i++) await sleep(1000);
 await sleep(1200); await shot('19-mei-briefing');
 await go(1); await key('m'); await sleep(900); await shot('14-quick-menu'); await key('Escape'); await key('Escape');
@@ -49,11 +52,11 @@ await ev(`(() => { const s = document.createElement('style'); s.id = 'shotfix';
   document.head.appendChild(s); document.body.dataset.orient = 'cw'; document.body.classList.add('portrait'); return 1; })()`);
 await sleep(800);
 const P = { x: 0, y: 0, width: 480, height: 800 };
-await go(0); await ev('movePill(), 1'); await sleep(500); await shot('20-portrait-news', P);
+await go(0); await ev('newsTopic(0), movePill(), 1'); await sleep(500); await shot('20-portrait-news', P);
 await go(1); await ev('movePill(), 1'); await sleep(800); await shot('21-portrait-markets', P);
-await go(2); await key('Escape'); await ev('movePill(), 1'); await sleep(1500); await shot('22-portrait-mei', P);
-await go(3); await ev('movePill(), 1'); await sleep(800); await shot('23-portrait-weather', P);
-await go(4); await ev(fs.readFileSync('/t/demo-calendar.js', 'utf8')); await ev('movePill(), 1'); await sleep(800); await shot('24-portrait-calendar', P);
+await go(7); await key('Escape'); await ev('movePill(), 1'); await sleep(1500); await shot('22-portrait-mei', P);
+await go(2); await ev('movePill(), 1'); await sleep(800); await shot('23-portrait-weather', P);
+await go(3); await ev(fs.readFileSync('/t/demo-calendar.js', 'utf8')); await ev('movePill(), 1'); await sleep(800); await shot('24-portrait-calendar', P);
 await call('Emulation.clearDeviceMetricsOverride');
 await ev(`localStorage.setItem('orient', '${before}'), location.reload(), 1`);
 console.log('orientation restored to', before);

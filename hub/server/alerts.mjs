@@ -69,4 +69,13 @@ export function createAlerts({ state, changed, config, priceOf, labelOf }) {
 
   setInterval(check, 60000);
   setTimeout(check, 15000);
+
+  // banners from other parts of the hub (security, rain, CI): kind is 'sec', 'rain' or 'ci'
+  function notify(kind, text) {
+    state.alerts.unshift({ id: ++seq, at: Date.now(), asset: null, dir: kind, text });
+    state.alerts.length = Math.min(state.alerts.length, 20);
+    console.log(`[${kind}]`, text);
+    changed();
+  }
+  return { notify };
 }

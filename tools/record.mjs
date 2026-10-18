@@ -26,11 +26,12 @@ const ev = (expression) => call('Runtime.evaluate', { expression, returnByValue:
 const key = (k) => ev(`dispatchEvent(new KeyboardEvent('keydown', {key: ${JSON.stringify(k)}})), 1`);
 
 // start from a calm News page
-await ev('setPage(0), newsTopic(0), 1');
+// landscape for the recording only (the saved orientation is left alone)
+await ev("orient = 'land', applyOrient(), setPage(0), newsTopic(0), 1");
 await sleep(1500);
 await call('Page.startScreencast', { format: 'jpeg', quality: 80, everyNthFrame: 1 });
 await sleep(1800);
-await key('2'); await sleep(1800);             // button 2: Việt Nam
+await key('1'); await sleep(1800);             // button 1: next topic (Việt Nam)
 await key('Enter'); await sleep(700);          // knob press: pick a story
 await key('ArrowDown'); await sleep(600);
 await key('Enter'); await sleep(3800);         // open its summary
@@ -39,16 +40,17 @@ await key('ArrowRight'); await sleep(2600);    // Markets
 await key('1'); await sleep(2400);             // zoom BTC
 await key('2'); await sleep(2200);             // zoom gold
 await key('Escape'); await sleep(800);
-await key('ArrowRight'); await sleep(4500);    // Mei and Nhat
 await key('ArrowRight'); await sleep(2400);    // Weather
 await key('ArrowRight'); await sleep(1800);    // Calendar
 await key('ArrowRight'); await sleep(1800);    // Music
 await key('ArrowRight'); await sleep(2200);    // Servers
+await key('ArrowRight'); await sleep(1600);    // Focus
+await key('ArrowRight'); await sleep(4500);    // Mei and Nhat
 await key('m'); await sleep(1800);             // quick menu
 await key('Escape'); await sleep(900);
 await call('Page.stopScreencast');
 await sleep(300);
-await ev('setPage(0), 1');
+await ev("orient = localStorage.getItem('orient') || 'land', applyOrient(), setPage(0), 1");
 
 // ffmpeg concat list: each frame shown until the next one arrived
 const lines = frames.map((f, i) => `file '${f.name}'\nduration ${Math.max(0.02, ((frames[i + 1]?.t ?? f.t + 0.1) - f.t)).toFixed(3)}`);

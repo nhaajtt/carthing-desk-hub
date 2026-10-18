@@ -39,6 +39,18 @@ async function containers() {
   return containerCache.list;
 }
 
+// security / update report written by host/host-report.sh from cron (read-only mount); sent once a minute
+const REPORT = process.env.REPORT_FILE || '/app/report/report.json';
+let reportSent = 0;
+function report() {
+  if (Date.now() - reportSent < 60000) return undefined;
+  try {
+    const r = JSON.parse(fs.readFileSync(REPORT, 'utf8'));
+    reportSent = Date.now();
+    return r;
+  } catch { return undefined; }
+}
+
 async function push() {
   const mem = Object.fromEntries(fs.readFileSync('/proc/meminfo', 'utf8').split('\n').filter(Boolean)
     .map((l) => { const [k, v] = l.split(':'); return [k, Number(v.trim().split(' ')[0]) * 1024]; }));
@@ -51,6 +63,7 @@ async function push() {
     temp: temp(),
     uptime: Number(fs.readFileSync('/proc/uptime', 'utf8').split(' ')[0]),
     containers: await containers(),
+    report: report(),
   };
   try {
     const r = await fetch(HUB, {
