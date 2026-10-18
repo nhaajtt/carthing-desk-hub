@@ -51,6 +51,7 @@ hub/server/
   github.mjs         CI runs, open issues and pull requests
   spotify.mjs        PKCE linking, polling, actions, album-art proxy
   covers.mjs         a picture for what the iPhone plays: YouTube thumbnail or iTunes cover
+  lyrics.mjs         timed lyrics from LRCLIB, parsed from LRC
   docker-status.mjs  the read-only sidecar
 ```
 
@@ -93,7 +94,8 @@ carthing/phonelink/
   bluez.go   D-Bus: agent (pairing), advertisement, finding the paired phone, GATT helpers, main loop
   gatt.go    the media-remote service that makes iOS list the Car Thing in Settings
   ancs.go    notifications and calls (Apple Notification Center Service)
-  ams.go     now playing and remote commands (Apple Media Service)
+  ams.go     now playing, queue, shuffle / repeat, remote commands (Apple Media Service)
+  rssi.go    signal strength of the link, and "at the desk" from it
 ```
 
 * **Being found.** Since iOS 18, Settings → Bluetooth no longer lists accessories that only ask for notifications, but it lists remotes. So the Car Thing also offers a HID-over-GATT service with consumer keys only (play, next, volume…): no keyboard, so the iPhone keeps its on-screen keyboard. It never sends a key; its report map can only be read over a code-paired link.
@@ -101,7 +103,10 @@ carthing/phonelink/
 * **Advertising.** Only during the window (discoverable) or while the paired phone is away (not discoverable, so it can find its way back). Once it is connected the Car Thing stops advertising.
 * **Reading.** After the link is encrypted the phone shows its services. ANCS: a new notification arrives on Notification Source; phonelink asks for app, title, subtitle and message on Control Point and collects the answer from Data Source. What was already on the phone at connect time is skipped, except a ringing call. AMS: phonelink subscribes to player (app, state, volume) and track (artist, album, title, duration); writes on Remote Command play, pause, skip and change volume.
 * **Sharing ANCS with nocturned.** Nocturne's daemon reads the same service. BlueZ runs one write per characteristic at a time and turns the other away with "In Progress", so phonelink retries, and it ignores Data Source answers that do not start with its own request's header.
-* **To the screen.** `GET /events` streams the whole state (paired, connected, name, battery, pairing, media, call, last 12 notifications) as SSE within 100 ms of a change. `POST /pair`, `/pair/cancel`, `/forget`, `/media` and `/call` take small JSON bodies sent as plain text (a "simple" request, so no CORS preflight). Everything is in memory and cleared when the phone disconnects.
+* **What the phone already has.** iOS lists its existing notifications once, when the first program subscribes; that is usually `nocturned`, a moment earlier. Values that arrive on the phone's characteristics before phonelink listens are kept and replayed when it subscribes, and when phonelink starts while the phone is already connected it drops the link once so the phone lists them again. The newest 30 are fetched (with their date) and marked `old`: they fill the iPhone page without banners.
+* **At the desk.** BlueZ gives no signal strength for a connected device, so `rssi.go` asks the kernel's management socket (`HCI_CHANNEL_CONTROL`, read-only command "Get Connection Information") every 2 s. A moving average above `-near` (default −62 dBm) for 4 s means at the desk; below `-far` (−78 dBm) for 20 s, or a lost link, means away.
+* **Keys.** The remote's report carries seven consumer keys; phonelink only ever sets Siri (voice command) and volume up (the Camera app's shutter), on `POST /key`, and lets go by itself after 10 s.
+* **To the screen.** `GET /events` streams the whole state (paired, connected, name, battery, pairing, media, call, last 12 notifications) as SSE within 100 ms of a change. `POST /pair`, `/pair/cancel`, `/forget`, `/media`, `/call`, `/note/clear` and `/key` take small JSON bodies sent as plain text (a "simple" request, so no CORS preflight). Everything is in memory and cleared when the phone disconnects.
 * **Covers.** The phone sends no pictures. The page borrows Spotify's art when the iPhone plays the same song Spotify reports, and otherwise asks the hub, which searches YouTube's public results page (for the YouTube app) or Apple's iTunes Search API (everything else) and proxies the image.
 
 ## Network
@@ -124,10 +129,12 @@ carthing/phonelink/
 |---|---|
 | `GET /`, `/events`, `/api/state`, static files | anyone who can reach the port (read-only); everyone but the Car Thing gets the trimmed state |
 | `GET /api/brightness` | anyone (read-only) |
-| `POST /api/brightness`, `/api/display/wake`, `/api/display/lang`, `/api/voice/*` (start, stop, briefing, dismiss, and the recorder's channel), `/api/device/*`, `/api/spotify/{toggle,next,prev,volume,like}` | Car Thing only (`10.42.1.2`) |
+| `POST /api/brightness`, `/api/display/wake`, `/api/display/lang`, `/api/voice/*` (start, stop, briefing, dismiss, and the recorder's channel), `/api/device/*`, `/api/spotify/{toggle,pause,play,next,prev,volume,like}` | Car Thing only (`10.42.1.2`) |
 | `POST /api/ingest` | `INGEST_FROM` address **and** bearer token |
 | `GET /spotify/link` | not the Car Thing |
 | `GET /callback` | valid one-time `state` (≤ 10 min old) |
 | `GET /api/news/detail?id=` | anyone who can reach the port |
 | `GET /api/spotify/art?u=` | proxies `https://i.scdn.co/` only |
-| `GET /api/media/cover?app=&t=&a=` | Car Thing only; fetches from `i.ytimg.com` or `*.mzstatic.com` only |
+| `GET /api/media/cover?app=&t=&a=&al=` | Car Thing only; fetches from `i.ytimg.com` or `*.mzstatic.com` only |
+| `GET /api/media/lyrics?t=&a=&al=&d=` | Car Thing only; asks `lrclib.net` |
+| `POST /api/display/away` | Car Thing only; `true` makes `/api/brightness` answer 0 until `false` |

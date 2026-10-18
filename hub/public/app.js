@@ -229,6 +229,7 @@ function presetButton(n) {
   if (page === MUSIC) return musicAction(['prev', 'toggle', 'next', 'like'][n - 1]);
   if (page === FOCUS) return pomoSet([15, 25, 45, 60][n - 1]);
   if (page === PHONE && n === 3) return togglePrivacy(); // 1 and 2 are held keys, see the keydown handler
+  if (page === PHONE && n === 4) return replyBySiri();
 }
 
 // ---------------------------------------------------------------- alerts (banner on every page, history on Settings)
@@ -1226,6 +1227,15 @@ function ipBack() {
   ipConfirm = null;
   renderIphone();
   return true;
+}
+// Reply: Apple lets accessories only accept or dismiss a notification, so the reply goes through Siri on the
+// phone. Button 4 opens Siri and shows whom to answer; Siri takes the message and sends it.
+function replyBySiri() {
+  const n = (PH.notes || [])[Math.max(0, ipSel)];
+  if (!n) return toast(tr('No notifications'));
+  phonePost('/key', { key: 'siri', down: true });
+  setTimeout(() => phonePost('/key', { key: 'siri', down: false }), 300);
+  showBanner('phone', `🎙 ${tr('Siri is listening: say “Reply to {n}” and your message', { n: n.title || n.app })}`, 10000);
 }
 function togglePrivacy() {
   privacy = !privacy;

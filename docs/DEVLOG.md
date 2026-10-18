@@ -31,8 +31,9 @@
 22. [Đợt nâng cấp thứ ba: ban đêm, bảo mật, cập nhật](#22-đợt-nâng-cấp-thứ-ba-ban-đêm-bảo-mật-cập-nhật)
 23. [Mượt hơn nữa](#23-mượt-hơn-nữa)
 24. [iPhone qua Bluetooth, không cần app](#24-iphone-qua-bluetooth-không-cần-app)
-25. [Bảng tổng hợp lỗi](#25-bảng-tổng-hợp-lỗi)
-26. [Những điều rút ra](#26-những-điều-rút-ra)
+25. [Điện thoại "đẳng cấp" hơn](#25-điện-thoại-đẳng-cấp-hơn)
+26. [Bảng tổng hợp lỗi](#26-bảng-tổng-hợp-lỗi)
+27. [Những điều rút ra](#27-những-điều-rút-ra)
 
 ---
 
@@ -651,7 +652,45 @@ Bấm phát / dừng / chuyển bài vẫn chạy nhưng hiện lỗi, mỗi nú
 | Nhạc | Mọi app trên iPhone, có ảnh; nút 1–3 và núm điều khiển iPhone |
 | Bluetooth đi ra ngoài | Chỉ quảng bá trong cửa sổ ghép hoặc khi iPhone ở xa; khi iPhone đã kết nối thì im |
 
-## 25. Bảng tổng hợp lỗi
+## 25. Điện thoại "đẳng cấp" hơn
+
+Sau khi ghép được, người dùng chọn 11 tính năng từ một danh sách đề xuất (bỏ hai thứ: Mei đọc tin nhắn, vì nội dung sẽ lên Gemini; và đồng bộ Focus qua app Phím tắt).
+
+| Nhóm | Làm gì | Lấy từ đâu |
+|---|---|---|
+| Nhạc | Lời bài hát chạy theo nhạc | LRCLIB (miễn phí, mã nguồn mở), qua hub |
+| | Màu trang Nhạc theo ảnh bìa, chế độ toàn màn hình | Ảnh bìa thu nhỏ 12 × 12 trong canvas |
+| | Trộn bài, lặp lại, vị trí trong danh sách | AMS, thực thể Queue |
+| | Spotify ở máy khác tự dừng khi có cuộc gọi, gọi xong phát tiếp | ANCS + Spotify API |
+| Thông báo | Trang iPhone: danh sách, xoá trên iPhone, ẩn nội dung | ANCS (hành động "negative" = xoá) |
+| | Thẻ "Trong lúc bạn đi" | Ngày giờ của từng thông báo (thuộc tính Date) |
+| Hiện diện | Rời bàn thì tắt màn hình, về thì chào | Cường độ sóng (RSSI) của kết nối |
+| | Siri (giữ nút 1), chụp ảnh (nút 2), trả lời qua Siri (nút 4) | Phím của remote HID |
+| | Cảnh báo pin 20%, 10%, đầy | Battery Service |
+
+### Đo khoảng cách không cần quét
+
+BlueZ chỉ báo RSSI khi đang quét, không báo cho thiết bị đang kết nối. Kernel thì có: lệnh "Get Connection Information" trên socket quản lý Bluetooth (`HCI_CHANNEL_CONTROL`). `rssi.go` hỏi mỗi 2 giây, lấy trung bình trượt, và chỉ đổi trạng thái khi tín hiệu mạnh đủ 4 giây (về bàn) hoặc yếu đủ 20 giây (rời bàn), để một bàn tay che điện thoại không làm tắt màn hình. Ngưỡng mặc định −62 / −78 dBm chạy đúng ngay lần thử đầu trong phòng của người dùng (ở bàn đo được khoảng −33 dBm).
+
+### Siri và nút chụp ảnh
+
+Remote HID có sẵn được thêm một phím: Voice Command (`0xCF`), thứ iOS hiểu là "mở Siri". Phím tăng âm lượng có sẵn chính là nút chụp trong app Camera. Giữ nút trên Car Thing thì giữ phím (keydown / keyup của trình duyệt), tự nhả sau 10 giây nếu trang quên. iPhone đọc lại danh sách phím mới mà không cần ghép lại.
+
+### Không trả lời tin nhắn được, trừ qua Siri
+
+Người dùng muốn trả lời nhanh, hoặc nói rồi Car Thing gửi đi. ANCS chỉ cho phụ kiện hai hành động trên một thông báo: chấp nhận hoặc gạt bỏ. Trả lời nhanh và đọc chính tả Apple chỉ dành cho Apple Watch và CarPlay. Gõ chữ qua một bàn phím HID thì phải mở sẵn ô trả lời trên iPhone, và iPhone sẽ giấu bàn phím ảo suốt lúc kết nối. Vậy nên nút 4 mở Siri và hiện tên người cần trả lời; Siri nhận lời và gửi.
+
+### Trang iPhone trống dù iPhone có thông báo
+
+iOS chỉ gửi danh sách thông báo đang có **một lần**, khi chương trình đầu tiên đăng ký nhận. Chương trình đó luôn là `nocturned`, nhanh hơn `phonelink` vài phần giây, nên lượt gửi đến trước khi `phonelink` nghe. Sửa: giữ lại mọi giá trị đến trên các characteristic của điện thoại trước khi có người nghe, phát lại khi `phonelink` đăng ký; và khi `phonelink` khởi động lúc điện thoại đang nối sẵn thì ngắt kết nối một lần cho iPhone nối lại và gửi lại danh sách. Sau đó trang hiện 16 thông báo. Thứ tự lấy theo ngày giờ của iPhone, vì số UID theo thứ tự iPhone liệt kê chứ không theo thời gian.
+
+### Lời bài hát và ảnh bìa
+
+* Lời: hub hỏi LRCLIB đúng bài trước (tên, ca sĩ, album, độ dài ±2 giây), không có thì tìm gần đúng. Chế độ toàn màn hình chỉ đổi chữ sáng và dịch cột lời một lần mỗi dòng (một `transform`), có một hẹn giờ cho dòng kế tiếp, không chạy gì theo từng khung hình.
+* Ảnh bìa từ iTunes: kết quả đầu tiên hay là bản remix ("Blinding Lights (Remix)"), nên giờ ưu tiên bài trong đúng album đang phát.
+* Màu trang lấy từ ảnh bìa: vẽ ảnh 12 × 12, cộng màu có trọng số (điểm ảnh nhiều màu nặng hơn điểm xám), rồi đặt hai biến CSS. Ảnh đi qua hub (cùng gốc), nên canvas đọc được.
+
+## 26. Bảng tổng hợp lỗi
 
 | # | Triệu chứng | Nguyên nhân gốc | Cách sửa |
 |---|---|---|---|
@@ -686,8 +725,10 @@ Bấm phát / dừng / chuyển bài vẫn chạy nhưng hiện lỗi, mỗi nú
 | 26 | Thông báo lúc hiện lúc không | `nocturned` cũng đọc ANCS; BlueZ chỉ cho một lệnh ghi một lúc (`In Progress`) | Thử lại khi bận, lọc câu trả lời theo đầu yêu cầu |
 | 27 | Nút Spotify báo "Unexpected…" dù vẫn chạy | Spotify trả 200 kèm nội dung không phải JSON | Nội dung không đọc được + mã thành công = thành công |
 | 28 | Không có ảnh bìa cho nhạc / video từ iPhone | Bluetooth chỉ gửi chữ; `nocturned` chỉ chuyển ảnh cho app của nó | Hub tìm ảnh: Spotify, YouTube, iTunes |
+| 29 | Trang iPhone trống dù iPhone có thông báo | iOS gửi danh sách có sẵn một lần, cho người đăng ký đầu tiên (`nocturned`) | Giữ và phát lại giá trị đến sớm; nối lại một lần khi khởi động |
+| 30 | Ảnh bìa là bản remix | Kết quả iTunes đầu tiên không phải album đang phát | Ưu tiên đúng album, rồi đúng tên bài |
 
-## 26. Những điều rút ra
+## 27. Những điều rút ra
 
 1. **Đo trên thiết bị thật, không đoán.** Font, FPS, mức âm thanh của micro, giờ hệ thống: lần nào thiết bị thật cũng khác với giả định.
 2. **"Không tin mặc định" là công cụ thiết kế, không chỉ là bảo mật.** Nó quyết định Car Thing không giữ key, hub không cầm `docker.sock`, agent chỉ đẩy dữ liệu đi, và firewall nằm trên đúng máy.

@@ -32,14 +32,15 @@ var (
 	savePath string
 
 	// guarded by mu (main.go)
-	phoneAddr string          // identity address of the paired iPhone, "" when none
-	phonePath dbus.ObjectPath // its BlueZ object, "" while BlueZ does not know it
-	pairUntil time.Time
-	pairTimer *time.Timer
-	advUp     bool
-	advDisc   bool
-	advProps  *prop.Properties
-	reconnect sync.Once
+	phoneAddr  string          // identity address of the paired iPhone, "" when none
+	phonePath  dbus.ObjectPath // its BlueZ object, "" while BlueZ does not know it
+	pairUntil  time.Time
+	pairTimer  *time.Timer
+	advUp      bool
+	advDisc    bool
+	advProps   *prop.Properties
+	reconnect  sync.Once
+	firstStart sync.Once
 
 	setupMu sync.Mutex
 	onValue = map[dbus.ObjectPath]func([]byte){} // characteristic → handler for its notifications (under mu)
@@ -314,16 +315,27 @@ func stopSessions() {
 	defer setupMu.Unlock()
 	mu.Lock()
 	onValue = map[dbus.ObjectPath]func([]byte){}
+	early = map[dbus.ObjectPath][][]byte{}
 	mu.Unlock()
 	stopANCS()
 	stopAMS()
 }
 
 // GATT helpers
+// early holds values that arrived on the phone's characteristics before we listened to them. nocturned
+// subscribes to the notification service a moment before we do, and the iPhone lists the notifications it
+// already has only once, right when the first subscriber arrives: replaying them lets us see that list too.
+var early = map[dbus.ObjectPath][][]byte{} // under mu
+
 func notify(p dbus.ObjectPath, f func([]byte)) error {
 	mu.Lock()
 	onValue[p] = f
+	replay := early[p]
+	delete(early, p)
 	mu.Unlock()
+	for _, b := range replay {
+		f(b)
+	}
 	return conn.Object(bluez, p).Call(ifChar+".StartNotify", 0).Err
 }
 
@@ -413,6 +425,17 @@ func runBluetooth() error {
 	if err := register(); err != nil {
 		return err
 	}
+	// started while the phone was already connected: the list of notifications it already has went out
+	// long ago, so drop the link once; the phone comes straight back and lists them again
+	firstStart.Do(func() {
+		mu.Lock()
+		p, c := phonePath, st.Connected
+		mu.Unlock()
+		if p != "" && c {
+			log.Printf("reconnecting the phone to read what it already has")
+			conn.Object(bluez, p).Call(ifDevice+".Disconnect", 0)
+		}
+	})
 
 	// iOS reconnects by itself while we advertise; this is a slower second way back in
 	reconnect.Do(func() {
@@ -455,8 +478,12 @@ func runBluetooth() error {
 					if v, ok := changed["Value"]; ok {
 						mu.Lock()
 						f := onValue[s.Path]
+						b, isBytes := v.Value().([]byte)
+						if f == nil && isBytes && phonePath != "" && strings.HasPrefix(string(s.Path), string(phonePath)+"/") && len(early[s.Path]) < 256 {
+							early[s.Path] = append(early[s.Path], b)
+						}
 						mu.Unlock()
-						if b, ok := v.Value().([]byte); ok && f != nil {
+						if isBytes && f != nil {
 							f(b)
 						}
 					}

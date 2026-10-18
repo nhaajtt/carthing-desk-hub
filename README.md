@@ -27,8 +27,8 @@ The Car Thing never touches the internet. It only talks to the hub, the hub only
 | 🐈 **Mei** | Press the knob and talk. The four microphones record, the hub asks Gemini, and Mei answers in English or Vietnamese in a speech bubble. She remembers the last few minutes, so follow-ups work, and knows which story you had open ("what does this one say?"). Every morning at 7 she writes a short **briefing**: weather, today's calendar, BTC and gold, USD/VND, top headlines. While idle, Mei and her owner **Nhat** act out random little scenes. |
 | 🌤 **Weather** | Current conditions, AQI, 12-hour and 4-day forecast (Open-Meteo), and rain in the next two hours in 15-minute steps, with a banner about half an hour before it starts. The sky behind every page takes the colour of the real weather. |
 | 📅 **Calendar** | Your Google Calendar through its secret iCal link (read-only, no OAuth): what's next with a countdown, then today, tomorrow or the week. Recurring events, exceptions and daylight-saving changes are handled on the hub. A banner pops up 10 minutes before each event, on any page. |
-| 🎵 **Music** | Spotify now playing and controls (PKCE, no client secret), album art proxied through the hub. When the paired iPhone is the one playing, any app (Apple Music, YouTube, a podcast) shows here instead, with the same buttons; the hub looks up a cover or the video's thumbnail. |
-| 📱 **iPhone** | Paired over Bluetooth Low Energy, with nothing installed on the phone: battery in the top bar, new notifications as a short banner, incoming calls full screen (press the knob to answer, Back to decline, and the screen wakes at night). Pair from the quick menu with a 6-digit code. Notification text never leaves the Car Thing. |
+| 🎵 **Music** | Spotify now playing and controls (PKCE, no client secret), album art proxied through the hub. When the paired iPhone is connected, whatever any app on it plays (Apple Music, YouTube, a podcast) comes first, with the same buttons plus shuffle and repeat; the hub looks up a cover or the video's thumbnail. The page takes its colours from the cover, and after a few quiet seconds it turns into a large cover with **lyrics that follow the song** (LRCLIB). |
+| 📱 **iPhone** | Paired over Bluetooth Low Energy, with nothing installed on the phone. Battery in the top bar (with low and full banners), new notifications as a short banner, incoming calls full screen (knob answers, Back declines; Spotify playing elsewhere pauses for the call). An **iPhone page** lists the phone's notifications, clears one on the phone itself, hides message text on request, holds Siri on button 1, takes a photo on button 2, and starts a Siri reply on button 4. The Car Thing knows when you sit down: the screen switches off when the phone leaves the desk and greets you with a **while you were away** card when it comes back. Pair from the quick menu with a 6-digit code. Notification text never leaves the Car Thing. |
 | 🖥 **Servers** | Four views on buttons 1–4. **Now**: CPU, memory, disk, temperature, uptime and container health for two home servers. **24 h**: CPU, memory and temperature graphs. **Security**: failed SSH logins, what the firewall blocked, every port open on all interfaces (a new one raises a banner), and whether the Car Thing still has its setup. **Updates**: pending apt packages, containers with a newer image, and GitHub (latest CI run per repository, open pull requests and issues). |
 | ⏱ **Focus** | A Pomodoro timer: buttons 1–4 set 15, 25, 45 or 60 minutes. |
 | ⚙️ **Quick menu** | The round button opens screen brightness, restart, shut down, rotate (each press turns the screen another 90°), language and iPhone (pair, or forget the paired one). |
@@ -56,6 +56,7 @@ The Car Thing never touches the internet. It only talks to the hub, the hub only
 | Music | Previous | Play / pause | Next | Like |
 | Servers | Now | 24 h | Security | Updates |
 | Focus | 15 min | 25 min | 45 min | 60 min |
+| iPhone | Siri (hold) | Camera shutter | Hide / show messages | Reply with Siri |
 | Mei | Today's briefing | | | |
 
 Upside down, the preset buttons sit along the bottom edge in reverse order, so the hub swaps them: the one on your left is always 1.
@@ -142,7 +143,7 @@ More detail: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** · the whole story
 ```
 hub/            the brain: Node 22 server, UI, config, compose file
   server/       index.mjs (data sources, HTTP/SSE), assistant.mjs (Mei), news.mjs, calendar.mjs,
-                spotify.mjs, covers.mjs, alerts.mjs, history.mjs, security.mjs, registry.mjs, github.mjs,
+                spotify.mjs, covers.mjs, lyrics.mjs, alerts.mjs, history.mjs, security.mjs, registry.mjs, github.mjs,
                 docker-status.mjs
   test/         node:test suite (calendar recurrence and time zones, image references, host reports)
   public/       index.html, app.js (pages + controls), stage.js (Mei & Nhat),

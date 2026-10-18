@@ -162,6 +162,10 @@ Battery, notifications, incoming calls and what any app plays, from one iPhone, 
 
 Pair: quick menu → **iPhone** → on the iPhone, Settings → Bluetooth → **Desk Hub** (an iPhone that met this Car Thing before may show it as "Nocturne (…)"; if it sits under My Devices, choose Forget This Device first) → type the 6-digit code from the screen → allow notifications. To unpair, quick menu → iPhone → press again to confirm, and forget the device on the iPhone too.
 
+"At the desk" uses the link's signal strength: `-near` (default `-62` dBm, held 4 s) and `-far` (`-78` dBm, held 20 s). If your room needs other values, watch `rssi` on the iPhone page's signal bars (or `PH.rssi` over DevTools) at the desk and across the room, and add the flags to the phonelink line in `carthing/kiosk-env`.
+
+If Siri does not open from button 1 after an update of phonelink, forget the device on the iPhone and pair again: iOS keeps the remote's key list from the first pairing.
+
 ## Development helpers
 
 `tools/` holds the scripts used while building: `cdp.mjs` (screenshot / eval over DevTools), `steps.mjs` (a list of key presses, evals and screenshots, printing every exception), `errors.mjs` / `errors2.mjs` (reload and print exceptions), `shoot*.mjs` (the README screenshots; `demo-calendar.js` supplies sample events), `record.mjs` (frames for the README GIF). Open the tunnel first:

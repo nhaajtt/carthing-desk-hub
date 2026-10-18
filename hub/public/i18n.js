@@ -114,6 +114,7 @@ const VI = {
   '{s} s left · Back to cancel': 'còn {s} giây · Back để huỷ',
   'Press the knob again to forget this iPhone · Back to cancel': 'Bấm núm lần nữa để quên iPhone này · Back để huỷ',
   Phone: 'Điện thoại', 'Unknown caller': 'Không rõ người gọi', Answer: 'Nghe', Decline: 'Từ chối',
+  'Reply with Siri': 'Trả lời qua Siri', 'Siri is listening: say “Reply to {n}” and your message': 'Siri đang nghe: nói “Trả lời {n}” rồi đọc tin nhắn',
   'Siri (hold)': 'Siri (giữ)', 'Camera shutter': 'Chụp ảnh', 'Hide messages': 'Ẩn tin nhắn', 'Show messages': 'Hiện tin nhắn',
   'Messages hidden on this screen': 'Đã ẩn nội dung tin nhắn trên màn hình này', 'Messages shown': 'Đã hiện nội dung tin nhắn',
   'At the desk': 'Ở bàn', Away: 'Đi vắng', 'Not connected': 'Chưa kết nối', 'Only on the Car Thing': 'Chỉ có trên Car Thing',

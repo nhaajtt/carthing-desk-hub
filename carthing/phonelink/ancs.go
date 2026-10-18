@@ -211,7 +211,13 @@ func (a *ancsSession) fetch(j ancsJob) {
 				out = append(out, o)
 			}
 		}
-		sort.Slice(out, func(i, j int) bool { return out[i].UID > out[j].UID }) // newest first
+		// newest first, by the phone's date (UIDs follow the order the phone listed them, not time)
+		sort.Slice(out, func(i, j int) bool {
+			if out[i].Date != out[j].Date {
+				return out[i].Date > out[j].Date
+			}
+			return out[i].UID > out[j].UID
+		})
 		if len(out) > keepNotes {
 			out = out[:keepNotes]
 		}
