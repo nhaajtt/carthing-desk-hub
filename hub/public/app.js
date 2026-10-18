@@ -16,7 +16,19 @@ const tz = () => (S && S.tz) || 'America/Los_Angeles';
 
 // ---------------------------------------------------------------- formatting
 
-const nf = (d) => new Intl.NumberFormat('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+// Intl formatters are slow to create on this CPU (a Markets update made dozens of them): build each one once
+const NF = [];
+const nf = (d) => NF[d] || (NF[d] = new Intl.NumberFormat('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }));
+const DTF = new Map();
+function dtf(locale, opts) {
+  const k = locale + JSON.stringify(opts);
+  let f = DTF.get(k);
+  if (!f) DTF.set(k, (f = new Intl.DateTimeFormat(locale, opts)));
+  return f;
+}
+// touch the DOM only when something changed: every write makes the browser restyle and lay out again
+const setText = (el, v) => { if (el.textContent !== v) el.textContent = v; };
+const setClass = (el, v) => { if (el.className !== v) el.className = v; };
 function usd(p) {
   if (p == null || isNaN(p)) return '—';
   const a = Math.abs(p);
@@ -48,6 +60,7 @@ function spark(values, w = 54, h = 20, up = null) {
 // Update a row by swapping only the child elements whose markup changed (a new price should not
 // rebuild the sparkline next to it), and flash the value green/red when it moves.
 const tpl = document.createElement('template');
+let entering = false; // true while setPage() draws the page that is about to slide in
 function setVal(el, key, value, html) {
   const prev = last[key];
   if (el._html === html) return;
@@ -60,13 +73,19 @@ function setVal(el, key, value, html) {
   } else {
     next.forEach((n, i) => { const cur = el.children[i]; if (cur._h !== n._h) cur.replaceWith(n); });
   }
-  if (prev != null && value != null && value !== prev) {
+  // no flash on a page that is sliding in: a burst of them at the start of a slide cost frames
+  if (prev != null && value != null && value !== prev && !entering) {
     const v = el.querySelector('.val') || el;
-    v.classList.remove('flash-up', 'flash-down');
-    void v.offsetWidth;
-    v.classList.add(value > prev ? 'flash-up' : 'flash-down');
+    // A tinted glow behind the number fades out: opacity runs on the GPU. (Animating the text colour ran on
+    // the main thread, and with prices every half second one was always running, so slides had to wait for it.)
+    v.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 700, easing: 'ease-out', pseudoElement: value > prev ? '::before' : '::after' });
   }
   last[key] = value;
+}
+
+// write markup only when it changed: rebuilding a block forces the browser to lay it out and paint it again
+function setHTML(el, html) {
+  if (el._html !== html) { el._html = html; el.innerHTML = html; }
 }
 
 function rowEl(container, key, cols) {
@@ -74,10 +93,10 @@ function rowEl(container, key, cols) {
   if (!el) {
     el = document.createElement('div');
     el.dataset.k = key;
+    el.className = 'row';
+    if (cols) el.style.gridTemplateColumns = cols;
     container.appendChild(el);
   }
-  el.className = 'row';
-  if (cols) el.style.gridTemplateColumns = cols;
   return el;
 }
 
@@ -88,15 +107,15 @@ function renderMarkets() {
   const coins = (S.config && S.config.crypto) || Object.keys(c);
   const btc = c[coins[0]];
   const hero = $('hero');
-  hero.className = 'hero' + stale(btc.at, 60000);
+  setClass(hero, 'hero' + stale(btc.at, 60000));
   if (!hero.dataset.built) {
     hero.innerHTML = '<div class="top"><span class="sym" id="heroSym"></span><span id="heroChg"></span></div><div class="price"><span class="odo" id="heroPrice"></span></div><div class="meta" id="heroMeta"></div><div id="heroSpark"></div>';
     hero.dataset.built = '1';
   }
-  $('heroSym').textContent = `${coins[0]} / USDT`;
-  $('heroChg').innerHTML = chg(pct(btc.price, btc.open24h));
+  setText($('heroSym'), `${coins[0]} / USDT`);
+  setHTML($('heroChg'), chg(pct(btc.price, btc.open24h)));
   odometer($('heroPrice'), usd(btc.price));
-  $('heroMeta').innerHTML = `<span>${tr('24h low')} ${usd(btc.low24h)}</span><span>${tr('high')} ${usd(btc.high24h)}</span>`;
+  setHTML($('heroMeta'), `<span>${tr('24h low')} ${usd(btc.low24h)}</span><span>${tr('high')} ${usd(btc.high24h)}</span>`);
   const sk = spark(btc.spark, 266, 54);
   if ($('heroSpark').dataset.sig !== sk.length + ':' + btc.spark.length) { $('heroSpark').innerHTML = sk; $('heroSpark').dataset.sig = sk.length + ':' + btc.spark.length; }
 
@@ -105,7 +124,7 @@ function renderMarkets() {
     const x = c[s];
     if (!x) continue;
     const el = rowEl(rows, s);
-    el.className += stale(x.at, 60000);
+    setClass(el, 'row' + stale(x.at, 60000));
     setVal(el, s, x.price, `<span class="label">${s}</span>${spark(x.spark)}<span class="val">${usd(x.price)}</span>${chg(pct(x.price, x.open24h))}`);
   }
 
@@ -113,15 +132,15 @@ function renderMarkets() {
   const m = S.metals || {};
   const gold = $('goldRows');
   let el = rowEl(gold, 'xau');
-  el.className += stale(m.at, 120000);
+  setClass(el, 'row' + stale(m.at, 120000));
   setVal(el, 'xau', m.xau, `<span class="label">${tr('Gold')}<small>XAU/USD · oz</small></span><span class="val">${usd(m.xau)}</span>${chg(y.gold ? pct(y.gold.price, y.gold.prev) : null)}`);
   el = rowEl(gold, 'xag');
-  el.className += stale(m.at, 120000);
+  setClass(el, 'row' + stale(m.at, 120000));
   setVal(el, 'xag', m.xag, `<span class="label">${tr('Silver')}<small>XAG/USD · oz</small></span><span class="val">${num(m.xag, 2)}</span>${chg(y.silver ? pct(y.silver.price, y.silver.prev) : null)}`);
   for (const g of S.vngold.items || []) {
     el = rowEl(gold, g.code, '1fr auto');
-    el.className += stale(S.vngold.at, 15 * 60000);
-    el.lang = 'vi';
+    setClass(el, 'row' + stale(S.vngold.at, 15 * 60000));
+    if (el.lang !== 'vi') el.lang = 'vi';
     const [name, sub] = g.code === 'SJC' ? ['SJC', 'vàng miếng · tr/lượng'] : ['Nhẫn', '9999 · tr/lượng'];
     setVal(el, g.code, g.sell, `<span class="label">${name}<small>${sub}</small></span>
       <span class="pair"><span><i>mua</i>${millions(g.buy)}</span><span class="val"><i>bán</i>${millions(g.sell)}</span></span>`);
@@ -133,16 +152,16 @@ function renderMarkets() {
   const vcb = (code, label) => {
     const q = r[code] || {};
     const e = rowEl(fx, code, '1fr auto');
-    e.className += stale(fxAt, 15 * 60000);
-    e.lang = 'vi';
+    setClass(e, 'row' + stale(fxAt, 15 * 60000));
+    if (e.lang !== 'vi') e.lang = 'vi';
     setVal(e, 'fx-' + code, q.sell, `<span class="label">${label}<small>Vietcombank</small></span>
       <span class="pair"><span><i>mua</i>${vnd(q.transfer ?? q.buy)}</span><span class="val"><i>bán</i>${vnd(q.sell)}</span></span>`);
   };
   vcb('USD', 'USD');
   const ib = y.usdvnd || {};
   el = rowEl(fx, 'usdvnd-ib');
-  el.className += stale(ib.at, 5 * 60000);
-  el.lang = 'vi';
+  setClass(el, 'row' + stale(ib.at, 5 * 60000));
+  if (el.lang !== 'vi') el.lang = 'vi';
   setVal(el, 'usdvnd-ib', ib.price, `<span class="label">USD<small>liên ngân hàng</small></span><span class="val">${vnd(ib.price)}</span>${chg(pct(ib.price, ib.prev))}`);
   vcb('EUR', 'EUR');
 
@@ -150,7 +169,7 @@ function renderMarkets() {
   for (const { key: k, name, sub, decimals } of (S.config && S.config.indices) || []) {
     const q = y[k] || {};
     el = rowEl(idx, k, '1fr auto auto auto');
-    el.className += stale(q.at, 5 * 60000);
+    setClass(el, 'row' + stale(q.at, 5 * 60000));
     setVal(el, 'i-' + k, q.price, `<span class="label">${esc(name)}<small>${esc(sub || '')}</small></span>${spark(q.spark, 44, 18, q.price >= q.prev)}<span class="val">${num(q.price, decimals ?? 2)}</span>${chg(pct(q.price, q.prev))}`);
   }
 }
@@ -287,7 +306,7 @@ function renderWeather() {
   const [alEn, ac] = aqiLabel(a.us_aqi);
   const al = tr(alEn);
   $('wxNow').className = 'wx-now' + stale(w.at, 30 * 60000);
-  $('wxNow').innerHTML = `
+  setHTML($('wxNow'), `
     <div class="icon">${cur.is_day ? icon : icon.replace('☀️', '🌙').replace('🌤️', '🌙')}</div>
     <div><div class="temp">${Math.round(deg(cur.temperature_2m))}°</div></div>
     <div><div class="desc">${desc} · ${S.city}</div>
@@ -295,7 +314,7 @@ function renderWeather() {
       ${tr('Wind {v}', { v: windText(cur.wind_speed_10m) })} · UV ${a.uv_index != null ? num(a.uv_index, 0) : '—'}<br>
       ${tr('Today {v}', { v: `${Math.round(deg(w.daily[0].min))}° – ${Math.round(deg(w.daily[0].max))}${degSym()}` })}</div>
       <div class="wx-unit"><i class="kb">1</i>${tr('switch to {u}', { u: wantF() ? '°C' : '°F' })}</div></div>
-    <div class="aqi"><div class="l">${tr('AQI (US)')}</div><div class="n" style="color:${ac}">${a.us_aqi ?? '—'}</div><div class="l">${al} · PM2.5 ${a.pm2_5 != null ? num(a.pm2_5, 0) : '—'}</div></div>`;
+    <div class="aqi"><div class="l">${tr('AQI (US)')}</div><div class="n" style="color:${ac}">${a.us_aqi ?? '—'}</div><div class="l">${al} · PM2.5 ${a.pm2_5 != null ? num(a.pm2_5, 0) : '—'}</div></div>`);
   const nc = S.nowcast;
   const rain = $('wxRain');
   if (nc && now() - nc.at < 30 * 60000) {
@@ -307,14 +326,14 @@ function renderWeather() {
       ? (nc.endsAt ? tr('Rain now, easing in about {n} min', { n: mins(nc.endsAt) }) : tr('Rain now, for the next two hours'))
       : nc.startsAt ? tr('Rain likely in about {n} min', { n: mins(nc.startsAt) }) : '';
     rain.className = 'wx-rain on' + (text ? ' wet' : '');
-    rain.innerHTML = `<span class="wr-t">${text ? '☔ ' + esc(text) : tr('No rain in the next 2 hours')}</span><span class="wr-bars">${bars}</span><span class="wr-k">${tr('now · 2 h')}</span>`;
+    setHTML(rain, `<span class="wr-t">${text ? '☔ ' + esc(text) : tr('No rain in the next 2 hours')}</span><span class="wr-bars">${bars}</span><span class="wr-k">${tr('now · 2 h')}</span>`);
   } else rain.className = 'wx-rain';
-  $('wxHourly').innerHTML = w.hourly.map((h) => `<div>${hourLabel(h.t)}<span>${wmo(h.code)[1]}</span><b>${Math.round(deg(h.temp))}°</b>${h.pop ?? 0}%</div>`).join('');
-  const dn = new Intl.DateTimeFormat(loc(), { timeZone: 'UTC', weekday: 'short' });
-  $('wxDaily').innerHTML = w.daily.map((d, i) => {
+  setHTML($('wxHourly'), w.hourly.map((h) => `<div>${hourLabel(h.t)}<span>${wmo(h.code)[1]}</span><b>${Math.round(deg(h.temp))}°</b>${h.pop ?? 0}%</div>`).join(''));
+  const dn = dtf(loc(), { timeZone: 'UTC', weekday: 'short' });
+  setHTML($('wxDaily'), w.daily.map((d, i) => {
     const day = i === 0 ? tr('Today') : dn.format(new Date(d.t + 'T12:00:00Z'));
     return `<div class="day"><span class="ic">${wmo(d.code)[1]}</span><div class="tx">${tr('{day} · {p}% rain', { day, p: d.pop ?? 0 })}<b>${Math.round(deg(d.min))}° – ${Math.round(deg(d.max))}°</b></div></div>`;
-  }).join('');
+  }).join(''));
 }
 
 // ---------------------------------------------------------------- news
@@ -359,7 +378,7 @@ function renderNews() {
     $('newsList').innerHTML = html;
     if (f.key !== newsShownKey) { // animate only when the topic changes, not when the highlight moves
       newsShownKey = f.key;
-      $('newsList').classList.remove('swap'); void $('newsList').offsetWidth; $('newsList').classList.add('swap');
+      $('newsList').animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: 'ease-out' });
     }
   }
 }
@@ -417,10 +436,10 @@ setInterval(() => { if (page === NEWS && newsSel < 0 && !newsDetail && S && Date
 
 let calView = 0; // 0 today, 1 tomorrow, 2 next 7 days (buttons 1-3)
 const CAL_VIEWS = ['Today', 'Tomorrow', 'Week'];
-const dayKey = (ms) => new Intl.DateTimeFormat('en-CA', { timeZone: tz() }).format(new Date(ms));
+const dayKey = (ms) => dtf('en-CA', { timeZone: tz() }).format(new Date(ms));
 const timeOf = (ms) => (lang === 'vi'
-  ? new Intl.DateTimeFormat('vi-VN', { timeZone: tz(), hour: '2-digit', minute: '2-digit' }).format(new Date(ms))
-  : new Intl.DateTimeFormat('en-US', { timeZone: tz(), hour: 'numeric', minute: '2-digit' }).format(new Date(ms)).replace(':00', '').replace(/\s/g, '').toLowerCase());
+  ? dtf('vi-VN', { timeZone: tz(), hour: '2-digit', minute: '2-digit' }).format(new Date(ms))
+  : dtf('en-US', { timeZone: tz(), hour: 'numeric', minute: '2-digit' }).format(new Date(ms)).replace(':00', '').replace(/\s/g, '').toLowerCase());
 function untilText(ms) {
   const m = Math.round((ms - now()) / 60000);
   if (m <= 0) return tr('now');
@@ -438,7 +457,7 @@ function renderCalendar() {
   const c = S.calendar || {};
   const t = now();
   const d = new Date(t);
-  const part = (o) => new Intl.DateTimeFormat(loc(), { timeZone: tz(), ...o }).format(d);
+  const part = (o) => dtf(loc(), { timeZone: tz(), ...o }).format(d);
   const views = CAL_VIEWS.map((v, i) => `<span class="nc ${i === calView ? 'on' : ''}"><i class="kb">${i + 1}</i>${tr(v)}</span>`).join('');
   const headHtml = `<div class="cal-date"><b>${part({ day: 'numeric' })}</b><span>${part({ weekday: 'long' })}<small>${part({ month: 'long', year: 'numeric' })}</small></span></div><div class="cal-views">${views}</div>`;
   const head = $('calHead');
@@ -446,9 +465,8 @@ function renderCalendar() {
 
   if (!c.configured) {
     $('calNext').className = 'cal-next';
-    $('calNext').innerHTML = `<span class="cn-k">${tr('Next up')}</span><b>${tr('No calendar linked')}</b><span class="cn-t">${tr('Run set-calendar-url.sh on server 2')}</span>`;
-    $('calList').innerHTML = `<div class="cal-none">${tr('Paste the secret iCal address of your Google Calendar into set-calendar-url.sh on server 2, and your events show up here.')}</div>`;
-    $('calList')._html = '';
+    setHTML($('calNext'), `<span class="cn-k">${tr('Next up')}</span><b>${tr('No calendar linked')}</b><span class="cn-t">${tr('Run set-calendar-url.sh on server 2')}</span>`);
+    setHTML($('calList'), `<div class="cal-none">${tr('Paste the secret iCal address of your Google Calendar into set-calendar-url.sh on server 2, and your events show up here.')}</div>`);
     return;
   }
   const evs = calEvents();
@@ -463,7 +481,7 @@ function renderCalendar() {
   const days = calView === 2 ? 7 : 1;
   const keys = Array.from({ length: days }, (_, i) => dayKey(t + (calView === 1 ? 1 : i) * 86400000));
   const label = (k, i) => (calView === 2 && i > 1
-    ? new Intl.DateTimeFormat(loc(), { timeZone: 'UTC', weekday: 'long', month: 'short', day: 'numeric' }).format(new Date(k + 'T12:00:00Z'))
+    ? dtf(loc(), { timeZone: 'UTC', weekday: 'long', month: 'short', day: 'numeric' }).format(new Date(k + 'T12:00:00Z'))
     : tr(['Today', 'Tomorrow'][calView === 1 ? 1 : i]));
   let html = '';
   keys.forEach((k, i) => {
@@ -654,20 +672,20 @@ function renderServersNow() {
   const s2 = S.servers.server2;
   if (s2) {
     $('srv2').className = 'srv' + stale(s2.at, 30000);
-    $('srv2').innerHTML = `
+    setHTML($('srv2'), `
       <div class="head"><div><b>Server 2</b> <span>${s2.ip} · ${tr('laptop')}</span></div><span class="state up">${tr('Online')}</span></div>
       ${statsBlock(s2, s2.battery != null ? meter('Battery', s2.battery / 100, `${s2.battery}%`, true) : '')}
-      ${containersBlock(s2.containers)}`;
+      ${containersBlock(s2.containers)}`);
   }
   const s1 = S.servers.server1;
   if (s1) {
     const st = s1.stats && now() - s1.stats.at < 60000 ? s1.stats : null;
     $('srv1').className = 'srv' + stale(s1.at, 60000);
-    $('srv1').innerHTML = `
+    setHTML($('srv1'), `
       <div class="head"><div><b>Server 1</b> <span>${s1.ip} · BRIX</span></div><span class="state ${s1.online ? 'up' : 'down'}">${tr(s1.online ? 'Online' : 'Offline')}</span></div>
       ${st ? statsBlock(st) : `<div class="note">${tr('No stats from the server 1 agent yet.')}</div>`}
       <div class="kv"><span>${tr('Network latency')}</span><b>${s1.online ? num(s1.latency, 1) + ' ms' : '—'}</b></div>
-      ${containersBlock(st && st.containers)}`;
+      ${containersBlock(st && st.containers)}`);
   }
 }
 
@@ -694,7 +712,7 @@ function pomoTick() {
   $('pomoTime').textContent = `${mm}:${ss}`;
   $('pomoTime').className = 'pomo-time ' + (pomo.running ? 'running' : 'paused');
   $('pomoMode').textContent = tr(pomo.mode === 'focus' ? 'Focus' : 'Break') + (pomo.running ? '' : tr(' · paused'));
-  $('pomoFill').style.width = `${100 * (1 - pomo.left / modeLen())}%`;
+  $('pomoFill').style.transform = `scaleX(${1 - pomo.left / modeLen()})`;
   pages[FOCUS].classList.toggle('break', pomo.mode !== 'focus');
   $('pomoCount').textContent = trn(pomo.done, '{n} session completed', '{n} sessions completed');
 }
@@ -761,7 +779,7 @@ function musicProgress() {
   const p = sp && sp.player;
   if (!p) return;
   const pos = Math.min(p.duration, p.progress + (p.isPlaying ? now() - sp.at : 0));
-  $('mFill').style.width = `${(100 * pos) / (p.duration || 1)}%`;
+  $('mFill').style.transform = `scaleX(${pos / (p.duration || 1)})`;
   $('mPos').textContent = mmss(pos);
   $('mDur').textContent = mmss(p.duration);
 }
@@ -1011,20 +1029,61 @@ function movePill() {
   const on = $('tabs').querySelector('.tab.on');
   if (!on) return;
   const pill = $('tabPill');
-  pill.style.width = `${on.offsetWidth}px`;
+  pill.style.width = `${on.offsetWidth}px`; // width snaps; only the position animates (on the GPU)
   pill.style.transform = `translateX(${on.offsetLeft}px)`;
 }
 
+// Page slide: the old and new page move side by side, fully opaque, so nothing ever shows through
+// (a cross-fade is what looked like ghosting). A new turn of the knob finishes the running slide at once,
+// so at most two pages are ever on screen. Data that arrives during a slide is drawn when it ends.
+let slide = null, slideStage = 0, pendingRender = false;
+const SLIDE = { duration: 260, easing: 'cubic-bezier(.22, .8, .24, 1)' };
 function transition(from, to, dir) {
-  const tag = dir > 0 ? 'next' : 'prev';
-  from.classList.remove('enter-next', 'enter-prev', 'fresh');
-  from.classList.add('leaving', `leave-${tag}`);
-  setTimeout(() => from.classList.remove('leaving', 'leave-next', 'leave-prev'), 340);
-  to.classList.remove('enter-next', 'enter-prev', 'leave-next', 'leave-prev', 'leaving', 'fresh');
-  void to.offsetWidth;
-  to.classList.add(`enter-${tag}`, 'fresh');
-  clearTimeout(to._fx);
-  to._fx = setTimeout(() => to.classList.remove('enter-next', 'enter-prev', 'fresh'), 1400);
+  finishSlide();
+  // the width is known from the orientation, so nothing has to be measured (measuring forces a layout)
+  const w = document.body.classList.contains('portrait') ? 480 : 800;
+  from.classList.add('slide', 'leaving');
+  to.classList.add('slide');
+  to.style.transform = `translate3d(${dir * w}px,0,0)`;
+  document.body.classList.add('sliding');
+  slide = { from, to, anims: [] };
+  // Give the new page two frames to be laid out and drawn just off screen, then move both pages.
+  // Starting at once dropped the first few frames of every slide while that work happened.
+  const stage = ++slideStage;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (stage !== slideStage || !slide) return;
+    to.style.transform = '';
+    movePill();
+    slide.anims = [
+      from.animate([{ transform: 'translate3d(0,0,0)' }, { transform: `translate3d(${-dir * w}px,0,0)` }], SLIDE),
+      to.animate([{ transform: `translate3d(${dir * w}px,0,0)` }, { transform: 'translate3d(0,0,0)' }], SLIDE),
+    ];
+    slide.anims[1].onfinish = finishSlide;
+  }));
+}
+function finishSlide() {
+  if (!slide) return;
+  const s = slide;
+  slide = null;
+  slideStage++;
+  s.anims.forEach((a) => a.cancel());
+  s.to.style.transform = '';
+  pages.forEach((p) => p.classList.remove('slide', 'leaving'));
+  document.body.classList.remove('sliding');
+  if (pendingRender) { pendingRender = false; render(); }
+}
+
+// Lay out every page once while the screen is idle, so the first visit to a page slides as smoothly
+// as the tenth. content-visibility keeps that layout while the page is hidden.
+function warmUp(i = 0) {
+  if (i >= pages.length) return;
+  if (i !== page && RENDER[i]) {
+    try { RENDER[i](); } catch (e) { console.error(e); }
+    pages[i].classList.add('warm');
+    void pages[i].offsetHeight;
+    pages[i].classList.remove('warm');
+  }
+  setTimeout(() => warmUp(i + 1), 300);
 }
 
 // ---------------------------------------------------------------- screen orientation (landscape, portrait turned right, portrait turned left)
@@ -1095,14 +1154,19 @@ function setPage(i) {
   // the open story stays open behind Mei's page, so you can ask her about it
   if (page !== ASK && (newsSel >= 0 || newsDetail)) { closeDetail(); newsSel = -1; }
   const dir = page === prev ? 0 : (i > prev ? 1 : -1);
+  // the knob changes pages; the four preset buttons act on the page that is open.
+  // Move the pill first: reading its size forces a layout, which is cheap while only the top bar changed.
+  [...$('tabs').children].forEach((t, j) => t.classList.toggle('on', j === page));
+  finishSlide();
   pages.forEach((p, j) => p.classList.toggle('on', j === page));
-  if (dir) transition(pages[prev], pages[page], dir);
   document.body.dataset.page = page;
-  // the knob changes pages; the four preset buttons act on the page that is open
-  $('tabs').innerHTML = pages.map((p, j) => `<span class="tab ${j === page ? 'on' : ''}">${tr(p.dataset.name)}</span>`).join('');
   if (page === ASK) mitStart();
-  movePill();
-  render();
+  // build the incoming page before it starts to move, so the slide's first frame is not a long one
+  entering = true;
+  try { render(); } finally { entering = false; }
+  // the gold pill moves together with the pages (see transition); started earlier, its first frames were
+  // dropped while the new page was being built
+  if (dir) transition(pages[prev], pages[page], dir); else movePill();
 }
 
 function toast(msg) {
@@ -1200,7 +1264,7 @@ addEventListener('touchend', (e) => {
 // ---------------------------------------------------------------- clock + data stream
 
 function tickClock() {
-  $('clock').textContent = new Intl.DateTimeFormat(loc(), { timeZone: tz(), hour: 'numeric', minute: '2-digit' }).format(new Date(now()));
+  setText($('clock'), dtf(loc(), { timeZone: tz(), hour: 'numeric', minute: '2-digit' }).format(new Date(now())));
   pomoTick();
   musicProgress();
   if (S && page === ASK) renderAsk();
@@ -1240,7 +1304,8 @@ function connect() {
     const msg = JSON.parse(ev.data);
     heard(msg);
     S = msg.state;
-    render();
+    if (slide) pendingRender = true; else render();
+    if (!warmUp.started) { warmUp.started = true; setTimeout(warmUp, 1500); }
   };
   es.addEventListener('hb', (ev) => heard(JSON.parse(ev.data)));
   es.onerror = () => $('conn').classList.remove('ok');
@@ -1256,6 +1321,7 @@ function checkLink() {
 }
 
 renderSettings();
+$('tabs').innerHTML = pages.map((p) => `<span class="tab">${tr(p.dataset.name)}</span>`).join('');
 setPage(0);
 tickClock();
 setInterval(tickClock, 1000);

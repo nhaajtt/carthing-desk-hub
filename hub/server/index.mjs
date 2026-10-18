@@ -71,7 +71,7 @@ function changed() {
     const full = `data: ${JSON.stringify({ t: Date.now(), v: BOOT, state })}\n\n`;
     let pub = null;
     for (const [res, all] of clients) res.write(all ? full : (pub ??= `data: ${JSON.stringify({ t: Date.now(), v: BOOT, state: publicState() })}\n\n`));
-  }, 250);
+  }, 500); // at most two updates a second: each one is parsed and drawn by the Car Thing's small CPU
 }
 
 // The LAN preview is read-only but anyone on the LAN can open it, so it gets no calendar, no security or

@@ -58,7 +58,8 @@
 
   const stage = $('stage');
   // scenes are written for an 800 px wide stage; positions past either edge stay off-screen
-  const W = () => stage.clientWidth || 800;
+  // known from the orientation: reading clientWidth on every frame would force a layout each time
+  const W = () => (document.body.classList.contains('portrait') ? 480 : 800);
   const mx = (x) => (x < 0 ? x : x > 800 ? W() + (x - 800) : (x * W()) / 800);
   const um = (x) => (x * 800) / W();
   const props = $('props');

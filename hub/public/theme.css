@@ -35,24 +35,21 @@ body[data-sky="night"]  { --b1: #2a1d6e; --b2: #0b3a52; --b3: #5a1f55; }
 
 /* ---------- living sky behind every page */
 #sky { position: absolute; inset: 0; overflow: hidden; z-index: 0; pointer-events: none; }
-#sky .blob { position: absolute; width: 560px; height: 560px; border-radius: 50%; opacity: 0.55; will-change: transform; }
-#sky .b1 { left: -180px; top: -260px; background: radial-gradient(closest-side, var(--b1), transparent); animation: drift1 26s ease-in-out infinite alternate; }
-#sky .b2 { right: -220px; top: -120px; background: radial-gradient(closest-side, var(--b2), transparent); animation: drift2 31s ease-in-out infinite alternate; }
-#sky .b3 { left: 160px; bottom: -380px; background: radial-gradient(closest-side, var(--b3), transparent); animation: drift3 23s ease-in-out infinite alternate; }
-@keyframes drift1 { to { transform: translate(140px, 90px) scale(1.15); } }
-@keyframes drift2 { to { transform: translate(-160px, 120px) scale(0.9); } }
-@keyframes drift3 { to { transform: translate(120px, -90px) scale(1.2); } }
+/* the sky is painted once and stays still: drifting full-screen layers cost frames on every page */
+#sky .blob { position: absolute; width: 560px; height: 560px; border-radius: 50%; opacity: 0.55; }
+#sky .b1 { left: -110px; top: -215px; background: radial-gradient(closest-side, var(--b1), transparent); }
+#sky .b2 { right: -300px; top: -60px; background: radial-gradient(closest-side, var(--b2), transparent); }
+#sky .b3 { left: 220px; bottom: -430px; background: radial-gradient(closest-side, var(--b3), transparent); }
 #sky .stars {
-  position: absolute; inset: 0; animation: twinkle 5s ease-in-out infinite alternate;
+  position: absolute; inset: 0;
   background:
     radial-gradient(1.6px 1.6px at 8% 18%, #fff, transparent), radial-gradient(1.2px 1.2px at 22% 64%, #fff, transparent),
     radial-gradient(1.4px 1.4px at 37% 9%, #fff, transparent), radial-gradient(1px 1px at 51% 41%, #fff, transparent),
     radial-gradient(1.6px 1.6px at 66% 22%, #fff, transparent), radial-gradient(1.2px 1.2px at 79% 71%, #fff, transparent),
     radial-gradient(1.4px 1.4px at 91% 12%, #fff, transparent), radial-gradient(1px 1px at 13% 88%, #fff, transparent);
-  opacity: 0.35;
+  opacity: 0.25;
 }
-@keyframes twinkle { to { opacity: 0.12; } }
-#sky .rain { display: none; position: absolute; inset: -40px 0 0; background: repeating-linear-gradient(105deg, transparent 0 22px, rgba(124, 200, 255, 0.10) 22px 23px); animation: rain 0.7s linear infinite; }
+#sky .rain { display: none; position: absolute; inset: -40px 0 0; background: repeating-linear-gradient(105deg, transparent 0 22px, rgba(124, 200, 255, 0.10) 22px 23px); animation: rain 1.4s linear infinite; will-change: transform; }
 body[data-sky="rain"] #sky .rain { display: block; }
 @keyframes rain { to { transform: translate(-11px, 40px); } }
 #app { position: relative; z-index: 1; }
@@ -62,10 +59,10 @@ body[data-sky="rain"] #sky .rain { display: block; }
 .tabs-wrap { position: relative; }
 .tab-pill {
   position: absolute; top: 0; left: 0; height: 100%; border-radius: 999px; background: var(--gold);
-  box-shadow: 0 0 22px rgba(255, 194, 61, 0.45); transition: transform 0.45s var(--spring), width 0.45s var(--spring);
+  box-shadow: 0 0 22px rgba(255, 194, 61, 0.45); transition: transform 0.3s var(--ease); will-change: transform;
 }
 .tabs { position: relative; }
-.tab { font-family: var(--display); font-weight: 600; font-size: 14px; border-radius: 999px; padding: 5px 10px; transition: color 0.3s; }
+.tab { font-family: var(--display); font-weight: 600; font-size: 14px; border-radius: 999px; padding: 5px 10px; }
 .tab.on { background: transparent; color: #1b1440; }
 .tab b { color: var(--dim); }
 .tab.on b { color: #1b1440; opacity: 0.55; }
@@ -95,10 +92,6 @@ h3::before { content: ''; display: inline-block; width: 7px; height: 7px; margin
 .chg.up { color: #0f2e24; background: var(--up); }
 .chg.down { color: #3a0f1f; background: var(--down); }
 .pair span i { color: var(--muted); }
-.flash-up { animation: fu 1.1s var(--ease); }
-.flash-down { animation: fd 1.1s var(--ease); }
-@keyframes fu { from { color: var(--up); text-shadow: 0 0 16px var(--up); } }
-@keyframes fd { from { color: var(--down); text-shadow: 0 0 16px var(--down); } }
 
 /* odometer digits for the hero price */
 .odo { display: inline-flex; }
@@ -106,27 +99,14 @@ h3::before { content: ''; display: inline-block; width: 7px; height: 7px; margin
 .odo .reel { display: flex; flex-direction: column; transition: transform 0.8s var(--spring); }
 .odo .reel span { height: 1.05em; line-height: 1.05em; }
 
-/* sparklines draw themselves when a page opens */
-.page.fresh svg polyline { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 1.1s var(--ease) 0.1s forwards; }
-@keyframes draw { to { stroke-dashoffset: 0; } }
-
-/* ---------- page transitions: pages swing in from the side the knob turned */
-.page.enter-next { animation: enterNext 0.55s var(--ease); }
-.page.enter-prev { animation: enterPrev 0.55s var(--ease); }
-.page.leaving { display: flex !important; pointer-events: none; z-index: 0; }
-.page.leave-next { animation: leaveNext 0.32s ease-in forwards; }
-.page.leave-prev { animation: leavePrev 0.32s ease-in forwards; }
-@keyframes enterNext { from { opacity: 0; transform: translateX(90px) skewX(-8deg) scale(0.96); } }
-@keyframes enterPrev { from { opacity: 0; transform: translateX(-90px) skewX(8deg) scale(0.96); } }
-@keyframes leaveNext { to { opacity: 0; transform: translateX(-70px) skewX(6deg) scale(0.97); } }
-@keyframes leavePrev { to { opacity: 0; transform: translateX(70px) skewX(-6deg) scale(0.97); } }
-.page.enter-next .srv, .page.enter-prev .srv { animation: rowIn 0.6s var(--ease) both; }
-.page .row:nth-child(2), .page .srv + .srv { animation-delay: 0.04s !important; }
-.page .row:nth-child(3) { animation-delay: 0.08s !important; }
-.page .row:nth-child(4) { animation-delay: 0.12s !important; }
-.page .row:nth-child(5) { animation-delay: 0.16s !important; }
-.page .row:nth-child(6) { animation-delay: 0.2s !important; }
-@keyframes rowIn { from { opacity: 0; transform: translateY(14px); } }
+/* ---------- page slide: the old and new page move side by side like a carousel, fully opaque,
+   so one page never shows through the other. app.js runs it with the Web Animations API. */
+.page.slide { will-change: transform; }
+.page.leaving { pointer-events: none; }
+/* nothing animates on a page that is not the current one (Mei's SVG legs and tail run on the main thread,
+   and any main-thread animation makes the compositor wait for it during a slide) */
+.page:not(.on) *, .page:not(.on) *::before, .page:not(.on) *::after { animation-play-state: paused !important; }
+body.sliding #sky .rain { animation-play-state: paused; }
 
 /* ---------- alert banner springs down */
 .alert-banner { border-radius: 18px; font-family: var(--display); background: linear-gradient(90deg, #0f3b2f, #1d5c47); color: #c9ffe9; box-shadow: 0 0 0 2px var(--up), 0 14px 40px rgba(0, 0, 0, 0.5); }
@@ -137,8 +117,7 @@ h3::before { content: ''; display: inline-block; width: 7px; height: 7px; margin
 
 /* ---------- weather */
 .wx-now .temp { font-family: var(--display); font-weight: 800; font-size: 84px; background: linear-gradient(180deg, #fff, #ffd98a); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.wx-now .icon { animation: float 4s ease-in-out infinite; }
-@keyframes float { 50% { transform: translateY(-8px) rotate(-3deg); } }
+
 .wx-now .desc { font-family: var(--display); font-size: 22px; }
 .wx-now .aqi { border-radius: 22px 22px 6px 22px; background: rgba(44, 36, 96, 0.6); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
 .wx-now .aqi .n { font-family: var(--display); font-weight: 800; }
@@ -157,14 +136,12 @@ h3::before { content: ''; display: inline-block; width: 7px; height: 7px; margin
 .meter .fill.warn { background: linear-gradient(90deg, #ffb347, var(--gold)); }
 .meter .fill.bad { background: linear-gradient(90deg, #ff4f7e, var(--down)); }
 .srv .state.up { color: #0f2e24; background: var(--up); border-radius: 999px; }
-.srv .state.up::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #0f2e24; margin-right: 6px; animation: beat 1.6s infinite; }
-@keyframes beat { 50% { transform: scale(0.5); opacity: 0.4; } }
+.srv .state.up::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #0f2e24; margin-right: 6px; }
 .srv .state.down { color: #3a0f1f; background: var(--down); border-radius: 999px; }
 
 /* ---------- focus */
 .pomo-time { font-family: var(--display); font-weight: 800; letter-spacing: -6px; }
-.pomo-time.running { color: var(--text); text-shadow: 0 0 40px rgba(255, 194, 61, 0.35); animation: breathe 4s ease-in-out infinite; }
-@keyframes breathe { 50% { transform: scale(1.02); } }
+.pomo-time.running { color: var(--text); text-shadow: 0 0 40px rgba(255, 194, 61, 0.35); }
 .pomo-ring { height: 10px; border-radius: 5px; background: rgba(255, 255, 255, 0.08); }
 .pomo-fill { background: linear-gradient(90deg, var(--gold), #ff9f43); box-shadow: 0 0 14px rgba(255, 194, 61, 0.6); }
 .focus.break .pomo-fill { background: linear-gradient(90deg, var(--up), var(--sky)); }
@@ -195,8 +172,7 @@ h3::before { content: ''; display: inline-block; width: 7px; height: 7px; margin
 /* ---------- quick menu */
 .ov-tile { background: rgba(44, 36, 96, 0.85); border-radius: 30px 30px 30px 10px; font-family: var(--display); }
 .ov-tile.sel { border-color: var(--gold); box-shadow: 0 0 30px rgba(255, 194, 61, 0.35); }
-.ov-tile.sel svg { animation: tilt 1.6s ease-in-out infinite; }
-@keyframes tilt { 50% { transform: rotate(12deg) scale(1.08); } }
+
 .ov-slider { background: rgba(44, 36, 96, 0.85); }
 .ov-slider.active { border-color: var(--gold); }
 .ov-slider b { font-family: var(--display); }
@@ -207,10 +183,8 @@ h3::before { content: ''; display: inline-block; width: 7px; height: 7px; margin
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
 
-/* keep every looping animation on its own GPU layer so the page is not repainted each frame */
-.wx-now .icon, .meter .fill::after, .srv .state.up::before,
-.tab-pill, .pomo-time.running, .ov-tile.sel svg, .ask-waves span, .ask-think i { will-change: transform; }
-#sky .stars { will-change: opacity; }
+/* the few looping animations left (Mei's page only) get their own GPU layer */
+.ask-waves span, .ask-think i { will-change: transform; }
 
 /* ---------- Mei & Nhat stage (Ask page). Actors move with translate3d from stage.js. */
 #stage { position: absolute; inset: 0; pointer-events: none; }
@@ -302,12 +276,7 @@ h3::before { content: ''; display: inline-block; width: 7px; height: 7px; margin
 .meter .fill::after { display: none; }
 .meter .fill { overflow: visible; }
 
-/* price ticks happen every second: keep the reels on the GPU and flash colour only (no glow repaint) */
-.odo .reel { will-change: transform; }
-.flash-up { animation: fu2 0.7s ease-out; }
-.flash-down { animation: fd2 0.7s ease-out; }
-@keyframes fu2 { from { color: var(--up); } }
-@keyframes fd2 { from { color: var(--down); } }
+
 
 /* the hello text fades back while Mei and Nhat are playing, so it never collides with Nhat's head */
 .ask-hello { transition: opacity 0.4s; }
@@ -324,12 +293,7 @@ h3::before { content: ''; display: inline-block; width: 7px; height: 7px; margin
 .nc { font-family: var(--display); font-weight: 600; font-size: 13px; color: var(--muted); padding: 5px 11px; border-radius: 999px; background: rgba(44, 36, 96, 0.5); white-space: nowrap; transition: background 0.3s, color 0.3s; }
 .nc.on { background: var(--gold); color: #1b1440; }
 .news-list { display: flex; flex-direction: column; gap: 2px; min-height: 0; }
-.news-list.swap .nh { animation: rowIn 0.5s var(--ease) both; }
-.news-list.swap .nh:nth-child(2) { animation-delay: 0.04s; }
-.news-list.swap .nh:nth-child(3) { animation-delay: 0.08s; }
-.news-list.swap .nh:nth-child(4) { animation-delay: 0.12s; }
-.news-list.swap .nh:nth-child(5) { animation-delay: 0.16s; }
-.news-list.swap .nh:nth-child(6) { animation-delay: 0.2s; }
+/* a new topic fades in as one layer (not row by row), from app.js */
 .nh { padding: 7px 4px 8px; border-bottom: 1px dashed rgba(255, 255, 255, 0.08); }
 .nh b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-family: var(--display); font-weight: 600; font-size: 16.5px; line-height: 1.25; }
 .nh span { display: block; font-size: 11.5px; color: var(--muted); margin-top: 2px; }
@@ -577,3 +541,12 @@ body.night-dark *, body.night-dark *::before, body.night-dark *::after { animati
 .srv .head .state { white-space: nowrap; flex: none; }
 .srv .head > div { min-width: 0; }
 .srv.sec .head > div > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* price change: a green or red glow behind the number fades out (opacity only, so it runs on the GPU) */
+.row .val { position: relative; isolation: isolate; }
+.row .val::before, .row .val::after { content: ''; position: absolute; inset: -2px -6px; border-radius: 8px; opacity: 0; pointer-events: none; z-index: -1; }
+.row .val::before { background: rgba(62, 230, 168, 0.28); }
+.row .val::after { background: rgba(255, 111, 156, 0.28); }
+
+/* the price reels jump straight to their value while a page slides in (no burst of animations at slide start) */
+body.sliding .odo .reel { transition: none; }
