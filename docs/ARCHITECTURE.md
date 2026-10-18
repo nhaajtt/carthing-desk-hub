@@ -74,9 +74,13 @@ hub/public/
   theme.css    "Mei's night market" look, motion, portrait layout
 ```
 
-* **Render only what is visible.** `render()` draws the current page; other pages render when opened.
+* **Pages stay laid out.** Every page is `display: flex`; the ones not on screen get `content-visibility: hidden`, which skips them but keeps their layout, so showing a page again is cheap. A few seconds after start-up each page is laid out once (`warmUp()`). `render()` draws only the current page; the others are drawn when they slide in.
+* **The slide.** The old and new page move side by side with the Web Animations API (`translate3d`, 260 ms), fully opaque: nothing ever shows through, which is what looked like ghosting with the old cross-fade. The new page is drawn first and gets two frames off screen before both move; the gold tab pill starts with them. A new knob turn finishes the running slide at once. During a slide, updates from the hub are held and drawn when it ends, and the new page is drawn without price flashes or rolling digits.
+* **No work on hidden pages.** Animations on pages that are not current are paused (Mei's SVG legs and tail run on the main thread, and any main-thread animation makes the compositor wait during a slide).
+* **Cheap updates.** The hub pushes at most twice a second. Intl formatters are created once and reused (creating them was most of a Markets update). `setHTML` / `setText` / `setClass` only write when the value changed. Market rows have a fixed height and `contain: strict`, so a new price lays out its own row only. Price flashes are an opacity glow (`::before` / `::after`) animated on the GPU instead of the text colour.
 * **Diff per child.** `setVal()` parses new row markup into a `<template>` and replaces only the child elements whose markup changed, so a new price does not rebuild the sparkline next to it.
-* **GPU only.** Every looping animation uses `transform` / `opacity` with `will-change`; effects that force repaints (`text-shadow` flashes, `filter` glows, shimmer inside `overflow:hidden`) were removed.
+* **Nothing loops in the background.** The sky is painted once (no drifting blobs or twinkling stars); rain is the only ambient animation and pauses during a slide. No `backdrop-filter` (the quick menu uses a solid dim). Progress bars grow with `scaleX`, not `width`. The only looping animations left are on Mei's page.
+* **Measuring.** `tools/framemeter.js` logs frame gaps while turning through every page; `tools/trace.mjs` reads Chromium's own frame reporter (compositor side) and counts the animation frames that were shown or dropped.
 * **Orientation.** Four steps of 90°. Portrait lays `#app` out at 480 × 800 and rotates it ±90° with `transform`; upside-down landscape is a plain `rotate(180deg)`. The choice is stored in the Car Thing's `localStorage`. Touch input arrives in screen coordinates, so swipes are mapped into the rotated layout, and upside down the preset buttons are swapped (4 ↔ 1, 3 ↔ 2) because they now sit along the bottom edge in reverse order.
 
 ## Network

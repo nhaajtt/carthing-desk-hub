@@ -29,8 +29,9 @@
 20. [Chế độ dọc, menu nổi, 4 nút theo trang](#20-chế-độ-dọc-menu-nổi-4-nút-theo-trang)
 21. [Màn hình tự tắt, và đợt nâng cấp thứ hai](#21-màn-hình-tự-tắt-và-đợt-nâng-cấp-thứ-hai)
 22. [Đợt nâng cấp thứ ba: ban đêm, bảo mật, cập nhật](#22-đợt-nâng-cấp-thứ-ba-ban-đêm-bảo-mật-cập-nhật)
-23. [Bảng tổng hợp lỗi](#23-bảng-tổng-hợp-lỗi)
-24. [Những điều rút ra](#24-những-điều-rút-ra)
+23. [Mượt hơn nữa](#23-mượt-hơn-nữa)
+24. [Bảng tổng hợp lỗi](#24-bảng-tổng-hợp-lỗi)
+25. [Những điều rút ra](#25-những-điều-rút-ra)
 
 ---
 
@@ -524,7 +525,66 @@ Khi lật ngược màn hình 180°, núm vặn **không** bị ngược: xoay t
 * Lần thử đầu, đổi ngôn ngữ "không ăn". Hoá ra trang đang **tự tải lại** (hub vừa khởi động lại, mã phiên bản đổi) đúng lúc bấm phím. Thử lại khi trang đã yên thì chạy đúng.
 * Chụp đủ các trang bằng tiếng Việt trên máy thật thì thấy chữ dài hơn làm ô trạng thái ở trang Security bị xuống dòng; đã sửa cho chữ không xuống dòng.
 
-## 23. Bảng tổng hợp lỗi
+## 23. Mượt hơn nữa
+
+Yêu cầu: "thực sự mượt mà, không giật lag, không bóng ma, nhất là hiệu ứng chuyển trang". Lần này mình đo trước rồi mới sửa.
+
+### Đo bằng gì
+
+* `tools/framemeter.js`: vặn núm qua cả 8 trang (chậm rồi nhanh) và ghi khoảng cách giữa các khung hình. 16,7 ms là 60 fps; trên 33 ms là mắt thấy khựng.
+* `tools/trace.mjs`: đọc bộ đếm khung hình của chính Chromium, phía compositor (thứ thật sự lên màn hình). Nó đếm bao nhiêu khung có chuyển động được hiện và bao nhiêu bị rớt.
+* `top` trên Car Thing để xem CPU lúc đứng yên.
+
+### Kết quả
+
+| | Trước | Sau |
+|---|---|---|
+| Khung trên 33 ms khi đi qua các trang (framemeter, màn hình ngang) | 100 / 319 | 46 / 401 |
+| p95 / khung tệ nhất | 100 ms / 267 ms | 50 ms / 117 ms |
+| Khung chuyển động bị rớt (trace, compositor) | khoảng 12%* | 4,5–4,9% |
+| CPU của Chromium lúc đứng yên | 17–35% | 0–1% |
+| Một lần cập nhật trang Markets | 24 ms, 44 thay đổi DOM | khoảng 5 ms, 1 thay đổi |
+| Thời gian xử lý khi chuyển sang một trang | 27–183 ms | khoảng 4–34 ms |
+
+\* Công cụ trace được viết sau đợt sửa đầu, nên số "trước" là lần đo đầu tiên của nó.
+
+### Nguyên nhân và cách sửa
+
+1. **Bóng ma** là hiệu ứng cũ: trang mới hiện dần từ trong suốt (kèm nghiêng và thu nhỏ) trong khi trang cũ mờ dần. Khoảng 0,3 giây hai trang nửa trong suốt chồng lên nhau; vặn núm nhanh thì chồng 2–3 trang. Giờ là kiểu **băng chuyền**: hai trang đi sát nhau, không trong suốt, mỗi lúc tối đa hai trang, vặn tiếp thì lần trượt cũ kết thúc ngay.
+2. **Mỗi lần chuyển trang dựng lại từ đầu.** Các trang ẩn dùng `display: none` nên mỗi lần hiện ra phải tính bố cục lại hết; trang Weather (emoji màu) mất 180 ms, Markets 140 ms. Giờ các trang ẩn dùng `content-visibility: hidden`, giữ được bố cục, và được "làm nóng" một lần lúc rảnh.
+3. **Đọc kích thước bắt trình duyệt tính lại bố cục giữa chừng:**
+   * Mẹo `void el.offsetWidth` để chạy lại hiệu ứng nháy giá: một lần cho mỗi con số đổi.
+   * Đo bề rộng trang trước khi trượt.
+   * Đo bề rộng sân khấu của Mei ở mỗi khung hình.
+
+   Đã thay hết bằng Web Animations API hoặc giá trị biết trước.
+4. **Tạo `Intl.NumberFormat` mỗi lần định dạng một con số.** Trên chip này nó rất chậm, và chiếm gần hết 24 ms của một lần cập nhật Markets. Giờ mỗi bộ định dạng chỉ tạo một lần.
+5. **Thứ chạy hoài dù không ai nhìn:**
+   * 3 mảng trời 560 px trôi liên tục, sao nhấp nháy toàn màn hình.
+   * Icon thời tiết lơ lửng, chấm "Online" đập, đồng hồ Focus "thở", ô menu lắc lư.
+   * Hiệu ứng mờ (blur) toàn màn hình sau menu.
+   * Thanh tiến trình đổi `width` (tính lại bố cục mỗi khung).
+
+   Bỏ hết, hoặc đổi sang `transform`. CPU lúc đứng yên của Chromium từ 17% xuống gần 0.
+6. **Hiệu ứng chạy trên luồng chính làm compositor phải chờ:**
+   * Màu chữ tab đổi dần.
+   * Nháy giá đổi màu chữ: với giá về mỗi nửa giây thì lúc nào cũng có một cái đang chạy.
+   * Chân, đuôi, mắt SVG của Mei vẫn chạy ở mọi trang.
+
+   Giờ màu tab đổi ngay, nháy giá là một lớp nền mờ dần (opacity, chạy trên GPU), và mọi animation của trang không hiển thị đều dừng.
+7. **Lúc trượt vào Markets**, trace cho thấy một khung 103 ms, trong đó 52 ms là tính bố cục: một con số đổi làm cả trang tính lại. Mỗi hàng giá giờ có chiều cao cố định và `contain: strict` (layout còn 11 ms). Trang đang trượt vào thì cập nhật số ngay, không chạy hiệu ứng (trước đó cả loạt hiệu ứng nháy và cuộn số cùng bắt đầu đúng lúc trượt).
+8. **Hub đẩy dữ liệu tối đa 2 lần mỗi giây** thay vì 4. Dữ liệu đến trong lúc trượt được giữ lại, vẽ khi trượt xong.
+
+### Những thứ đã thử mà không giúp
+
+* Vẽ sẵn hai trang kề bên ở ngoài màn hình: không đổi gì, lại tốn bộ nhớ. Đã bỏ.
+* Tách mỗi sparkline ra một lớp GPU riêng: không đổi rõ. Thí nghiệm ẩn hẳn mọi sparkline cũng không đổi, nên chúng không phải thủ phạm.
+
+### Phần còn lại
+
+Một animation đơn giản chạy thử trên Car Thing đạt 60 fps tròn (300/300 khung), nên phần cứng làm được. Phần rớt còn lại (khoảng 5%) nằm ở khung đầu khi một trang hiện ra (tính style 20 ms) và ở nền tảng: Chromium của Nocturne chạy `--single-process`, và `nocturned` luôn dùng khoảng 10% CPU để nghe từ khoá "Hey Nocturne". Có lệnh tắt nghe (`wakeword.pause` trên WebSocket `localhost:5000`), nhưng `nocturned` chỉ nhận lệnh đó khi app đồng hành trên điện thoại đang kết nối ("No active app session"). Vì vậy mình để nguyên.
+
+## 24. Bảng tổng hợp lỗi
 
 | # | Triệu chứng | Nguyên nhân gốc | Cách sửa |
 |---|---|---|---|
@@ -552,8 +612,11 @@ Khi lật ngược màn hình 180°, núm vặn **không** bị ngược: xoay t
 | 19 | Chạm lúc màn hình tối vẫn lọt một phím | Trạng thái "đã sáng" về trước khi đèn nền sáng thật (tối đa 2 giây) | Nuốt mọi thao tác trong 2,5 giây sau khi đánh thức |
 | 20 | `reload sshd` thất bại trên Car Thing | SSH của Nocturne kích hoạt qua socket, không có `sshd.service` | Chỉ cần `sshd -t` |
 | 21 | Số gói bị chặn cao bất thường | Đếm cả multicast và gói ACK/FIN muộn của kết nối đã đóng | Chỉ đếm lần mở kết nối mới |
+| 22 | "Bóng ma" khi chuyển trang | Hai trang nửa trong suốt chồng lên nhau, vặn nhanh thì chồng nhiều trang | Trượt kiểu băng chuyền, không trong suốt, tối đa 2 trang |
+| 23 | Chuyển trang khựng 30–180 ms | `display:none` bắt dựng lại trang; đo kích thước giữa chừng; tạo `Intl.NumberFormat` liên tục | `content-visibility`, Web Animations, cache bộ định dạng |
+| 24 | Chromium ăn 17–35% CPU lúc đứng yên | Trời trôi, sao nhấp nháy, các vòng lặp nhỏ | Trời tĩnh, bỏ vòng lặp ở trang không hiển thị |
 
-## 24. Những điều rút ra
+## 25. Những điều rút ra
 
 1. **Đo trên thiết bị thật, không đoán.** Font, FPS, mức âm thanh của micro, giờ hệ thống: lần nào thiết bị thật cũng khác với giả định.
 2. **"Không tin mặc định" là công cụ thiết kế, không chỉ là bảo mật.** Nó quyết định Car Thing không giữ key, hub không cầm `docker.sock`, agent chỉ đẩy dữ liệu đi, và firewall nằm trên đúng máy.
