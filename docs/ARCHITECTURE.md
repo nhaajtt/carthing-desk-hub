@@ -51,7 +51,9 @@ hub/server/
   github.mjs         CI runs, open issues and pull requests
   spotify.mjs        PKCE linking, polling, actions, album-art proxy
   covers.mjs         a picture for what the iPhone plays: YouTube thumbnail or iTunes cover
-  lyrics.mjs         timed lyrics from LRCLIB, parsed from LRC
+  lyrics.mjs         timed lyrics from LRCLIB, parsed from LRC; Vietnamese lines from Gemini Flash-Lite
+  desk.mjs           minutes at the desk per day (state/desk.json), stand-up nudge
+  reminders.mjs      reminders Mei sets (state/reminders.json): banner and screen on when due
   docker-status.mjs  the read-only sidecar
 ```
 
@@ -62,6 +64,8 @@ hub/server/
 * **Two views of the state.** The Car Thing (and addresses in `PREVIEW_FULL_FROM`) get everything. Any other client, i.e. the LAN preview, gets the state without calendar events, security and update details, GitHub, Mei's answers and the security / CI banners.
 * **Language.** English or Vietnamese is kept on the hub (`state.display.lang`, saved in `state/display.json`), not in the browser, because the hub writes text too: price, rain, security and CI banners, and Mei's briefing (unless `BRIEFING_LANG` pins one). The UI translates its own strings with `tr()`, and the fixed messages the hub sends (Mei's errors) by exact match. °C / °F is only a display choice, stored in the Car Thing's `localStorage`; the hub keeps sending its own unit.
 * **Night.** Between `NIGHT_DIM`'s times the hub answers `0` to `GET /api/brightness`. Any input on the Car Thing calls `POST /api/display/wake`, which lights it for `WAKE_MINUTES`; the UI swallows that first input (and anything in the 2.5 s the backlight needs to come on) so a tap in the dark does not press anything.
+* **Reminders.** Mei's answer can end with `R: <minutes> | <text>` when the user asked to be reminded; the hub keeps it in `state/reminders.json` (at most 20, up to a week ahead). When it is due, a banner shows on every page and the screen lights (night, or the phone away).
+* **Time at the desk.** The Car Thing reports the iPhone's near / away and a heartbeat every 2 minutes; each minute while near (and heard from in the last 6 minutes) is added to today. A break of 3 minutes resets the sitting streak; at 60 minutes (`DESK_SIT_MINUTES`) a banner says to stand up.
 * **Command channel.** `GET /api/voice/cmd` is a 25 s long-poll held open by `voice-agent.sh`. The hub answers it with `record <id> <seconds>`, `stop <id>`, `reboot` or `poweroff`.
 * **Audio.** The WAV arrives as 4-channel 32-bit PCM. The hub averages the channels, resamples to 16 kHz, removes the DC offset, drops the first 150 ms, measures 50 ms windows (noise = 20th percentile, loud = 95th percentile), and only calls Gemini when loud ≥ 4 × noise and ≥ RMS 20. Gain is normalised up to 40×.
 
@@ -107,6 +111,7 @@ carthing/phonelink/
 * **At the desk.** BlueZ gives no signal strength for a connected device, so `rssi.go` asks the kernel's management socket (`HCI_CHANNEL_CONTROL`, read-only command "Get Connection Information") every 2 s. A moving average above `-near` (default −62 dBm) for 4 s means at the desk; below `-far` (−78 dBm) for 20 s, or a lost link, means away.
 * **Keys.** The remote's report carries seven consumer keys; phonelink only ever sets Siri (voice command) and volume up (the Camera app's shutter), on `POST /key`, and lets go by itself after 10 s.
 * **To the screen.** `GET /events` streams the whole state (paired, connected, name, battery, pairing, media, call, last 12 notifications) as SSE within 100 ms of a change. `POST /pair`, `/pair/cancel`, `/forget`, `/media`, `/call`, `/note/clear` and `/key` take small JSON bodies sent as plain text (a "simple" request, so no CORS preflight). Everything is in memory and cleared when the phone disconnects.
+* **Find my iPhone.** An accessory cannot make the phone ring, so the iPhone page plays its music instead: volume up to the top with AMS, play, and after 30 s (or a second press) pause and the same number of steps back down.
 * **Covers.** The phone sends no pictures. The page borrows Spotify's art when the iPhone plays the same song Spotify reports, and otherwise asks the hub, which searches YouTube's public results page (for the YouTube app) or Apple's iTunes Search API (everything else) and proxies the image.
 
 ## Network
@@ -137,4 +142,7 @@ carthing/phonelink/
 | `GET /api/spotify/art?u=` | proxies `https://i.scdn.co/` only |
 | `GET /api/media/cover?app=&t=&a=&al=` | Car Thing only; fetches from `i.ytimg.com` or `*.mzstatic.com` only |
 | `GET /api/media/lyrics?t=&a=&al=&d=` | Car Thing only; asks `lrclib.net` |
+| `GET /api/media/lyrics/vi?…` | Car Thing only; the same lyrics translated by Gemini Flash-Lite, one request per song |
+| `POST /api/desk {near}` | Car Thing only; presence reports and a 2-minute heartbeat |
+| `POST /api/phone/summary {notes, calls, battery}` | Car Thing only; counts for the morning briefing, kept 2 h in memory |
 | `POST /api/display/away` | Car Thing only; `true` makes `/api/brightness` answer 0 until `false` |

@@ -651,3 +651,20 @@ body.sliding .odo .reel { transition: none; }
 .clock { white-space: nowrap; }
 body:not(.portrait) .tab { padding: 5px 8px; font-size: 13.5px; }
 body:not(.portrait) .bar-right { gap: 8px; }
+
+/* ---------- find my iPhone, translated lyrics, time at the desk, desk and reminder banners */
+.ip-row.find .ip-ti { color: var(--sky); }
+.ip-row.find.on { background: rgba(124, 200, 255, 0.14); box-shadow: inset 3px 0 0 var(--sky); }
+.ly small { display: block; margin-top: 2px; font: 600 15px/1.3 Inter, sans-serif; color: inherit; opacity: 0.75; }
+.desk { margin-top: 14px; }
+.desk:empty { display: none; }
+.dk-top { display: flex; align-items: baseline; justify-content: center; gap: 10px; font-size: 14px; color: var(--muted); }
+.dk-top b { font: 800 20px var(--display); color: var(--text); }
+.dk-top em { font-style: normal; color: var(--gold); }
+.dk-week { display: flex; justify-content: center; gap: 10px; margin-top: 8px; }
+.dk-day { width: 30px; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; color: var(--dim); }
+.dk-day i { display: block; width: 14px; height: 0; max-height: 40px; min-height: 3px; border-radius: 4px; background: rgba(255, 255, 255, 0.18); }
+.dk-day { height: 58px; justify-content: flex-end; }
+.dk-day.today i { background: var(--gold); }
+.dk-day.today span { color: var(--text); }
+.alert-banner.desk, .alert-banner.remind { background: linear-gradient(90deg, #3d2a07, #6b4a0e); color: #ffe6ad; box-shadow: 0 0 0 2px var(--gold), 0 14px 40px rgba(0, 0, 0, 0.5); }

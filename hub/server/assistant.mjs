@@ -10,9 +10,12 @@ You are given live dashboard data (markets, weather, servers, today's headlines)
 For questions about today's news, research or business, answer from the headlines in the dashboard data and name the outlet. You cannot browse the web: if the answer is not in the data and may have changed recently, say so instead of guessing.
 Answer only what the user actually said in the audio; never invent a question from the dashboard data.
 When the user says "this", "this story", "tin này" or similar, they mean what is on the screen right now (given below the dashboard data).
-Always reply in exactly this format, with nothing before or after:
+If the user asks to be reminded of something or to set a timer, say in A when you will remind them, and add one last line:
+R: <minutes from now until then, a whole number; work it out from the local time in the dashboard data for a clock time> | <what to remind them of, short, in their language>
+Always reply in exactly this format, with nothing before or after (the R line only for a reminder):
 Q: <what the user said, word for word, in their language; leave empty if there was no clear speech>
-A: <your answer>`;
+A: <your answer>
+R: <minutes> | <reminder>`;
 
 // The Car Thing's four microphones arrive as 4-channel, 32-bit PCM (hw:0,0).
 // Mix them to one channel, downsample to 16 kHz, remove the DC offset, normalise, and decide whether
@@ -80,7 +83,7 @@ function toSpeechWav(buf) {
   return { wav: Buffer.concat([hdr, pcm]), peak: Math.round(peak), noise: Math.round(noise), loud: Math.round(loud), speech, gain, seconds: n / 16000 };
 }
 
-export function createAssistant({ state, changed, snapshot, describe }) {
+export function createAssistant({ state, changed, snapshot, describe, onReminder }) {
   const KEY = process.env.GEMINI_API_KEY || '';
   // Google Search grounding needs a paid plan for current models (2.5 Flash is closed to new keys),
   // so fresh news comes from the headline feeds in the dashboard data instead.
@@ -160,7 +163,8 @@ export function createAssistant({ state, changed, snapshot, describe }) {
       if (!clip.speech) {
         return set({ phase: 'error', transcript: '', error: "Meow? I didn't hear anything. Hold the Car Thing closer and speak up, then press the knob again." });
       }
-      const { transcript, answer, searches, sources } = await ask(clip.wav);
+      const { transcript, answer, searches, sources, reminder } = await ask(clip.wav);
+      if (reminder && onReminder) onReminder(reminder.minutes, reminder.text);
       remember(transcript, answer);
       set({ phase: 'answer', transcript, answer, searches, sources });
     } catch (e) {
@@ -207,7 +211,9 @@ export function createAssistant({ state, changed, snapshot, describe }) {
       ...(SEARCH ? { tools: [{ google_search: {} }] } : {}),
       generationConfig: { maxOutputTokens: 1200 },
     });
-    const text = (cand.content?.parts || []).map((p) => p.text || '').join('').trim();
+    const full = (cand.content?.parts || []).map((p) => p.text || '').join('').trim();
+    const r = full.match(/^\s*R:\s*(\d+)\s*\|\s*(.+)$/m);
+    const text = full.replace(/^\s*R:.*$/m, '').trim();
     const q = text.match(/^\s*Q:\s*(.*)$/m);
     const a = text.match(/^\s*A:\s*([\s\S]*)$/m);
     // shown under the answer: what Mei searched on Google and where the facts came from
@@ -219,6 +225,7 @@ export function createAssistant({ state, changed, snapshot, describe }) {
       transcript: q ? q[1].trim() : '',
       answer: (a ? a[1] : text).replace(/\*\*/g, '').trim() || 'No answer.',
       searches, sources,
+      reminder: r ? { minutes: Number(r[1]), text: r[2].trim() } : null,
     };
   }
 
@@ -233,11 +240,12 @@ export function createAssistant({ state, changed, snapshot, describe }) {
     set({ phase: 'thinking', kind: 'briefing', transcript: '', answer: '', error: '', searches: [], sources: [] });
     try {
       const cand = await gemini({
-        systemInstruction: { parts: [{ text: SYSTEM.split('Always reply in exactly this format')[0] }] },
+        systemInstruction: { parts: [{ text: SYSTEM.split('If the user asks to be reminded')[0] }] },
         contents: [{ role: 'user', parts: [{ text: `Live dashboard data:\n${snapshot()}\n\n`
           + `Write the user's briefing for today in ${lang}, at most 65 words, as one short paragraph of plain text with whole numbers where possible. `
           + "Cover, in this order: today's weather (range and rain chance), the calendar for today if there is one (times and titles), "
-          + 'how BTC and gold moved, the USD/VND rate, and the two most important headlines. Use only the data above. '
+          + 'how BTC and gold moved, the USD/VND rate, the two most important headlines, and, if a Phone line is in the data, '
+          + 'how many notifications and missed calls came in overnight and the phone battery. Use only the data above. '
           + 'Start with a one-word cat greeting.' }] }],
         generationConfig: { maxOutputTokens: 1200 },
       });

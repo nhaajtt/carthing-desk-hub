@@ -32,8 +32,9 @@
 23. [Mượt hơn nữa](#23-mượt-hơn-nữa)
 24. [iPhone qua Bluetooth, không cần app](#24-iphone-qua-bluetooth-không-cần-app)
 25. [Điện thoại "đẳng cấp" hơn](#25-điện-thoại-đẳng-cấp-hơn)
-26. [Bảng tổng hợp lỗi](#26-bảng-tổng-hợp-lỗi)
-27. [Những điều rút ra](#27-những-điều-rút-ra)
+26. [Ngồi bàn, tìm điện thoại, nhắc việc](#26-ngồi-bàn-tìm-điện-thoại-nhắc-việc)
+27. [Bảng tổng hợp lỗi](#27-bảng-tổng-hợp-lỗi)
+28. [Những điều rút ra](#28-những-điều-rút-ra)
 
 ---
 
@@ -690,7 +691,18 @@ iOS chỉ gửi danh sách thông báo đang có **một lần**, khi chương t
 * Ảnh bìa từ iTunes: kết quả đầu tiên hay là bản remix ("Blinding Lights (Remix)"), nên giờ ưu tiên bài trong đúng album đang phát.
 * Màu trang lấy từ ảnh bìa: vẽ ảnh 12 × 12, cộng màu có trọng số (điểm ảnh nhiều màu nặng hơn điểm xám), rồi đặt hai biến CSS. Ảnh đi qua hub (cùng gốc), nên canvas đọc được.
 
-## 26. Bảng tổng hợp lỗi
+## 26. Ngồi bàn, tìm điện thoại, nhắc việc
+
+| Tính năng | Cách làm |
+|---|---|
+| Thời gian ở bàn | Car Thing báo hub mỗi khi iPhone đến gần / rời đi, và cứ 2 phút một lần; hub cộng từng phút vào ngày hôm nay (`state/desk.json`, 5 tuần). Rời bàn đủ 3 phút là tính một lần nghỉ; ngồi liền 60 phút thì banner nhắc đứng dậy. Trang Focus có giờ hôm nay và cột 7 ngày. |
+| Tìm iPhone | Phụ kiện không làm iPhone đổ chuông được, nhưng điều khiển được nhạc: tăng âm lượng hết cỡ qua AMS, phát, 30 giây sau (hoặc bấm lần nữa) dừng và hạ đúng bấy nhiêu nấc. Kèm khoảng cách ước lượng từ sóng (−59 dBm ở 1 m). |
+| Bản tin có điện thoại | Car Thing gửi hub **số đếm** (thông báo, cuộc gọi nhỡ trong 12 giờ, pin), không gửi nội dung; Mei nhắc trong bản tin 7 giờ sáng. |
+| Mei nhắc việc | Câu trả lời của Mei có thể kết thúc bằng dòng `R: <số phút> \| <việc>`; Gemini tự đổi giờ đồng hồ thành số phút từ "Local time" có sẵn trong dữ liệu. Hub lưu vào `state/reminders.json`, đến giờ thì banner và bật màn hình. |
+| Dịch lời bài hát | Khi màn hình ở tiếng Việt mà lời không có dấu tiếng Việt, hub gửi cả bài một lần cho Gemini Flash-Lite (khoảng 3 giây), trả về mảng đúng số dòng; lệch số dòng thì bỏ, không hiện bản dịch sai dòng. |
+| Dọn server 2 | Xoá image `golang:1.24-bookworm` (1,27 GB); `build-phonelink.sh` tự tải lại khi cần build. |
+
+## 27. Bảng tổng hợp lỗi
 
 | # | Triệu chứng | Nguyên nhân gốc | Cách sửa |
 |---|---|---|---|
@@ -728,7 +740,7 @@ iOS chỉ gửi danh sách thông báo đang có **một lần**, khi chương t
 | 29 | Trang iPhone trống dù iPhone có thông báo | iOS gửi danh sách có sẵn một lần, cho người đăng ký đầu tiên (`nocturned`) | Giữ và phát lại giá trị đến sớm; nối lại một lần khi khởi động |
 | 30 | Ảnh bìa là bản remix | Kết quả iTunes đầu tiên không phải album đang phát | Ưu tiên đúng album, rồi đúng tên bài |
 
-## 27. Những điều rút ra
+## 28. Những điều rút ra
 
 1. **Đo trên thiết bị thật, không đoán.** Font, FPS, mức âm thanh của micro, giờ hệ thống: lần nào thiết bị thật cũng khác với giả định.
 2. **"Không tin mặc định" là công cụ thiết kế, không chỉ là bảo mật.** Nó quyết định Car Thing không giữ key, hub không cầm `docker.sock`, agent chỉ đẩy dữ liệu đi, và firewall nằm trên đúng máy.

@@ -14,7 +14,9 @@ import { createSecurity } from './security.mjs';
 import { createRegistry } from './registry.mjs';
 import { createGitHub } from './github.mjs';
 import { cover } from './covers.mjs';
-import { lyrics } from './lyrics.mjs';
+import { lyrics, translateLyrics } from './lyrics.mjs';
+import { createDesk } from './desk.mjs';
+import { createReminders } from './reminders.mjs';
 
 const PORT = Number(process.env.PORT || 8787);
 const LAT = Number(process.env.LAT || 37.3382);
@@ -89,6 +91,8 @@ function publicState() {
     security: null, updates: null,
     github: { configured: false, hidden: true },
     voice: v && { ...v, transcript: '', answer: v.answer ? 'Answers show on the Car Thing only.' : '' },
+    // when you are at your desk, and what you asked to be reminded of, are nobody else's business
+    desk: null, reminders: [],
   };
 }
 
@@ -462,6 +466,15 @@ const alerts = createAlerts({ state, changed, config, priceOf, labelOf: assetLab
 // ---------------------------------------------------------------- 24 h graphs, security, updates, GitHub
 
 createHistory({ state, stateDir: STATE_DIR });
+const desk = createDesk({ state, changed, stateDir: STATE_DIR, tz: WX_TZ, notify: alerts.notify, lang: () => state.display.lang });
+// light the screen for something that matters (a reminder): at night and while the phone is away
+function wakeDisplay() {
+  if (state.display.night?.active) { wakeUntil = Date.now() + WAKE_MS; updateNight(); }
+  if (state.display.away) { state.display.away = false; changed(); }
+}
+const reminders = createReminders({ state, changed, stateDir: STATE_DIR, notify: alerts.notify, wake: wakeDisplay });
+// counts only (never the text) of what the paired iPhone got, sent by the Car Thing for the morning briefing
+let phoneSummary = null;
 const security = createSecurity({ state, changed, stateDir: STATE_DIR, hostDir: HOST_DIR, notify: alerts.notify });
 createRegistry({ state, changed, every });
 createGitHub({ state, changed, notify: alerts.notify, every });
@@ -488,6 +501,8 @@ function snapshot() {
   const s2 = state.servers.server2, s1 = state.servers.server1;
   if (s2) lines.push(`Server 2: CPU ${Math.round(s2.cpu || 0)}%, RAM ${(s2.memUsed / 2 ** 30).toFixed(1)} GB used`);
   if (s1) lines.push(`Server 1: ${s1.online ? 'online' : 'offline'}${s1.stats ? `, CPU ${Math.round(s1.stats.cpu || 0)}%` : ''}`);
+  const ph = phoneSummary;
+  if (ph && Date.now() - ph.at < 2 * 3600000) lines.push(`Phone (last 12 hours): ${ph.notes} notifications, ${ph.calls} missed calls${ph.battery != null ? `, battery ${ph.battery}%` : ''}`);
   if (state.alerts?.length) lines.push(`Recent alerts: ${state.alerts.slice(0, 3).map((a) => a.text).join('; ')}`);
   if (state.calendar?.configured) {
     const day = (ms) => new Date(ms).toLocaleDateString('en-CA', tz);
@@ -514,7 +529,7 @@ function describe(ctx) {
   }
   return out.join('\n');
 }
-const assistant = createAssistant({ state, changed, snapshot, describe });
+const assistant = createAssistant({ state, changed, snapshot, describe, onReminder: (m, t) => reminders.add(m, t) });
 
 // ---------------------------------------------------------------- morning briefing (once a day at BRIEFING_AT, local time)
 
@@ -688,6 +703,39 @@ const server = http.createServer((req, res) => {
     spotify.art(url.searchParams.get('u') || '')
       .then((a) => { res.writeHead(200, { 'Content-Type': a.type, 'Cache-Control': 'max-age=86400' }); res.end(a.buf); })
       .catch(() => { res.writeHead(404); res.end(); });
+    return;
+  }
+
+  // the paired iPhone came to or left the desk (heartbeat every few minutes)
+  if (url.pathname === '/api/desk' && req.method === 'POST') {
+    if (!fromCarThing(req)) { res.writeHead(403); return res.end(); }
+    readRaw(req, 100).then((b) => {
+      let near = false;
+      try { near = JSON.parse(b.toString() || '{}').near === true; } catch {}
+      desk.report(near);
+      res.end('ok');
+    }).catch(() => { res.writeHead(413); res.end(); });
+    return;
+  }
+  if (url.pathname === '/api/phone/summary' && req.method === 'POST') {
+    if (!fromCarThing(req)) { res.writeHead(403); return res.end(); }
+    readRaw(req, 200).then((b) => {
+      let j = {};
+      try { j = JSON.parse(b.toString() || '{}'); } catch {}
+      const n = (v) => (Number.isFinite(v) ? Math.max(0, Math.min(999, Math.round(v))) : 0);
+      phoneSummary = { notes: n(j.notes), calls: n(j.calls), battery: Number.isFinite(j.battery) ? n(j.battery) : null, at: Date.now() };
+      res.end('ok');
+    }).catch(() => { res.writeHead(413); res.end(); });
+    return;
+  }
+
+  // a Vietnamese line under each lyric line (Gemini Flash-Lite, one request per song)
+  if (url.pathname === '/api/media/lyrics/vi') {
+    if (!fromCarThing(req)) { res.writeHead(403); return res.end(); }
+    const q = url.searchParams;
+    translateLyrics(q.get('t'), q.get('a'), q.get('al'), q.get('d'))
+      .then((l) => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(l)); })
+      .catch(() => { res.writeHead(502); res.end('null'); });
     return;
   }
 

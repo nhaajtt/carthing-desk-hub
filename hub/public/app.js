@@ -242,7 +242,7 @@ function renderAlerts() {
   if (alertSeen === null) alertSeen = newest ? newest.id : 0; // do not replay old alerts after a reload
   if (newest && newest.id > alertSeen) {
     alertSeen = newest.id;
-    showBanner(newest.dir, `${{ up: '▲', down: '▼', sec: '⚠', rain: '☔', ci: '✖' }[newest.dir] || '•'} ${newest.text}`, 30000);
+    showBanner(newest.dir, `${{ up: '▲', down: '▼', sec: '⚠', rain: '☔', ci: '✖', desk: '🧍', remind: '⏰' }[newest.dir] || '•'} ${newest.text}`, 30000);
   }
 }
 function showBanner(cls, text, ms) {
@@ -897,13 +897,24 @@ function loadLyrics() {
     .then((l) => {
       if (lyr.key !== key || !l || !l.lines.length) return;
       lyr = { key, lines: l.lines, synced: l.synced };
-      $('mLyCol').innerHTML = l.lines.map((x) => `<div class="ly">${esc(x.text) || '♪'}</div>`).join('');
-      $('mLyCol').style.transform = '';
-      lyIdx = -2;
-      lyricTick();
+      drawLyrics();
+      // a song in another language gets a Vietnamese line under each line, when the screen is in Vietnamese
+      if (lang === 'vi' && !looksVietnamese(l.lines)) {
+        fetch(`/api/media/lyrics/vi?${new URLSearchParams({ t: t.title, a: t.artist || '', al: t.album || '', d: Math.round(t.dur || 0) })}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((vi) => { if (lyr.key === key && Array.isArray(vi)) { lyr.vi = vi; drawLyrics(); } })
+          .catch(() => {});
+      }
     })
     .catch(() => {});
 }
+function drawLyrics() {
+  $('mLyCol').innerHTML = lyr.lines.map((x, i) => `<div class="ly">${esc(x.text) || '♪'}${lyr.vi && lyr.vi[i] && x.text ? `<small>${esc(lyr.vi[i])}</small>` : ''}</div>`).join('');
+  $('mLyCol').style.transform = '';
+  lyIdx = -2;
+  lyricTick();
+}
+const looksVietnamese = (lines) => lines.filter((x) => /[ăâđêôơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]/i.test(x.text)).length > lines.length * 0.3;
 // no lyrics: the title and artist, large
 function lyricsEmpty() {
   const t = trackInfo();
@@ -1074,6 +1085,7 @@ function renderPhone() {
     const msg = privacy ? '' : n.msg && n.msg.length > 110 ? n.msg.slice(0, 108) + '…' : n.msg;
     showBanner('phone', `${n.cat === 2 ? '☎' : '💬'} ${n.app ? n.app + ' · ' : ''}${n.title}${msg ? ': ' + msg : ''}`, 9000);
   }
+  if (top !== noteSeen) sendSummary();
   noteSeen = Math.max(noteSeen, top);
 
   // an incoming call takes the whole screen, wakes it at night, and pauses Spotify playing elsewhere
@@ -1097,7 +1109,24 @@ function renderPhone() {
 
 // ---- presence, battery, the "while you were away" card
 
-let awaySince = null, digestTimer = null, phoneSeen = false;
+let awaySince = null, digestTimer = null, phoneSeen = false, deskSent = null;
+function reportDesk() {
+  if (onCarThing) fetch('/api/desk', { method: 'POST', body: JSON.stringify({ near: !!(PH.connected && PH.near) }) }).catch(() => {});
+}
+setInterval(reportDesk, 120000);
+// for the morning briefing: how many notifications and missed calls in the last 12 hours, and the battery.
+// Counts only; the text of a notification never leaves the Car Thing.
+let summaryTimer = null;
+function sendSummary() {
+  clearTimeout(summaryTimer);
+  summaryTimer = setTimeout(() => {
+    if (!onCarThing || !PH.connected) return;
+    const recent = (PH.notes || []).filter((n) => noteMs(n) > Date.now() - 12 * 3600000);
+    const calls = recent.filter((n) => n.cat === 2).length;
+    fetch('/api/phone/summary', { method: 'POST', body: JSON.stringify({ notes: recent.length - calls, calls, battery: PH.battery }) }).catch(() => {});
+  }, 20000);
+}
+setInterval(sendSummary, 10 * 60000);
 function phoneChanged(prev) {
   const wasNear = prev.connected && prev.near, isNear = PH.connected && PH.near;
   // left the desk: the screen goes off and a running focus timer pauses. Not on the first message after a
@@ -1113,6 +1142,8 @@ function phoneChanged(prev) {
     toast(greeting());
   }
   phoneSeen = true;
+  // time at the desk is counted on the hub from these reports (plus a heartbeat, see below)
+  if (isNear !== deskSent) { deskSent = isNear; reportDesk(); }
   // battery: once per crossing on the way down, and when it reaches full while charging
   const a = prev.battery, b = PH.battery;
   if (a != null && b != null && PH.connected && prev.connected) {
@@ -1172,6 +1203,15 @@ $('digest').addEventListener('click', hideDigest);
 
 const CAT_ICON = { 1: '📞', 2: '☎', 3: '📮', 4: '💬', 5: '📅', 6: '✉️', 7: '📰', 8: '❤️', 9: '💼', 10: '📍', 11: '🎬' };
 let ipSel = -1, ipConfirm = null, ipConfirmTimer = null;
+// the list on the iPhone page: "find my iPhone" first while the phone is connected, then its notifications
+const ipItems = () => (PH.connected ? [{ find: true }] : []).concat(PH.notes || []);
+// a rough distance from the link's signal (−59 dBm at 1 m; walls and hands make it rougher)
+function phoneDistance() {
+  if (PH.rssi == null) return '';
+  if (PH.rssi > -45) return tr('right here');
+  const m = Math.pow(10, (-59 - PH.rssi) / 25);
+  return tr('about {m} m away', { m: m < 10 ? m.toFixed(m < 3 ? 1 : 0) : Math.round(m) });
+}
 function renderIphone() {
   setText($('ipPriv'), tr(privacy ? 'Show messages' : 'Hide messages'));
   const head = $('ipHead'), list = $('ipList');
@@ -1185,30 +1225,34 @@ function renderIphone() {
   setHTML(head, `<div class="ip-name">${esc(PH.name || 'iPhone')}</div><div class="ip-stat">`
     + (PH.connected ? `<span class="ip-bars b${bars}"><i></i><i></i><i></i><i></i></span>${tr(PH.near ? 'At the desk' : 'Away')}` : tr('Not connected'))
     + (PH.connected && PH.battery != null ? `<span>🔋 ${PH.battery}%</span>` : '') + (privacy ? '<span>🙈</span>' : '') + '</div>');
-  const notes = PH.notes || [];
-  if (ipSel >= notes.length) ipSel = notes.length - 1;
-  setHTML(list, notes.length ? notes.map((n, i) => `<div class="ip-row${n.cat === 2 ? ' missed' : ''}${i === ipSel ? ' sel' : ''}${ipConfirm === n.uid ? ' confirm' : ''}" data-i="${i}">`
-    + `<span class="ip-ic">${CAT_ICON[n.cat] || '🔔'}</span><div class="ip-tx"><div class="ip-top"><b>${esc(n.app || '')}</b><span>${ago(noteMs(n))}</span></div>`
-    + `<div class="ip-ti">${esc(n.title || '')}</div>${privacy || !n.msg ? '' : `<div class="ip-msg">${esc(n.msg)}</div>`}</div></div>`).join('')
-    : `<div class="ip-empty">${tr(PH.connected ? 'No notifications' : 'The iPhone is not connected')}</div>`);
+  const items = ipItems();
+  if (ipSel >= items.length) ipSel = items.length - 1;
+  setHTML(list, items.map((n, i) => (n.find
+    ? `<div class="ip-row find${i === ipSel ? ' sel' : ''}${finding ? ' on' : ''}" data-i="${i}"><span class="ip-ic">🔊</span><div class="ip-tx">`
+      + `<div class="ip-ti">${tr(finding ? 'Stop the sound' : 'Find my iPhone')}</div><div class="ip-msg">${tr('Plays music loudly on the iPhone')} · ${phoneDistance()}</div></div></div>`
+    : `<div class="ip-row${n.cat === 2 ? ' missed' : ''}${i === ipSel ? ' sel' : ''}${ipConfirm === n.uid ? ' confirm' : ''}" data-i="${i}">`
+      + `<span class="ip-ic">${CAT_ICON[n.cat] || '🔔'}</span><div class="ip-tx"><div class="ip-top"><b>${esc(n.app || '')}</b><span>${ago(noteMs(n))}</span></div>`
+      + `<div class="ip-ti">${esc(n.title || '')}</div>${privacy || !n.msg ? '' : `<div class="ip-msg">${esc(n.msg)}</div>`}</div></div>`)).join('')
+    + (PH.notes && PH.notes.length ? '' : `<div class="ip-empty">${tr(PH.connected ? 'No notifications' : 'The iPhone is not connected')}</div>`));
   pages[PHONE].classList.toggle('browsing', ipSel >= 0);
   const sel = list.children[ipSel];
   if (sel) sel.scrollIntoView({ block: 'nearest' });
 }
 function ipKnob(step) {
-  const k = (PH.notes || []).length;
+  const k = ipItems().length;
   if (!k) return;
   ipSel = Math.max(0, Math.min(k - 1, ipSel + step));
   ipConfirm = null;
   renderIphone();
 }
-// press: start choosing; on a chosen notification, press twice to clear it on the iPhone
+// press: start choosing; on "find", ring; on a chosen notification, press twice to clear it on the iPhone
 function ipPress() {
   if (!PH.paired) return phonePost('/pair');
-  const notes = PH.notes || [];
-  if (ipSel < 0) { if (notes.length) { ipSel = 0; renderIphone(); } return; }
-  const n = notes[ipSel];
+  const items = ipItems();
+  if (ipSel < 0) { if (items.length) { ipSel = 0; renderIphone(); } return; }
+  const n = items[ipSel];
   if (!n) return;
+  if (n.find) return findPhone();
   clearTimeout(ipConfirmTimer);
   if (ipConfirm === n.uid) {
     ipConfirm = null;
@@ -1228,10 +1272,36 @@ function ipBack() {
   renderIphone();
   return true;
 }
+
+// Find my iPhone: accessories cannot make the phone ring, but they can play its music. Volume up to the top,
+// play, and after 30 s (or a second press) pause and bring the volume back down.
+let finding = null;
+function findPhone() {
+  const m = PH.media;
+  if (finding) return stopFinding();
+  if (!PH.connected || !m || !(m.cmds || []).includes(0)) return toast(tr('No app on the iPhone can play right now'));
+  const steps = Math.round((1 - (m.volume || 0)) * 16);
+  finding = { steps, timer: setTimeout(stopFinding, 30000) };
+  for (let i = 0; i < steps; i++) setTimeout(() => phonePost('/media', { cmd: 5 }), i * 120);
+  setTimeout(() => phonePost('/media', { cmd: 0 }), steps * 120 + 100);
+  toast(tr('Playing on the iPhone for 30 s'));
+  renderIphone();
+}
+function stopFinding() {
+  if (!finding) return;
+  const { steps, timer } = finding;
+  clearTimeout(timer);
+  finding = null;
+  phonePost('/media', { cmd: 1 });
+  for (let i = 0; i < steps; i++) setTimeout(() => phonePost('/media', { cmd: 6 }), 200 + i * 120);
+  if (page === PHONE) renderIphone();
+}
+
 // Reply: Apple lets accessories only accept or dismiss a notification, so the reply goes through Siri on the
 // phone. Button 4 opens Siri and shows whom to answer; Siri takes the message and sends it.
 function replyBySiri() {
-  const n = (PH.notes || [])[Math.max(0, ipSel)];
+  const items = ipItems();
+  const n = (items[ipSel] && !items[ipSel].find ? items[ipSel] : null) || (PH.notes || [])[0];
   if (!n) return toast(tr('No notifications'));
   phonePost('/key', { key: 'siri', down: true });
   setTimeout(() => phonePost('/key', { key: 'siri', down: false }), 300);
@@ -1751,7 +1821,18 @@ function tickClock() {
   checkLink();
 }
 
-const RENDER = { [NEWS]: renderNews, [MARKETS]: renderMarkets, [ASK]: renderAsk, [WEATHER]: renderWeather, [CALENDAR]: renderCalendar, [MUSIC]: renderMusic, [SERVERS]: renderServers, [PHONE]: renderIphone };
+// ---------------------------------------------------------------- time at the desk (Focus page), counted on the hub
+function renderDesk() {
+  const d = S && S.desk;
+  if (!d || !d.week.some((w) => w.minutes)) return setHTML($('desk'), '');
+  const max = Math.max(60, ...d.week.map((w) => w.minutes));
+  const hm = (min) => tr('{h} h {m} min', { h: Math.floor(min / 60), m: min % 60 });
+  setHTML($('desk'), `<div class="dk-top"><span>${tr('At the desk today')}</span><b>${hm(d.today)}</b>`
+    + `${d.near && d.streak ? `<em>${tr('{m} min without a break', { m: d.streak })}</em>` : ''}</div>`
+    + `<div class="dk-week">${d.week.map((w, i) => `<div class="dk-day${i === 6 ? ' today' : ''}"><i style="height:${Math.round((w.minutes / max) * 40)}px"></i><span>${tr(w.day)}</span></div>`).join('')}</div>`);
+}
+
+const RENDER = { [FOCUS]: renderDesk, [NEWS]: renderNews, [MARKETS]: renderMarkets, [ASK]: renderAsk, [WEATHER]: renderWeather, [CALENDAR]: renderCalendar, [MUSIC]: renderMusic, [SERVERS]: renderServers, [PHONE]: renderIphone };
 function render() {
   if (!S) return;
   applyLang();

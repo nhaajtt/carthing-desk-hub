@@ -164,6 +164,8 @@ Pair: quick menu → **iPhone** → on the iPhone, Settings → Bluetooth → **
 
 "At the desk" uses the link's signal strength: `-near` (default `-62` dBm, held 4 s) and `-far` (`-78` dBm, held 20 s). If your room needs other values, watch `rssi` on the iPhone page's signal bars (or `PH.rssi` over DevTools) at the desk and across the room, and add the flags to the phonelink line in `carthing/kiosk-env`.
 
+`DESK_SIT_MINUTES` (default 60) sets when the stand-up banner shows.
+
 If Siri does not open from button 1 after an update of phonelink, forget the device on the iPhone and pair again: iOS keeps the remote's key list from the first pairing.
 
 ## Development helpers

@@ -48,7 +48,9 @@ So the Car Thing must not hold secrets, must not reach anything except the hub, 
 * Story summaries send the article text to Gemini in the same way.
 * The morning briefing and Mei's answers include **today's and tomorrow's calendar entries** (times, titles, locations) in what is sent to Gemini. Leave `CALENDAR_ICS` empty, or set `BRIEFING_AT=off`, if that is not acceptable for your calendar.
 * GitHub: with a token, names of private repositories and titles of their issues and pull requests are shown on the Car Thing (never on the LAN preview). Use a fine-grained token, read-only, limited to the repositories you want on the screen.
-* Covers and lyrics: the title, artist and album (or the YouTube video's title and channel) and the length of what plays go from the hub to YouTube, Apple or LRCLIB to find a picture and lyrics. Nothing else from the phone leaves the Car Thing.
+* Covers and lyrics: the title, artist and album (or the YouTube video's title and channel) and the length of what plays go from the hub to YouTube, Apple or LRCLIB to find a picture and lyrics, and the lyrics of a foreign song go to Gemini to be translated.
+* For the morning briefing the Car Thing sends the hub **counts** only (notifications, missed calls, battery), which then go to Gemini with the rest of the briefing data. Notification text never leaves the Car Thing.
+* Time at the desk (minutes per day) and reminders are kept on the hub, and hidden from the LAN preview.
 * Nocturne's own daemon (`nocturned`) also connects to the paired iPhone (Apple's iAP2 link, and the same notification service). It runs on the Car Thing, which has no route to the LAN or the internet, so what it reads can only go back to the phone; it is waiting for Nocturne's phone app, which this setup does not use.
 * Recordings are not stored: the Car Thing deletes the WAV after upload, and the hub keeps it in memory only for the request.
 

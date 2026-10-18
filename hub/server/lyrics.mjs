@@ -51,3 +51,35 @@ export async function lyrics(title, artist, album, duration) {
   }
   return keep(key, found);
 }
+
+// A Vietnamese line under each line of a foreign song, for immersive Music. One Gemini Flash-Lite request per
+// song (free tier), cached; only the lyrics themselves are sent.
+const KEY = process.env.GEMINI_API_KEY || '';
+const MODEL = process.env.GEMINI_SUMMARY_MODEL || 'gemini-flash-lite-latest';
+const translated = new Map();
+
+export async function translateLyrics(title, artist, album, duration) {
+  const l = await lyrics(title, artist, album, duration);
+  if (!l || !KEY) return null;
+  const key = `${title}\n${artist}\n${Math.round(Number(duration) || 0)}`;
+  if (translated.has(key)) return translated.get(key);
+  const texts = l.lines.map((x) => x.text);
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(MODEL)}:generateContent`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': KEY },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: `Translate these song lyric lines into natural, singable Vietnamese. Answer with a JSON array of exactly ${texts.length} strings, one per line and in the same order; an empty line stays an empty string.\n\n${JSON.stringify(texts)}` }] }],
+      generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 4000 },
+    }),
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!r.ok) throw new Error(`Gemini ${r.status}`);
+  const j = await r.json();
+  let out = null;
+  try { out = JSON.parse((j.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('')); } catch {}
+  if (!Array.isArray(out) || out.length !== texts.length) return null; // misaligned: better none than wrong lines
+  out = out.map((s) => String(s || '').slice(0, 200));
+  translated.set(key, out);
+  if (translated.size > 100) translated.delete(translated.keys().next().value);
+  return out;
+}
