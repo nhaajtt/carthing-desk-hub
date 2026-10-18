@@ -9,6 +9,7 @@
 | **kiosk-watch.sh** | Car Thing | Every 15 s asks Chromium's DevTools (loopback) which page is open. If it is not the hub (for example an error page because the hub was down at boot) and the hub answers `/health`, restarts the kiosk. |
 | **systemd watchdog** | Car Thing | `RuntimeWatchdogSec=30s` on the Amlogic hardware watchdog: a frozen system reboots itself. |
 | **voice-agent.sh** | Car Thing | Long-polls `GET /api/voice/cmd`. On `record`: pauses `nocturned` (which holds the mics), runs `arecord` on `hw:0,0` (4 ch, S32_LE, 16 kHz), reports `/api/voice/started`, uploads the WAV on `stop`. Also runs `reboot` / `poweroff`. |
+| **phonelink** | Car Thing | Go, static, about 8 MB of memory. Talks to BlueZ over D-Bus: pairs one iPhone (2-minute window, 6-digit code), reads its notifications (ANCS), what is playing (AMS) and battery, and serves the result to the kiosk page only, at `http://127.0.0.1:5055`. See *iPhone link* below. |
 | **carthing-hub** | Server 2 (Docker) | Node 22, no dependencies. Collects every data source, keeps all keys, serves the UI and streams state over SSE. |
 | **docker-status** | Server 2 and Server 1 | The only container with `docker.sock` (read-only mount). Answers `GET /` with container names, state and health. No host port. |
 | **hub-stats-agent** | Server 1 (Docker) | Every 5 s pushes CPU, memory, disk, temperature, load, uptime and the container list to `POST /api/ingest`, plus the host report once a minute. No ports. |
@@ -49,10 +50,11 @@ hub/server/
   registry.mjs       newer-image checks against the registries
   github.mjs         CI runs, open issues and pull requests
   spotify.mjs        PKCE linking, polling, actions, album-art proxy
+  covers.mjs         a picture for what the iPhone plays: YouTube thumbnail or iTunes cover
   docker-status.mjs  the read-only sidecar
 ```
 
-* **State and push.** One `state` object. Any change calls `changed()`, which batches for 250 ms and sends the whole state to every SSE client. The state only holds what the screen draws (about 26 KB); article links and related headlines stay in a separate map on the hub.
+* **State and push.** One `state` object. Any change calls `changed()`, which batches for 500 ms and sends the whole state to every SSE client. The state only holds what the screen draws (about 26 KB); article links and related headlines stay in a separate map on the hub.
 * **Clock.** Every SSE message carries the hub's time; the UI uses `clockOffset` for the clock and for staleness checks (the Car Thing also gets NTP from the hub now).
 * **Liveness and updates.** Besides state pushes, the hub sends a named `hb` event every 10 s (SSE comments never reach JavaScript, so they cannot tell a quiet hub from a dead link). After 25 s of silence the UI shows a "Reconnecting" card and opens a fresh `EventSource` every 30 s. Every message also carries `v`, an id that changes each time the hub starts; when the UI sees a new one it reloads, so new UI code reaches the Car Thing without touching it.
 * **Calendar.** Times with a `TZID` are converted with `Intl` (offset checked twice so the hour around a DST change lands right). Recurring events are expanded in wall-clock time of their own zone, so a 10 am meeting stays at 10 am across DST. Daily and weekly series without `COUNT` start counting near the window instead of from their first year. `hub/test/calendar.test.mjs` covers these cases.
@@ -83,6 +85,25 @@ hub/public/
 * **Measuring.** `tools/framemeter.js` logs frame gaps while turning through every page; `tools/trace.mjs` reads Chromium's own frame reporter (compositor side) and counts the animation frames that were shown or dropped.
 * **Orientation.** Four steps of 90°. Portrait lays `#app` out at 480 × 800 and rotates it ±90° with `transform`; upside-down landscape is a plain `rotate(180deg)`. The choice is stored in the Car Thing's `localStorage`. Touch input arrives in screen coordinates, so swipes are mapped into the rotated layout, and upside down the preset buttons are swapped (4 ↔ 1, 3 ↔ 2) because they now sit along the bottom edge in reverse order.
 
+## iPhone link (phonelink)
+
+```
+carthing/phonelink/
+  main.go    state, the loopback HTTP + SSE server for the kiosk page, pidfile
+  bluez.go   D-Bus: agent (pairing), advertisement, finding the paired phone, GATT helpers, main loop
+  gatt.go    the media-remote service that makes iOS list the Car Thing in Settings
+  ancs.go    notifications and calls (Apple Notification Center Service)
+  ams.go     now playing and remote commands (Apple Media Service)
+```
+
+* **Being found.** Since iOS 18, Settings → Bluetooth no longer lists accessories that only ask for notifications, but it lists remotes. So the Car Thing also offers a HID-over-GATT service with consumer keys only (play, next, volume…): no keyboard, so the iPhone keeps its on-screen keyboard. It never sends a key; its report map can only be read over a code-paired link.
+* **Pairing.** `POST /pair` makes phonelink BlueZ's default agent with the `DisplayOnly` capability, turns `Pairable` on and advertises as discoverable for 2 minutes. The iPhone asks for the 6 digits shown on the screen (`DisplayPasskey`). Every agent call outside the window is refused, and "just works" pairing (no code) is always refused. The first phone that pairs in the window becomes the only one; its identity address is kept in `/var/lib/hub/phonelink.json`.
+* **Advertising.** Only during the window (discoverable) or while the paired phone is away (not discoverable, so it can find its way back). Once it is connected the Car Thing stops advertising.
+* **Reading.** After the link is encrypted the phone shows its services. ANCS: a new notification arrives on Notification Source; phonelink asks for app, title, subtitle and message on Control Point and collects the answer from Data Source. What was already on the phone at connect time is skipped, except a ringing call. AMS: phonelink subscribes to player (app, state, volume) and track (artist, album, title, duration); writes on Remote Command play, pause, skip and change volume.
+* **Sharing ANCS with nocturned.** Nocturne's daemon reads the same service. BlueZ runs one write per characteristic at a time and turns the other away with "In Progress", so phonelink retries, and it ignores Data Source answers that do not start with its own request's header.
+* **To the screen.** `GET /events` streams the whole state (paired, connected, name, battery, pairing, media, call, last 12 notifications) as SSE within 100 ms of a change. `POST /pair`, `/pair/cancel`, `/forget`, `/media` and `/call` take small JSON bodies sent as plain text (a "simple" request, so no CORS preflight). Everything is in memory and cleared when the phone disconnects.
+* **Covers.** The phone sends no pictures. The page borrows Spotify's art when the iPhone plays the same song Spotify reports, and otherwise asks the hub, which searches YouTube's public results page (for the YouTube app) or Apple's iTunes Search API (everything else) and proxies the image.
+
 ## Network
 
 | Link | Addresses | Allowed |
@@ -91,6 +112,8 @@ hub/public/
 | Server 1 → Server 2 | LAN | `POST /api/ingest` with token, accepted only from `10.10.10.21` |
 | LAN → Server 2 | LAN | SSH, the hub's LAN preview (`10.10.10.20:8787`, read-only), admin UIs |
 | Hub → Internet | outbound HTTPS | data sources above |
+| iPhone ↔ Car Thing | Bluetooth LE, bonded with a 6-digit code (LE Secure Connections) | Notifications, media and battery from the phone; answer / decline and media commands to it. Only the paired phone; pairing is refused outside the 2-minute window. |
+| Kiosk page → phonelink | Car Thing loopback, `127.0.0.1:5055` | Only requests whose `Origin` is the hub page. |
 | Server 2 → Car Thing | USB, SSH with the hub key | `check-carthing.sh` (hourly, read-only checks; fixes only when run by hand) |
 
 `net.ipv4.ip_nonlocal_bind=1` lets Docker publish `10.42.1.6:8787` before the Car Thing is plugged in.
@@ -107,3 +130,4 @@ hub/public/
 | `GET /callback` | valid one-time `state` (≤ 10 min old) |
 | `GET /api/news/detail?id=` | anyone who can reach the port |
 | `GET /api/spotify/art?u=` | proxies `https://i.scdn.co/` only |
+| `GET /api/media/cover?app=&t=&a=` | Car Thing only; fetches from `i.ytimg.com` or `*.mzstatic.com` only |

@@ -13,6 +13,7 @@
   <header class="bar">
     <div class="tabs-wrap"><span class="tab-pill" id="tabPill"></span><nav class="tabs" id="tabs"></nav></div>
     <div class="bar-right">
+      <span class="phone" id="phone"><svg viewBox="0 0 24 24"><rect x="6.5" y="2.5" width="11" height="19" rx="2.6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10.5 18.5h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><b id="phoneBat"></b></span>
       <span class="dot" id="conn" title="connection"></span>
       <span class="clock" id="clock">--:--</span>
     </div>
@@ -140,6 +141,9 @@
         <div class="ov-tile" data-i="4">
           <svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="18" fill="none" stroke="currentColor" stroke-width="3.5"/><path d="M6 24h36M24 6c-6 5-8.5 11-8.5 18s2.5 13 8.5 18M24 6c6 5 8.5 11 8.5 18s-2.5 13-8.5 18" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/></svg>
           <span id="langLabel">English</span></div>
+        <div class="ov-tile" data-i="5">
+          <svg viewBox="0 0 48 48"><rect x="14" y="5" width="20" height="38" rx="5" fill="none" stroke="currentColor" stroke-width="3.5"/><path d="M21 37h6" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/></svg>
+          <span id="phoneLabel">iPhone</span></div>
       </div>
       <div class="ov-slider" id="ovSlider">
         <svg viewBox="0 0 48 48" class="ov-sun"><circle cx="24" cy="24" r="7" fill="currentColor"/></svg>
@@ -155,6 +159,26 @@
       <div class="off-zz"><span>z</span><span>z</span><span>z</span></div>
       <b data-t="Reconnecting to the hub…">Reconnecting to the hub…</b>
       <span><span data-t="No data for">No data for</span> <em id="offSince">0 s</em>. <span data-t="The screen comes back on its own when server 2 answers.">The screen comes back on its own when server 2 answers.</span></span>
+    </div>
+  </div>
+  <!-- incoming call on the paired iPhone: knob answers, Back declines -->
+  <div class="call" id="call">
+    <div class="call-card">
+      <div class="call-app" id="callApp"></div>
+      <div class="call-name" id="callName"></div>
+      <div class="call-btns">
+        <button class="call-no" id="callNo"><i class="kb">Back</i><span data-t="Decline">Decline</span></button>
+        <button class="call-yes" id="callYes"><i class="kb">●</i><span data-t="Answer">Answer</span></button>
+      </div>
+    </div>
+  </div>
+  <!-- pairing an iPhone (quick menu → iPhone): the code to type on the phone -->
+  <div class="pair" id="pair">
+    <div class="pair-card">
+      <b data-t="Pair your iPhone">Pair your iPhone</b>
+      <div class="pair-code" id="pairCode"></div>
+      <span class="pair-help" id="pairHelp"></span>
+      <span class="pair-left" id="pairLeft"></span>
     </div>
   </div>
   <div class="alert-banner" id="alertBanner"></div>

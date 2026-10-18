@@ -10,6 +10,7 @@ The Car Thing is treated as **untrusted**:
 * Chromium runs with `--no-sandbox`, so a renderer bug is a root shell.
 * The screen shows text and images that come from the internet (headlines, album art).
 * It is a portable device that can be lost or plugged in by someone else.
+* Its Bluetooth radio can be reached by any phone or laptop in the room.
 
 So the Car Thing must not hold secrets, must not reach anything except the hub, and the hub must not trust what the Car Thing sends beyond a short list of actions.
 
@@ -26,7 +27,9 @@ So the Car Thing must not hold secrets, must not reach anything except the hub, 
 | **Actions** | State-changing endpoints (brightness, Mei, Spotify controls, reboot / power off) accept requests only from the Car Thing's address. |
 | **Server-1 agent** | Push only, no listening ports. The hub requires both the source address and a bearer token (constant-time comparison). |
 | **Spotify linking** | One-time `state`, 10-minute expiry, never started from the Car Thing; the callback stays on loopback through an SSH tunnel. |
-| **Album art proxy** | Only `https://i.scdn.co/`. |
+| **Album art proxy** | Only `https://i.scdn.co/`; covers for the iPhone only from `i.ytimg.com` and `*.mzstatic.com`, and only for the Car Thing. |
+| **Bluetooth** | One phone. Pairing only in a 2-minute window opened from the quick menu, only with the 6-digit code shown on the screen (no "just works"). Classic Bluetooth stays off (not discoverable, not connectable); the Car Thing advertises only during that window or while the paired phone is away. phonelink offers no service another device could use: the remote service never sends a key. |
+| **iPhone data** | phonelink listens on `127.0.0.1` only and answers only the hub page (`Origin` check). Notifications, calls and what is playing stay in its memory on the Car Thing: not written to disk, not logged, not sent to the hub, so never on the LAN preview. |
 | **Inbound internet** | None. Every integration is an outbound request (including the new ones: GitHub API and the image registries, both read-only). |
 | **LAN preview** | Read-only, and trimmed: no calendar events, security or update details, GitHub, Mei answers or security / CI banners for anyone but the Car Thing (or addresses you list in `PREVIEW_FULL_FROM`). A list of open ports and failed-login sources is a map for whoever is probing the LAN. |
 | **Host reports** | `host-report.sh` runs from the normal user's crontab (reads the journal as a member of `adm`, no sudo). Its output reaches the hub as a file through a read-only mount (server 2) or inside the agent's authenticated push (server 1), where the hub keeps only the expected fields, clipped to fixed lengths. No new ports. |
@@ -44,6 +47,8 @@ So the Car Thing must not hold secrets, must not reach anything except the hub, 
 * Story summaries send the article text to Gemini in the same way.
 * The morning briefing and Mei's answers include **today's and tomorrow's calendar entries** (times, titles, locations) in what is sent to Gemini. Leave `CALENDAR_ICS` empty, or set `BRIEFING_AT=off`, if that is not acceptable for your calendar.
 * GitHub: with a token, names of private repositories and titles of their issues and pull requests are shown on the Car Thing (never on the LAN preview). Use a fine-grained token, read-only, limited to the repositories you want on the screen.
+* Covers for the iPhone: the title and artist (or the YouTube video's title and channel) of what the phone plays go from the hub to YouTube or Apple to find a picture. Nothing else from the phone leaves the Car Thing.
+* Nocturne's own daemon (`nocturned`) also connects to the paired iPhone (Apple's iAP2 link, and the same notification service). It runs on the Car Thing, which has no route to the LAN or the internet, so what it reads can only go back to the phone; it is waiting for Nocturne's phone app, which this setup does not use.
 * Recordings are not stored: the Car Thing deletes the WAV after upload, and the hub keeps it in memory only for the request.
 
 ## Reporting

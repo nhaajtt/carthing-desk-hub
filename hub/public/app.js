@@ -226,7 +226,7 @@ function presetButton(n) {
   if (page === WEATHER && n === 1) return toggleUnit();
   if (page === CALENDAR && n <= 3) { calView = n - 1; return renderCalendar(); }
   if (page === SERVERS) { srvView = n - 1; return renderServers(); }
-  if (page === MUSIC) return spotifyAction(['prev', 'toggle', 'next', 'like'][n - 1]);
+  if (page === MUSIC) return musicAction(['prev', 'toggle', 'next', 'like'][n - 1]);
   if (page === FOCUS) return pomoSet([15, 25, 45, 60][n - 1]);
 }
 
@@ -240,12 +240,15 @@ function renderAlerts() {
   if (alertSeen === null) alertSeen = newest ? newest.id : 0; // do not replay old alerts after a reload
   if (newest && newest.id > alertSeen) {
     alertSeen = newest.id;
-    const b = $('alertBanner');
-    b.className = `alert-banner on ${newest.dir}`;
-    b.textContent = `${{ up: '▲', down: '▼', sec: '⚠', rain: '☔', ci: '✖' }[newest.dir] || '•'} ${newest.text}`;
-    clearTimeout(bannerTimer);
-    bannerTimer = setTimeout(() => b.classList.remove('on'), 30000);
+    showBanner(newest.dir, `${{ up: '▲', down: '▼', sec: '⚠', rain: '☔', ci: '✖' }[newest.dir] || '•'} ${newest.text}`, 30000);
   }
+}
+function showBanner(cls, text, ms) {
+  const b = $('alertBanner');
+  b.className = `alert-banner on ${cls}`;
+  b.textContent = text;
+  clearTimeout(bannerTimer);
+  bannerTimer = setTimeout(() => b.classList.remove('on'), ms);
 }
 
 // ---------------------------------------------------------------- weather
@@ -774,7 +777,23 @@ setIcon($('mLike'), 'heart');
 const mmss = (ms) => { const s = Math.max(0, Math.floor((ms || 0) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 let shownArt = null;
 
+// Music shows Spotify, or the paired iPhone when the phone is the one playing (any app, read over Bluetooth)
+const phoneMedia = () => (PH.connected && PH.media && PH.media.title ? PH.media : null);
+function musicSource() {
+  const m = phoneMedia();
+  const sp = S && S.spotify && S.spotify.player;
+  return m && (m.state === 1 || !sp) ? 'phone' : 'spotify';
+}
+
 function musicProgress() {
+  if (musicSource() === 'phone') {
+    const m = phoneMedia();
+    const pos = Math.min(m.duration, m.elapsed + (m.state === 1 ? (m.rate || 1) * (Date.now() - m.at) / 1000 : 0));
+    $('mFill').style.transform = `scaleX(${m.duration ? pos / m.duration : 0})`;
+    $('mPos').textContent = mmss(pos * 1000);
+    $('mDur').textContent = mmss(m.duration * 1000);
+    return;
+  }
   const sp = S && S.spotify;
   const p = sp && sp.player;
   if (!p) return;
@@ -784,7 +803,26 @@ function musicProgress() {
   $('mDur').textContent = mmss(p.duration);
 }
 
+function renderPhoneMusic(m) {
+  // the Bluetooth link carries no picture: borrow Spotify's when it is the same song, else the hub looks one up
+  // (a YouTube video's thumbnail, or the album cover from Apple's search)
+  const sp = S && S.spotify && S.spotify.player;
+  const art = sp && sp.art && sp.title === m.title
+    ? `/api/spotify/art?u=${encodeURIComponent(sp.art)}`
+    : `/api/media/cover?${new URLSearchParams({ app: m.app || '', t: m.title, a: m.artist || '' })}`;
+  if (art !== shownArt) { shownArt = art; $('mArt').style.backgroundImage = art ? `url("${art}")` : 'none'; }
+  setText($('mTitle'), m.title);
+  setText($('mArtist'), m.artist);
+  setText($('mAlbum'), m.album);
+  setIcon($('mPlay'), m.state === 1 ? 'pause' : 'play');
+  setIcon($('mLike'), 'heart');
+  $('mLike').parentElement.classList.remove('on');
+  setText($('mDev'), `${PH.name || 'iPhone'}${m.app ? ` · ${m.app}` : ''} · ${tr('volume {v}%', { v: Math.round(m.volume * 100) })}`);
+  musicProgress();
+}
+
 function renderMusic() {
+  if (musicSource() === 'phone') return renderPhoneMusic(phoneMedia());
   const sp = S.spotify || {};
   const p = sp.player;
   if (!sp.configured || !sp.linked) {
@@ -823,8 +861,21 @@ function spotifyAction(act, body) {
     .catch(() => toast(tr('Could not reach the hub')));
 }
 
+// AMS remote commands: 2 play/pause, 3 next, 4 previous, 5 volume up, 6 volume down
+function musicAction(act) {
+  if (musicSource() !== 'phone') return spotifyAction(act);
+  if (act === 'like') return toast(tr('Liking works with Spotify only'));
+  phonePost('/media', { cmd: { prev: 4, toggle: 2, next: 3 }[act] });
+}
+
 let volTimer = null, volDelta = 0;
 function volumeAdjust(step) {
+  const m = musicSource() === 'phone' && phoneMedia();
+  if (m) {
+    m.volume = Math.max(0, Math.min(1, m.volume + step / 16)); // the phone moves in 16 steps
+    renderMusic();
+    return phonePost('/media', { cmd: step > 0 ? 5 : 6 });
+  }
   const d = S && S.spotify && S.spotify.player && S.spotify.player.device;
   if (!d || !d.canVolume) return toast(tr('This device does not allow volume control'));
   volDelta += step * 5;
@@ -834,7 +885,85 @@ function volumeAdjust(step) {
   volTimer = setTimeout(() => { spotifyAction('volume', { delta: volDelta }); volDelta = 0; }, 300);
 }
 
-document.querySelectorAll('.m-ctrl button').forEach((b) => b.addEventListener('click', () => spotifyAction(b.dataset.act)));
+document.querySelectorAll('.m-ctrl button').forEach((b) => b.addEventListener('click', () => musicAction(b.dataset.act)));
+
+// ---------------------------------------------------------------- phone: the paired iPhone, over Bluetooth
+// phonelink runs on the Car Thing itself and serves only this page, on 127.0.0.1. What it reads from the
+// phone (notifications, calls, what is playing) never goes to the hub, so the LAN preview never sees it.
+
+const PHONE = 'http://127.0.0.1:5055';
+const onCarThing = /CrKey\//.test(navigator.userAgent);
+let PH = { paired: false, connected: false, notes: [] };
+let noteSeen = null, callShown = null;
+
+function phonePost(path, body) {
+  if (!onCarThing) return toast(tr('Only the Car Thing can do this'));
+  // a plain-text body keeps this a simple request (no CORS preflight)
+  return fetch(PHONE + path, { method: 'POST', body: JSON.stringify(body || {}) })
+    .then((r) => { if (!r.ok) r.text().then((t) => toast(t || `iPhone: ${r.status}`)); })
+    .catch(() => toast(tr('The Bluetooth helper is not running')));
+}
+
+function phoneConnect() {
+  if (!onCarThing) return;
+  const es = new EventSource(PHONE + '/events');
+  es.onmessage = (ev) => {
+    PH = JSON.parse(ev.data);
+    renderPhone();
+    if (page === MUSIC && !slide) renderMusic();
+  };
+  es.onerror = () => { es.close(); PH = { paired: false, connected: false, notes: [] }; renderPhone(); setTimeout(phoneConnect, 10000); };
+}
+
+function renderPhone() {
+  const chip = $('phone');
+  chip.classList.toggle('on', !!PH.paired);
+  chip.classList.toggle('away', !!PH.paired && !PH.connected);
+  setText($('phoneBat'), PH.connected && PH.battery != null ? `${PH.battery}%` : '');
+  setText($('phoneLabel'), PH.paired ? PH.name || 'iPhone' : tr('Pair iPhone'));
+
+  // a new notification: a short banner (not for what was already there when the stream started)
+  const n = PH.notes && PH.notes[0];
+  if (noteSeen === null) noteSeen = n ? n.uid : 0;
+  else if (n && n.uid !== noteSeen) {
+    noteSeen = n.uid;
+    const msg = n.msg && n.msg.length > 110 ? n.msg.slice(0, 108) + '…' : n.msg;
+    showBanner('phone', `${n.cat === 2 ? '☎' : '💬'} ${n.app ? n.app + ' · ' : ''}${n.title}${msg ? ': ' + msg : ''}`, 9000);
+  }
+
+  // an incoming call takes the whole screen, and wakes it at night
+  const c = PH.call;
+  $('call').classList.toggle('on', !!c);
+  if (c) {
+    setText($('callApp'), c.app || tr('Phone'));
+    setText($('callName'), c.title || tr('Unknown caller'));
+    if (callShown !== c.uid) {
+      callShown = c.uid;
+      if (S && S.display && S.display.night && S.display.night.dark) fetch('/api/display/wake', { method: 'POST' }).catch(() => {});
+    }
+  } else callShown = null;
+  renderPairing();
+}
+
+function renderPairing() {
+  const p = PH.pairing;
+  $('pair').classList.toggle('on', !!p);
+  if (!p) return;
+  setText($('pairCode'), p.passkey ? p.passkey.replace(/(\d{3})(\d{3})/, '$1 $2') : '');
+  setText($('pairHelp'), p.passkey
+    ? tr('Type this code on your iPhone')
+    : tr('On the iPhone: Settings → Bluetooth → tap “Desk Hub” (or “{a}”, if this iPhone met the Car Thing before)', { a: p.alias || 'Nocturne' }));
+  setText($('pairLeft'), tr('{s} s left · Back to cancel', { s: Math.max(0, Math.round((p.until - Date.now()) / 1000)) }));
+}
+
+function phoneMenu() {
+  if (!PH.paired) { setModeTo(null); return phonePost('/pair'); }
+  setModeTo('confirm'); // paired: pressing again forgets it
+}
+
+$('callYes').addEventListener('click', () => phonePost('/call', { action: 'answer' }));
+$('callNo').addEventListener('click', () => phonePost('/call', { action: 'decline' }));
+$('pair').addEventListener('click', () => phonePost('/pair/cancel'));
 
 // ---------------------------------------------------------------- ask: Mei, the desk cat (voice assistant)
 
@@ -929,8 +1058,8 @@ function askToggle() {
 // ---------------------------------------------------------------- quick menu (round settings button, top right)
 
 let setMode = null; // null (closed) | 'menu' | 'bright' | 'confirm'
-let setIdx = 0;     // 0 brightness, 1 restart, 2 shut down, 3 rotate, 4 language
-const TILES = 5;
+let setIdx = 0;     // 0 brightness, 1 restart, 2 shut down, 3 rotate, 4 language, 5 iPhone
+const TILES = 6;
 let setTimer = null;
 
 function renderSettings() {
@@ -943,7 +1072,7 @@ function renderSettings() {
   $('setHint').textContent = setMode === 'bright'
     ? tr('Turn the knob to change brightness · press the knob or Back when done')
     : setMode === 'confirm'
-      ? tr(setIdx === 1 ? 'Press the knob again to restart · Back to cancel' : 'Press the knob again to shut down · Back to cancel')
+      ? tr(setIdx === 1 ? 'Press the knob again to restart · Back to cancel' : setIdx === 5 ? 'Press the knob again to forget this iPhone · Back to cancel' : 'Press the knob again to shut down · Back to cancel')
       : tr('Turn the knob to choose · press the knob to select · Back to close');
 }
 
@@ -953,6 +1082,11 @@ function setModeTo(m) {
   renderBrightness();
   clearTimeout(setTimer);
   if (m) setTimer = setTimeout(() => setModeTo(null), 20000);
+}
+
+function confirmed() {
+  if (setIdx === 5) { setModeTo(null); return phonePost('/forget'); }
+  deviceAction(setIdx === 1 ? 'reboot' : 'poweroff');
 }
 
 function deviceAction(act) {
@@ -969,9 +1103,9 @@ function settingsKnob(step) {
 }
 
 function settingsPress() {
-  if (setMode === 'menu') { if (setIdx === 3) return rotate(); if (setIdx === 4) return switchLang(); return setModeTo(setIdx === 0 ? 'bright' : 'confirm'); }
+  if (setMode === 'menu') { if (setIdx === 3) return rotate(); if (setIdx === 4) return switchLang(); if (setIdx === 5) return phoneMenu(); return setModeTo(setIdx === 0 ? 'bright' : 'confirm'); }
   if (setMode === 'bright') return setModeTo('menu');
-  if (setMode === 'confirm') deviceAction(setIdx === 1 ? 'reboot' : 'poweroff');
+  if (setMode === 'confirm') confirmed();
 }
 
 function settingsBack() {
@@ -997,10 +1131,11 @@ $('overlay').addEventListener('click', (e) => {
   }
   if (tile) {
     const i = Number(tile.dataset.i);
-    if (setMode === 'confirm' && i === setIdx) return deviceAction(i === 1 ? 'reboot' : 'poweroff');
+    if (setMode === 'confirm' && i === setIdx) return confirmed();
     setIdx = i;
     if (i === 3) return rotate();
     if (i === 4) return switchLang();
+    if (i === 5) return phoneMenu();
     return setModeTo(i === 0 ? 'bright' : 'confirm');
   }
   if (!e.target.closest('.ov-panel')) setModeTo(null);
@@ -1178,6 +1313,7 @@ function toast(msg) {
 }
 
 function knob(step) {
+  if (PH.call || PH.pairing) return;
   if (setMode) return settingsKnob(step);
   if (page === NEWS && (newsSel >= 0 || newsDetail)) return newsKnob(step);
   if (!editing) return setPage(page + step);
@@ -1225,10 +1361,18 @@ addEventListener('click', (e) => { const n = S && S.display && S.display.night; 
 addEventListener('keydown', (e) => {
   if (nightGate()) return;
   const k = e.key;
+  const isBack = k === 'Escape' || k === 'Backspace' || k === 'BrowserBack' || k === 'GoBack';
+  // a ringing call or an open pairing window owns the buttons until it is over
+  if (PH.call) {
+    if (k === 'Enter' || k === ' ') phonePost('/call', { action: 'answer' });
+    else if (isBack) phonePost('/call', { action: 'decline' });
+    return;
+  }
+  if (PH.pairing) { if (isBack) phonePost('/pair/cancel'); return; }
   // upside down, the preset buttons sit along the bottom in reverse order: keep 1 on the left
   if (/^[1-4]$/.test(k)) return presetButton(orient === 'flip' ? 5 - Number(k) : Number(k));
   if (k === 'm' || k === 'M') return settingsButton(); // the round settings button, top right
-  if (k === 'Escape' || k === 'Backspace' || k === 'BrowserBack' || k === 'GoBack') return back();
+  if (isBack) return back();
   if (k === 'Enter' || k === ' ') return press();
   if (k === 'ArrowRight' || k === 'ArrowDown') return knob(1);
   if (k === 'ArrowLeft' || k === 'ArrowUp') return knob(-1);
@@ -1252,7 +1396,7 @@ function appX(t) {
 let tx = null;
 addEventListener('touchstart', (e) => { tx = appX(e.touches[0]); }, { passive: true });
 addEventListener('touchend', (e) => {
-  if (tx == null || setMode) { tx = null; return; }
+  if (tx == null || setMode || PH.call || PH.pairing) { tx = null; return; }
   if (nightGate()) { tx = null; return; }
   const dx = appX(e.changedTouches[0]) - tx;
   tx = null;
@@ -1267,6 +1411,7 @@ function tickClock() {
   setText($('clock'), dtf(loc(), { timeZone: tz(), hour: 'numeric', minute: '2-digit' }).format(new Date(now())));
   pomoTick();
   musicProgress();
+  if (PH.pairing) renderPairing();
   if (S && page === ASK) renderAsk();
   if (S && page === CALENDAR && new Date().getSeconds() === 0) renderCalendar();
   checkLink();
@@ -1327,3 +1472,4 @@ tickClock();
 setInterval(tickClock, 1000);
 setInterval(render, 15000);
 connect();
+phoneConnect();

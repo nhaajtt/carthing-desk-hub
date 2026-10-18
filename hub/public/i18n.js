@@ -108,6 +108,15 @@ const VI = {
   'Only the Car Thing can do this': 'Chỉ Car Thing làm được việc này', 'Brightness can only be changed on the Car Thing': 'Chỉ chỉnh độ sáng được trên Car Thing',
   'Language can only be changed on the Car Thing': 'Chỉ đổi ngôn ngữ được trên Car Thing',
 
+  // iPhone over Bluetooth
+  'Pair iPhone': 'Ghép iPhone', 'Pair your iPhone': 'Ghép iPhone của bạn', 'Type this code on your iPhone': 'Nhập mã này trên iPhone',
+  'On the iPhone: Settings → Bluetooth → tap “Desk Hub” (or “{a}”, if this iPhone met the Car Thing before)': 'Trên iPhone: Cài đặt → Bluetooth → chạm “Desk Hub” (hoặc “{a}” nếu iPhone từng gặp Car Thing này)',
+  '{s} s left · Back to cancel': 'còn {s} giây · Back để huỷ',
+  'Press the knob again to forget this iPhone · Back to cancel': 'Bấm núm lần nữa để quên iPhone này · Back để huỷ',
+  Phone: 'Điện thoại', 'Unknown caller': 'Không rõ người gọi', Answer: 'Nghe', Decline: 'Từ chối',
+  'Liking works with Spotify only': 'Chỉ thả tim được với Spotify',
+  'The Bluetooth helper is not running': 'Chương trình Bluetooth trên Car Thing chưa chạy',
+
   // offline card
   'Reconnecting to the hub…': 'Đang kết nối lại với hub…', 'No data for': 'Không có dữ liệu trong',
   'The screen comes back on its own when server 2 answers.': 'Màn hình sẽ tự trở lại khi server 2 trả lời.',

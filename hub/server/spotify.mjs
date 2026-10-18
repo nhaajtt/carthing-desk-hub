@@ -71,7 +71,9 @@ export function createSpotify({ state, changed, stateDir }) {
     }
     if (r.status === 204 || r.status === 202) return null;
     const text = await r.text();
-    const j = text ? JSON.parse(text) : null;
+    // player commands can answer 200 with a body that is not JSON; that is still a success
+    let j = null;
+    try { j = text ? JSON.parse(text) : null; } catch {}
     if (!r.ok) {
       const msg = j?.error?.message || text.slice(0, 80);
       console.error(`[spotify] ${method} ${p} ${r.status}: ${msg}`);

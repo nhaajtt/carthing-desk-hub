@@ -27,10 +27,11 @@ The Car Thing never touches the internet. It only talks to the hub, the hub only
 | 🐈 **Mei** | Press the knob and talk. The four microphones record, the hub asks Gemini, and Mei answers in English or Vietnamese in a speech bubble. She remembers the last few minutes, so follow-ups work, and knows which story you had open ("what does this one say?"). Every morning at 7 she writes a short **briefing**: weather, today's calendar, BTC and gold, USD/VND, top headlines. While idle, Mei and her owner **Nhat** act out random little scenes. |
 | 🌤 **Weather** | Current conditions, AQI, 12-hour and 4-day forecast (Open-Meteo), and rain in the next two hours in 15-minute steps, with a banner about half an hour before it starts. The sky behind every page takes the colour of the real weather. |
 | 📅 **Calendar** | Your Google Calendar through its secret iCal link (read-only, no OAuth): what's next with a countdown, then today, tomorrow or the week. Recurring events, exceptions and daylight-saving changes are handled on the hub. A banner pops up 10 minutes before each event, on any page. |
-| 🎵 **Music** | Spotify now playing and controls (PKCE, no client secret), album art proxied through the hub. |
+| 🎵 **Music** | Spotify now playing and controls (PKCE, no client secret), album art proxied through the hub. When the paired iPhone is the one playing, any app (Apple Music, YouTube, a podcast) shows here instead, with the same buttons; the hub looks up a cover or the video's thumbnail. |
+| 📱 **iPhone** | Paired over Bluetooth Low Energy, with nothing installed on the phone: battery in the top bar, new notifications as a short banner, incoming calls full screen (press the knob to answer, Back to decline, and the screen wakes at night). Pair from the quick menu with a 6-digit code. Notification text never leaves the Car Thing. |
 | 🖥 **Servers** | Four views on buttons 1–4. **Now**: CPU, memory, disk, temperature, uptime and container health for two home servers. **24 h**: CPU, memory and temperature graphs. **Security**: failed SSH logins, what the firewall blocked, every port open on all interfaces (a new one raises a banner), and whether the Car Thing still has its setup. **Updates**: pending apt packages, containers with a newer image, and GitHub (latest CI run per repository, open pull requests and issues). |
 | ⏱ **Focus** | A Pomodoro timer: buttons 1–4 set 15, 25, 45 or 60 minutes. |
-| ⚙️ **Quick menu** | The round button opens screen brightness, restart, shut down, rotate (each press turns the screen another 90°) and language. |
+| ⚙️ **Quick menu** | The round button opens screen brightness, restart, shut down, rotate (each press turns the screen another 90°), language and iPhone (pair, or forget the paired one). |
 | 🇻🇳 **English / Tiếng Việt** | The language tile switches the whole screen: pages, hints, dates and the clock, the banners the hub raises, and Mei's morning briefing. |
 | 🌙 **Night** | From 23:00 to 06:30 the backlight goes off. Touch anything and it lights up for two minutes; that first touch only wakes the screen. |
 | 🔌 **Self-healing** | If the hub goes quiet the screen says so and keeps reconnecting, and it reloads itself when the hub comes back with new code. A watcher on the device restarts the kiosk if it got stuck on an error page, and the hardware watchdog reboots it if it ever freezes. |
@@ -44,6 +45,7 @@ The Car Thing never touches the internet. It only talks to the hub, the hub only
 | **Back** (button beside the knob) | Leave whatever you entered: a story summary, story selection, a zoomed market view, volume mode, Mei's answer |
 | **Buttons 1–4** | Depend on the page; small numbered badges on screen show what each one does |
 | **Round button** | Quick menu |
+| **During a call** | Knob press answers, Back declines; nothing else reacts until the call is over |
 
 | Page | 1 | 2 | 3 | 4 |
 |---|---|---|---|---|
@@ -104,6 +106,8 @@ On **News**: press the knob to highlight a story, turn to move, press again (or 
 flowchart LR
   subgraph desk["On the desk"]
     CT["Car Thing<br/>Nocturne 4 · Chromium 147 kiosk<br/>knob · 5 buttons · 4 mics"]
+    IP["iPhone<br/>notifications · media · battery"]
+    IP <-- "Bluetooth LE<br/>paired with a code, encrypted" --> CT
   end
   subgraph s2["Server 2 (the brain)"]
     HUB["carthing-hub<br/>Node 22, read-only container"]
@@ -126,7 +130,7 @@ flowchart LR
   HUB -- "outbound HTTPS only" --> NET
 ```
 
-* **The Car Thing is a screen, not a computer you trust.** It runs Chromium in kiosk mode pointed at the hub, plus three tiny shell helpers: one applies the brightness you pick (and switches the backlight off at night), one records the microphones when you talk to Mei, one reloads the kiosk if it gets stuck. It has no route to the LAN or the internet. After a Nocturne update, `check-carthing.sh` on server 2 checks all of that and puts back whatever the update reset.
+* **The Car Thing is a screen, not a computer you trust.** It runs Chromium in kiosk mode pointed at the hub, plus three tiny shell helpers (one applies the brightness you pick and switches the backlight off at night, one records the microphones when you talk to Mei, one reloads the kiosk if it gets stuck) and `phonelink`, a small Go program that talks to the paired iPhone over Bluetooth and serves only the kiosk page, on loopback. It has no route to the LAN or the internet. After a Nocturne update, `check-carthing.sh` on server 2 checks all of that and puts back whatever the update reset.
 * **Security data without new privileges.** A small cron script on each server (run as the normal user, which can read the journal) writes failed SSH logins, firewall blocks, open ports and pending updates to a JSON file. The hub reads server 2's file through a read-only mount; server 1's agent sends its file along with the stats. Image update checks are anonymous `HEAD` requests to the registries.
 * **The hub is the brain.** One Node.js process with no dependencies gathers every data source, keeps all keys, and streams state to the screen over Server-Sent Events. It runs in a read-only container with every capability dropped and no `docker.sock`.
 * **Everything is free.** No paid API is required. The two optional extras that would cost money (Google Search grounding for Mei, and paid Gemini tiers) are off by default. When the main Gemini model runs out of its free daily quota, Mei switches to Flash-Lite on her own.
@@ -138,13 +142,14 @@ More detail: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** · the whole story
 ```
 hub/            the brain: Node 22 server, UI, config, compose file
   server/       index.mjs (data sources, HTTP/SSE), assistant.mjs (Mei), news.mjs, calendar.mjs,
-                spotify.mjs, alerts.mjs, history.mjs, security.mjs, registry.mjs, github.mjs,
+                spotify.mjs, covers.mjs, alerts.mjs, history.mjs, security.mjs, registry.mjs, github.mjs,
                 docker-status.mjs
   test/         node:test suite (calendar recurrence and time zones, image references, host reports)
   public/       index.html, app.js (pages + controls), stage.js (Mei & Nhat),
                 style.css + theme.css, fonts/ (Bricolage Grotesque, OFL)
 agent/          server-1 stats agent (push only) + its compose file
-carthing/       files that live on the Car Thing: helpers, kiosk override and watcher, sshd, NTP, watchdog
+carthing/       files that live on the Car Thing: helpers, kiosk override and watcher, sshd, NTP, watchdog;
+  phonelink/    the iPhone link over Bluetooth (Go, built on the brain by tools/build-phonelink.sh)
 host/           server-2 host config: netplan, UFW / DOCKER-USER rules, sysctl, chrony; host-report.sh (cron)
 tools/          setup scripts for secrets, check-carthing.sh (run after Nocturne updates), DevTools helpers (screenshots, the GIF, error capture)
 docs/           SETUP, ARCHITECTURE, SECURITY, DEVLOG, screenshots

@@ -533,10 +533,11 @@ body[data-orient="flip"] #app { transform: rotate(180deg); }
 body.night-dark *, body.night-dark *::before, body.night-dark *::after { animation-play-state: paused !important; }
 .portrait .nc-up .upd { display: none; }
 
-/* ---------- weather: °C / °F hint, quick menu with five tiles */
+/* ---------- weather: °C / °F hint, quick menu with six tiles (one row landscape, two rows portrait) */
 .wx-unit { margin-top: 6px; font-size: 12px; color: var(--dim); }
 .ov-tiles { gap: 14px; }
-.ov-tile { width: 128px; height: 128px; }
+.ov-tile { width: 116px; height: 116px; }
+.portrait .ov-tile { width: 128px; height: 128px; }
 .portrait .ov-tiles { grid-template-columns: repeat(3, 128px); }
 .srv .head .state { white-space: nowrap; flex: none; }
 .srv .head > div { min-width: 0; }
@@ -550,3 +551,28 @@ body.night-dark *, body.night-dark *::before, body.night-dark *::after { animati
 
 /* the price reels jump straight to their value while a page slides in (no burst of animations at slide start) */
 body.sliding .odo .reel { transition: none; }
+
+/* ---------- iPhone over Bluetooth: battery in the top bar, notification banner, incoming call, pairing */
+.phone { display: none; align-items: center; gap: 2px; color: var(--muted); font: 700 14px var(--display); }
+.phone.on { display: flex; }
+.phone.away { color: var(--dim); }
+.phone svg { width: 17px; height: 17px; }
+.alert-banner.phone { background: linear-gradient(90deg, #262063, #3b3488); color: #eeeaff; box-shadow: 0 0 0 2px var(--sky), 0 14px 40px rgba(0, 0, 0, 0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.call, .pair { position: absolute; inset: 0; z-index: 15; display: none; align-items: center; justify-content: center; background: rgba(12, 9, 34, 0.98); }
+.call.on, .pair.on { display: flex; animation: fade 0.25s ease-out; }
+.call-card, .pair-card { width: min(560px, 88%); white-space: normal; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.call-app { font-size: 16px; color: var(--muted); }
+.call-name { max-width: 100%; font: 800 46px/1.1 var(--display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.call-btns { display: flex; gap: 36px; margin-top: 26px; }
+.call-btns button { position: relative; width: 156px; height: 62px; border: 0; border-radius: 999px; font: 800 20px var(--display); }
+.call-no { background: var(--down); color: #2a0614; }
+.call-yes { background: var(--up); color: #062a1d; }
+.call-btns .kb { position: absolute; top: -9px; left: 50%; transform: translateX(-50%); width: auto; padding: 0 7px; height: 18px; margin: 0; background: var(--bg); color: var(--text); box-shadow: 0 0 0 2px var(--bg); }
+.pair-card b { font: 800 26px var(--display); }
+.pair-code { font: 800 76px/1 var(--display); letter-spacing: 4px; color: var(--gold); font-variant-numeric: tabular-nums; }
+.pair-code:empty { display: none; }
+.pair-help { font-size: 17px; line-height: 1.5; }
+.pair-left { font-size: 14px; color: var(--muted); }
+.portrait .call-name { font-size: 38px; }
+.portrait .call-btns { gap: 18px; }
+.portrait .call-btns button { width: 140px; }

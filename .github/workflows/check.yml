@@ -25,6 +25,18 @@ jobs:
             node --check "$f" || exit 1
           done
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: false
+
+      - name: Go (the Car Thing's Bluetooth helper)
+        working-directory: carthing/phonelink
+        run: |
+          test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+          go vet ./...
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o /dev/null .
+
       - name: Shell syntax
         run: |
           for f in carthing/*.sh tools/*.sh host/*.sh; do bash -n "$f" || exit 1; done

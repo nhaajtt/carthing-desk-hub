@@ -94,7 +94,7 @@ An update can reset `/etc` and `/root` on the Car Thing: the kiosk override, key
 ~/carthing-tools/check-carthing.sh --check    # only report
 ```
 
-It compares every file with the copy in `carthing/` (SHA-256), checks the kiosk points at the hub, the hub's key is in `authorized_keys`, sshd refuses passwords, time sync is on and the three helpers are running. If the update wiped the key, it asks for the root password once (Nocturne's default is `nocturne`) to put the key back, then continues with the key. Run hourly from cron with `--json`, it also feeds the Car Thing card on Servers → Security (see section 9).
+It compares every file with the copy in `carthing/` (SHA-256), checks the kiosk points at the hub, the hub's key is in `authorized_keys`, sshd refuses passwords, time sync is on and the helpers (including phonelink, once built) are running. If the update wiped the key, it asks for the root password once (Nocturne's default is `nocturne`) to put the key back, then continues with the key. Run hourly from cron with `--json`, it also feeds the Car Thing card on Servers → Security (see section 9).
 
 ## 5. Optional: stats from a second server
 
@@ -150,6 +150,17 @@ GitHub: set `GITHUB_USER` in `hub/.env`. Public repositories need no token. For 
 ## 10. Optional: night
 
 `NIGHT_DIM=23:00-06:30` (the default; `off` to disable) turns the backlight off between those times. The first knob turn, button press or tap only wakes the screen, for `WAKE_MINUTES` (2), and every further input keeps it awake.
+
+## 11. Optional: iPhone over Bluetooth
+
+Battery, notifications, incoming calls and what any app plays, from one iPhone, with nothing installed on the phone. Build the helper on the brain (official Go image, static arm64 binary) and let `check-carthing.sh` put it on the Car Thing:
+
+```bash
+~/carthing-tools/build-phonelink.sh     # writes ~/carthing-hub/carthing/phonelink/phonelink
+~/carthing-tools/check-carthing.sh      # copies it to /var/lib/hub/phonelink and restarts the kiosk
+```
+
+Pair: quick menu → **iPhone** → on the iPhone, Settings → Bluetooth → **Desk Hub** (an iPhone that met this Car Thing before may show it as "Nocturne (…)"; if it sits under My Devices, choose Forget This Device first) → type the 6-digit code from the screen → allow notifications. To unpair, quick menu → iPhone → press again to confirm, and forget the device on the iPhone too.
 
 ## Development helpers
 

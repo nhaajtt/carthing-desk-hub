@@ -13,6 +13,7 @@ import { createHistory } from './history.mjs';
 import { createSecurity } from './security.mjs';
 import { createRegistry } from './registry.mjs';
 import { createGitHub } from './github.mjs';
+import { cover } from './covers.mjs';
 
 const PORT = Number(process.env.PORT || 8787);
 const LAT = Number(process.env.LAT || 37.3382);
@@ -672,6 +673,16 @@ const server = http.createServer((req, res) => {
 
   if (url.pathname === '/api/spotify/art') {
     spotify.art(url.searchParams.get('u') || '')
+      .then((a) => { res.writeHead(200, { 'Content-Type': a.type, 'Cache-Control': 'max-age=86400' }); res.end(a.buf); })
+      .catch(() => { res.writeHead(404); res.end(); });
+    return;
+  }
+
+  // picture for what the paired iPhone plays; only the Car Thing knows what that is
+  if (url.pathname === '/api/media/cover') {
+    if (!fromCarThing(req)) { res.writeHead(403); return res.end(); }
+    const q = url.searchParams;
+    cover(q.get('app') || '', q.get('t') || '', q.get('a') || '')
       .then((a) => { res.writeHead(200, { 'Content-Type': a.type, 'Cache-Control': 'max-age=86400' }); res.end(a.buf); })
       .catch(() => { res.writeHead(404); res.end(); });
     return;

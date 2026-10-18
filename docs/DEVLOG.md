@@ -2,7 +2,7 @@
 
 > Ghi lại toàn bộ quá trình biến một chiếc Spotify Car Thing đã "chết" thành màn hình để bàn: từ lúc lên ý tưởng, chọn hướng đi, thiết kế hệ thống, cho tới từng lỗi gặp phải và cách mình gỡ. Viết theo thứ tự thời gian, kèm số liệu đo thật trên thiết bị.
 >
-> Toàn bộ dự án làm trong hai ngày 16–17/10/2026.
+> Toàn bộ dự án làm trong ba ngày 16–18/10/2026.
 
 ## Mục lục
 
@@ -30,8 +30,9 @@
 21. [Màn hình tự tắt, và đợt nâng cấp thứ hai](#21-màn-hình-tự-tắt-và-đợt-nâng-cấp-thứ-hai)
 22. [Đợt nâng cấp thứ ba: ban đêm, bảo mật, cập nhật](#22-đợt-nâng-cấp-thứ-ba-ban-đêm-bảo-mật-cập-nhật)
 23. [Mượt hơn nữa](#23-mượt-hơn-nữa)
-24. [Bảng tổng hợp lỗi](#24-bảng-tổng-hợp-lỗi)
-25. [Những điều rút ra](#25-những-điều-rút-ra)
+24. [iPhone qua Bluetooth, không cần app](#24-iphone-qua-bluetooth-không-cần-app)
+25. [Bảng tổng hợp lỗi](#25-bảng-tổng-hợp-lỗi)
+26. [Những điều rút ra](#26-những-điều-rút-ra)
 
 ---
 
@@ -584,7 +585,73 @@ Yêu cầu: "thực sự mượt mà, không giật lag, không bóng ma, nhất
 
 Một animation đơn giản chạy thử trên Car Thing đạt 60 fps tròn (300/300 khung), nên phần cứng làm được. Phần rớt còn lại (khoảng 5%) nằm ở khung đầu khi một trang hiện ra (tính style 20 ms) và ở nền tảng: Chromium của Nocturne chạy `--single-process`, và `nocturned` luôn dùng khoảng 10% CPU để nghe từ khoá "Hey Nocturne". Có lệnh tắt nghe (`wakeword.pause` trên WebSocket `localhost:5000`), nhưng `nocturned` chỉ nhận lệnh đó khi app đồng hành trên điện thoại đang kết nối ("No active app session"). Vì vậy mình để nguyên.
 
-## 24. Bảng tổng hợp lỗi
+## 24. iPhone qua Bluetooth, không cần app
+
+Yêu cầu: kết nối với điện thoại (iPhone 15 Pro) qua Bluetooth, **không** dùng app đồng hành của Nocturne (bản thử nghiệm, phải cài qua một app khác) mà tự làm để an toàn hơn.
+
+### Chọn hướng
+
+Không cài gì lên iPhone thì iOS chỉ cho phụ kiện dùng vài dịch vụ chuẩn của Apple:
+
+| Dịch vụ | Cho được gì |
+|---|---|
+| ANCS (Apple Notification Center Service) | Thông báo, kể cả cuộc gọi đến (kèm hai hành động: nghe / từ chối) |
+| AMS (Apple Media Service) | App nào đang phát, tên bài, ca sĩ, tiến độ, âm lượng; nhận lệnh phát, dừng, chuyển bài, âm lượng |
+| Battery Service | % pin |
+
+So với mua app Nocturne (khoảng 10 đô): app làm được nhiều thứ hơn ngay (giọng nói qua điện thoại, tắt nghe từ khoá), nhưng là mã đóng và đi qua bên thứ ba. Tự làm thì giới hạn trong ba dịch vụ trên nhưng mở rộng được tuỳ ý trong giới hạn đó. Chọn tự làm.
+
+Car Thing không có Python hay Node, nên chương trình (`phonelink`) viết bằng Go, build trên server 2 bằng image Go chính thức (tĩnh, arm64, khoảng 7 MB, chạy tốn khoảng 8 MB RAM). Nó nói chuyện với BlueZ 5.86 qua D-Bus và mở một cổng chỉ trong nội bộ Car Thing (`127.0.0.1:5055`) cho trang hub đọc. Trước khi viết, mình thử: trang hub (gốc `http://10.42.1.6:8787`) gọi được `127.0.0.1` trên Chromium 147 của Car Thing, cả `fetch` lẫn WebSocket.
+
+### `nocturned` đã giữ sẵn Bluetooth
+
+Đọc log và chuỗi trong `nocturned` thì thấy nó đã là "agent" mặc định của BlueZ (bộ trả lời khi có máy xin ghép), có sẵn bộ đọc ANCS, đăng ký iAP2 và SPP. Vì vậy:
+
+* `phonelink` chỉ xin làm agent mặc định **trong 2 phút** mở cửa sổ ghép. Agent của nó là `DisplayOnly`: iPhone phải nhập mã 6 số hiện trên màn hình, ghép kiểu "just works" (không mã) bị từ chối. Ngoài cửa sổ, mọi yêu cầu bị từ chối.
+* Không động vào cấu hình của `nocturned`.
+
+### iPhone không thấy Car Thing
+
+Lần thử đầu: quảng bá BLE kèm lời "xin" dịch vụ ANCS (cách các dự án ESP32 hay dùng). iPhone không hiện gì, chỉ hiện "Nocturne (Q417)" từ lần ghép cũ. Hoá ra **từ iOS 18, Cài đặt → Bluetooth không còn liệt kê phụ kiện chỉ xin ANCS** (có người gặp đúng chuyện này trên diễn đàn Nordic). Nhưng iOS vẫn liệt kê **remote Bluetooth**.
+
+Cách sửa: Car Thing đồng thời là một remote media (HID over GATT), **chỉ có phím media**, không có bàn phím chữ, nên iPhone vẫn hiện bàn phím ảo bình thường. Nó không bao giờ gửi phím nào; phần mô tả phím chỉ đọc được sau khi đã ghép bằng mã. Thêm nữa, iOS kết nối nhưng không tự đòi ghép, nên khi iPhone kết nối trong cửa sổ ghép, `phonelink` chủ động yêu cầu ghép. Lần thử sau: iPhone hiện "Desk Hub", hỏi mã, ghép xong đọc được ngay pin, Spotify đang phát, và bật nhận thông báo.
+
+### Thông báo lúc hiện lúc không
+
+Ngay khi iPhone ghép, `nocturned` cũng thấy nó và bật bộ đọc ANCS riêng. Hai chương trình cùng ghi vào Control Point của iPhone; BlueZ chỉ cho một lệnh ghi trên một characteristic tại một thời điểm và trả lỗi `In Progress` cho bên kia. Log ghi 8 lần như vậy trong vài phút, mỗi lần là một thông báo mất. Cùng lúc, `nocturned` báo "Discarding invalid ANCS Data Source response": nó nhận cả câu trả lời dành cho `phonelink`.
+
+Cách sửa: gặp `In Progress` thì chờ một chút ngẫu nhiên rồi thử lại (tối đa khoảng 3 giây), và chỉ nhận câu trả lời bắt đầu bằng đúng đầu yêu cầu của mình. Câu trả lời của iPhone đi lần lượt, không xen nhau, nên lọc theo đầu là đủ.
+
+### `nocturned` còn tự nối iAP2
+
+`nocturned` cũng mở kênh iAP2 của Apple (qua Bluetooth thường) tới iPhone, xác thực thành công, nhận ảnh bìa bài hát, và thử mở app Nocturne 5 lần. Người dùng chọn giữ kênh này để lấy ảnh bìa. Nhưng khi nghe WebSocket của `nocturned` (`localhost:5000`) suốt nhiều phút, không có sự kiện `media.now_playing.*` nào: nó chỉ chuyển ảnh cho app Nocturne trên điện thoại. Vậy ảnh bìa phải lấy cách khác (bên dưới).
+
+### Ảnh bìa và YouTube
+
+Qua Bluetooth, iPhone chỉ gửi chữ. Trang Nhạc lấy ảnh theo thứ tự:
+
+1. iPhone đang phát đúng bài mà Spotify báo: dùng ảnh của Spotify (hub đã có).
+2. App là YouTube: hub tìm tên video và tên kênh trên trang kết quả tìm kiếm công khai của YouTube, lấy video đầu tiên, trả ảnh thu nhỏ.
+3. Còn lại: iTunes Search API của Apple (miễn phí, không cần key).
+
+Chỉ tên bài và tên ca sĩ / kênh rời hub. Nội dung thông báo không bao giờ rời Car Thing.
+
+### Lỗi "Unexpected…" ở nút Spotify
+
+Bấm phát / dừng / chuyển bài vẫn chạy nhưng hiện lỗi, mỗi nút một lỗi khác. Spotify giờ trả `200` kèm nội dung không phải JSON cho các lệnh điều khiển, và hub `JSON.parse` nội dung đó. Sửa: nội dung không đọc được mà mã trả về là thành công thì coi là thành công.
+
+### Kết quả
+
+| | |
+|---|---|
+| Ghép | Menu nhanh → iPhone → nhập mã 6 số trên iPhone |
+| Pin | Góc trên, mờ khi iPhone đi xa |
+| Thông báo | Banner khoảng 9 giây |
+| Cuộc gọi | Toàn màn hình; bấm núm nghe, Back từ chối; ban đêm tự sáng màn hình |
+| Nhạc | Mọi app trên iPhone, có ảnh; nút 1–3 và núm điều khiển iPhone |
+| Bluetooth đi ra ngoài | Chỉ quảng bá trong cửa sổ ghép hoặc khi iPhone ở xa; khi iPhone đã kết nối thì im |
+
+## 25. Bảng tổng hợp lỗi
 
 | # | Triệu chứng | Nguyên nhân gốc | Cách sửa |
 |---|---|---|---|
@@ -615,8 +682,12 @@ Một animation đơn giản chạy thử trên Car Thing đạt 60 fps tròn (3
 | 22 | "Bóng ma" khi chuyển trang | Hai trang nửa trong suốt chồng lên nhau, vặn nhanh thì chồng nhiều trang | Trượt kiểu băng chuyền, không trong suốt, tối đa 2 trang |
 | 23 | Chuyển trang khựng 30–180 ms | `display:none` bắt dựng lại trang; đo kích thước giữa chừng; tạo `Intl.NumberFormat` liên tục | `content-visibility`, Web Animations, cache bộ định dạng |
 | 24 | Chromium ăn 17–35% CPU lúc đứng yên | Trời trôi, sao nhấp nháy, các vòng lặp nhỏ | Trời tĩnh, bỏ vòng lặp ở trang không hiển thị |
+| 25 | iPhone không thấy Car Thing trong Cài đặt | Từ iOS 18, phụ kiện chỉ xin ANCS không còn được liệt kê | Thêm dịch vụ remote media (chỉ phím media, không bao giờ gửi phím) |
+| 26 | Thông báo lúc hiện lúc không | `nocturned` cũng đọc ANCS; BlueZ chỉ cho một lệnh ghi một lúc (`In Progress`) | Thử lại khi bận, lọc câu trả lời theo đầu yêu cầu |
+| 27 | Nút Spotify báo "Unexpected…" dù vẫn chạy | Spotify trả 200 kèm nội dung không phải JSON | Nội dung không đọc được + mã thành công = thành công |
+| 28 | Không có ảnh bìa cho nhạc / video từ iPhone | Bluetooth chỉ gửi chữ; `nocturned` chỉ chuyển ảnh cho app của nó | Hub tìm ảnh: Spotify, YouTube, iTunes |
 
-## 25. Những điều rút ra
+## 26. Những điều rút ra
 
 1. **Đo trên thiết bị thật, không đoán.** Font, FPS, mức âm thanh của micro, giờ hệ thống: lần nào thiết bị thật cũng khác với giả định.
 2. **"Không tin mặc định" là công cụ thiết kế, không chỉ là bảo mật.** Nó quyết định Car Thing không giữ key, hub không cầm `docker.sock`, agent chỉ đẩy dữ liệu đi, và firewall nằm trên đúng máy.
@@ -624,3 +695,5 @@ Một animation đơn giản chạy thử trên Car Thing đạt 60 fps tròn (3
 4. **Firmware của người khác có luật chơi riêng.** Phân vùng chỉ-đọc, `floor-sync`, daemon tự chỉnh độ sáng, daemon giữ micro: muốn sống chung thì phải đọc code của họ trước.
 5. **Miễn phí là một ràng buộc thiết kế.** Nó loại Binance (bị chặn), loại grounding của Gemini (đã thành trả phí), và đẩy sang những giải pháp khéo hơn: OKX WebSocket, Yahoo `spark`, RSS kèm tóm tắt.
 6. **Hiệu năng trên phần cứng yếu nằm ở việc tránh vẽ lại, không phải ở việc viết code nhanh.** `will-change` và việc chỉ cập nhật phần tử thay đổi mạnh hơn mọi tối ưu JavaScript khác.
+7. **Hai chương trình dùng chung một radio thì phải nhường nhau.** Đọc log của chương trình kia trước: lỗi `In Progress` chỉ hiện ra khi cả hai cùng ghi.
+8. **Nền tảng đổi luật mà không báo.** iOS 18 ngừng liệt kê phụ kiện chỉ xin thông báo, và Spotify đổi nội dung trả về. Đường vòng (remote media, đọc lỏng tay hơn) rẻ hơn chờ họ đổi lại.

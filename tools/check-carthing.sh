@@ -28,6 +28,7 @@ FILES=(
   "/var/lib/hub/voice-agent.sh|voice-agent.sh|755"
   "/var/lib/hub/kiosk-watch.sh|kiosk-watch.sh|755"
   "/var/lib/hub/kiosk-env|kiosk-env|644"
+  "/var/lib/hub/phonelink|phonelink/phonelink|755"
   "/etc/systemd/timesyncd.conf.d/10-hub.conf|10-hub.conf|644"
   "/etc/ssh/sshd_config.d/10-hardening.conf|10-hardening.conf|644"
   "/etc/systemd/system.conf.d/10-watchdog.conf|10-watchdog.conf|644"
@@ -73,7 +74,7 @@ echo "kiosk \$(grep -c '^KIOSK_ENV_OVERRIDE_FILE=/var/lib/hub/kiosk-env\$' /etc/
 grep -qxF '$PUB' /root/.ssh/authorized_keys 2>/dev/null && echo "key ok" || echo "key missing"
 echo "sshd \$(sshd -T 2>/dev/null | grep -E '^(passwordauthentication|permitemptypasswords) ' | tr ' \n' '=,')"
 echo "timesyncd \$(systemctl is-enabled systemd-timesyncd 2>/dev/null) \$(systemctl is-active systemd-timesyncd 2>/dev/null)"
-for p in brightness voice kiosk-watch; do
+for p in brightness voice kiosk-watch phone; do
   if [ -f /run/hub-\$p.pid ] && kill -0 "\$(cat /run/hub-\$p.pid)" 2>/dev/null; then echo "helper \$p up"; else echo "helper \$p down"; fi
 done
 echo "version \$(. /etc/os-release; echo \$VERSION)"
@@ -85,6 +86,8 @@ say "Car Thing: Nocturne ${version:-unknown}"
 problems=(); fix_files=(); etc_change=0; helper_change=0; sshd_change=0; watchdog_change=0; timesync_change=0; kiosk_default=0
 for entry in "${FILES[@]}"; do
   IFS='|' read -r dst name mode <<<"$entry"
+  # the Bluetooth helper is built, not stored in the repository (tools/build-phonelink.sh)
+  if [ ! -f "$SRC/$name" ]; then problems+=("not built yet: $SRC/$name (run tools/build-phonelink.sh)"); continue; fi
   want=$(sha256sum "$SRC/$name" | cut -d' ' -f1)
   read -r _ _ have hmode < <(printf '%s\n' "$remote" | grep "^file $dst ")
   if [ "$have" != "$want" ] || [ "$hmode" != "$mode" ]; then
@@ -124,8 +127,9 @@ cmds=""
 cmds+="mkdir -p /var/lib/hub /etc/systemd/timesyncd.conf.d /etc/ssh/sshd_config.d /etc/systemd/system.conf.d /root/.ssh"
 for entry in "${fix_files[@]}"; do
   IFS='|' read -r dst name mode <<<"$entry"
-  "${SSH[@]}" "cat > /tmp/hub-fix.$name" < "$SRC/$name" || { say "upload of $name failed"; exit 1; }
-  cmds+=" && install -m $mode /tmp/hub-fix.$name $dst && rm -f /tmp/hub-fix.$name"
+  tmp=/tmp/hub-fix.${name##*/}
+  "${SSH[@]}" "cat > $tmp" < "$SRC/$name" || { say "upload of $name failed"; exit 1; }
+  cmds+=" && install -m $mode $tmp $dst && rm -f $tmp"
 done
 [ $kiosk_default = 1 ] && cmds+=" && { [ -f /etc/default/chromium-kiosk.orig ] || cp -p /etc/default/chromium-kiosk /etc/default/chromium-kiosk.orig; } && sed -i 's#^KIOSK_ENV_OVERRIDE_FILE=.*#KIOSK_ENV_OVERRIDE_FILE=/var/lib/hub/kiosk-env#' /etc/default/chromium-kiosk && { grep -q '^KIOSK_ENV_OVERRIDE_FILE=' /etc/default/chromium-kiosk || echo 'KIOSK_ENV_OVERRIDE_FILE=/var/lib/hub/kiosk-env' >> /etc/default/chromium-kiosk; }"
 grep -q '^key ok$' <<<"$remote" || cmds+=" && grep -qxF '$PUB' /root/.ssh/authorized_keys 2>/dev/null || echo '$PUB' >> /root/.ssh/authorized_keys"
@@ -135,7 +139,7 @@ grep -q '^key ok$' <<<"$remote" || cmds+=" && grep -qxF '$PUB' /root/.ssh/author
 [ $sshd_change = 1 ] && cmds+=" && sshd -t"
 [ $timesync_change = 1 ] && cmds+=" && systemctl unmask systemd-timesyncd; systemctl enable systemd-timesyncd && systemctl restart systemd-timesyncd"
 # helpers start with the kiosk; stop the old copies so the new files are the ones that run
-cmds+=" && for p in brightness voice kiosk-watch; do [ -f /run/hub-\$p.pid ] && kill \$(cat /run/hub-\$p.pid) 2>/dev/null; rm -f /run/hub-\$p.pid; done; systemctl restart chromium-kiosk"
+cmds+=" && for p in brightness voice kiosk-watch phone; do [ -f /run/hub-\$p.pid ] && kill \$(cat /run/hub-\$p.pid) 2>/dev/null; rm -f /run/hub-\$p.pid; done; systemctl restart chromium-kiosk"
 "${SSH[@]}" "$cmds" || { say "A fix step failed (see above). Check by hand: ssh -i $KEY $CT"; exit 1; }
 say "Done. Checking again in 20 s..."
 sleep 20

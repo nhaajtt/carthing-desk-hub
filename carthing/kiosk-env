@@ -3,7 +3,8 @@
 # /etc/default/chromium-kiosk points KIOSK_ENV_OVERRIDE_FILE here (see docs/SETUP.md).
 KIOSK_URL=http://10.42.1.6:8787/
 # Helpers that live and die with the kiosk: brightness from the quick menu, microphone for Mei,
-# and a watcher that reloads the kiosk if it got stuck on an error page.
+# a watcher that reloads the kiosk if it got stuck on an error page, and the iPhone link over Bluetooth.
 [ -x /var/lib/hub/brightness-sync.sh ] && setsid /var/lib/hub/brightness-sync.sh >/dev/null 2>&1 </dev/null &
 [ -x /var/lib/hub/voice-agent.sh ] && setsid /var/lib/hub/voice-agent.sh >/dev/null 2>&1 </dev/null &
 [ -x /var/lib/hub/kiosk-watch.sh ] && setsid /var/lib/hub/kiosk-watch.sh >/dev/null 2>&1 </dev/null &
+[ -x /var/lib/hub/phonelink ] && setsid /var/lib/hub/phonelink >/run/hub-phone.log 2>&1 </dev/null &
