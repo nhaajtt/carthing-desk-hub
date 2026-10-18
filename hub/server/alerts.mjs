@@ -1,8 +1,12 @@
-// Price alerts: percentage moves over a window, and level crossings.
+// Price alerts: percentage moves over a window, and level crossings. Levels come from config.json, and from
+// the Car Thing (Markets zoom → press the knob): those are kept in state/levels.json and fire once.
+import fs from 'node:fs';
+import path from 'node:path';
+
 const WINDOWS = { '15m': 15 * 60000, '1h': 3600000, '4h': 4 * 3600000, '24h': 24 * 3600000 };
 const KEEP = 26 * 3600000;
 
-export function createAlerts({ state, changed, config, priceOf, labelOf }) {
+export function createAlerts({ state, changed, config, priceOf, labelOf, stateDir }) {
   const cfg = config.alerts || {};
   const cooldown = (cfg.cooldownMinutes ?? 60) * 60000;
   const history = new Map(); // asset -> [[t, price], ...] one sample per minute
@@ -11,6 +15,28 @@ export function createAlerts({ state, changed, config, priceOf, labelOf }) {
   state.alerts = [];
 
   const assets = new Set([...(cfg.moves || []), ...(cfg.levels || [])].map((r) => r.asset));
+  const userFile = path.join(stateDir, 'levels.json');
+  let user = {}; // asset -> { above, below }, set on the Car Thing
+  try { user = JSON.parse(fs.readFileSync(userFile, 'utf8')) || {}; } catch {}
+  function publishLevels() {
+    state.levels = Object.entries(user).map(([asset, v]) => ({ asset, label: labelOf(asset), above: v.above ?? null, below: v.below ?? null }));
+    for (const a of Object.keys(user)) assets.add(a);
+    try { fs.writeFileSync(userFile, JSON.stringify(user)); } catch (e) { console.error('[alerts]', e.message); }
+    changed();
+  }
+  // POST /api/alerts/level {asset, kind: 'above' | 'below' | 'clear', value}
+  function setLevel(asset, kind, value) {
+    if (priceOf(asset) == null) return false;
+    if (kind === 'clear') delete user[asset];
+    else {
+      const v = Number(value);
+      if (!(v > 0) || !['above', 'below'].includes(kind)) return false;
+      user[asset] = { ...user[asset], [kind]: v };
+    }
+    if (user[asset] && user[asset].above == null && user[asset].below == null) delete user[asset];
+    publishLevels();
+    return true;
+  }
 
   function sample() {
     const t = Date.now();
@@ -59,6 +85,23 @@ export function createAlerts({ state, changed, config, priceOf, labelOf }) {
         fire(`move${i}`, r.asset, dir, `${labelOf(r.asset)} ${chg > 0 ? '+' : ''}${chg.toFixed(2)}% ${vi() ? 'trong' : 'in'} ${r.window} · ${vi() ? 'hiện' : 'now'} ${fmt(now)}`);
       }
     });
+    // one-shot levels from the Car Thing: banner, then gone
+    for (const [a, v] of Object.entries(user)) {
+      const h = history.get(a);
+      if (!h || h.length < 2) continue;
+      const prev = h[h.length - 2][1], now = h[h.length - 1][1];
+      for (const kind of ['above', 'below']) {
+        const lvl = v[kind];
+        if (lvl == null || !(kind === 'above' ? prev < lvl && now >= lvl : prev > lvl && now <= lvl)) continue;
+        lastFired.delete(`user:${a}:${kind}`);
+        fire(`user:${a}:${kind}`, a, kind === 'above' ? 'up' : 'down', vi()
+          ? `🔔 ${labelOf(a)} ${kind === 'above' ? 'đã lên tới' : 'đã xuống'} ${fmt(lvl)} · hiện ${fmt(now)}`
+          : `🔔 ${labelOf(a)} ${kind === 'above' ? 'reached' : 'fell to'} ${fmt(lvl)} · now ${fmt(now)}`);
+        delete v[kind];
+        if (v.above == null && v.below == null) delete user[a];
+        publishLevels();
+      }
+    }
     (cfg.levels || []).forEach((r, i) => {
       const h = history.get(r.asset);
       if (!h || h.length < 2) return;
@@ -78,5 +121,7 @@ export function createAlerts({ state, changed, config, priceOf, labelOf }) {
     console.log(`[${kind}]`, text);
     changed();
   }
-  return { notify };
+  state.levels = [];
+  if (Object.keys(user).length) publishLevels();
+  return { notify, setLevel };
 }

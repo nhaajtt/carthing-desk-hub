@@ -3,7 +3,7 @@
 // 16.7 ms is a perfect 60 fps frame; anything over 33 ms is a visible stutter.
 (async () => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const key = (k) => dispatchEvent(new KeyboardEvent('keydown', { key: k }));
+  const key = (k) => { dispatchEvent(new KeyboardEvent('keydown', { key: k })); dispatchEvent(new KeyboardEvent('keyup', { key: k })); };
   const gaps = [];
   let last = 0, on = true;
   const tick = (t) => { if (last) gaps.push(t - last); last = t; if (on) requestAnimationFrame(tick); };

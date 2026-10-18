@@ -23,7 +23,7 @@ ws.onmessage = (m) => {
 await new Promise((r) => (ws.onopen = r));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const ev = (expression) => call('Runtime.evaluate', { expression, returnByValue: true });
-const key = (k) => ev(`dispatchEvent(new KeyboardEvent('keydown', {key: ${JSON.stringify(k)}})), 1`);
+const key = (k) => ev(`dispatchEvent(new KeyboardEvent('keydown', {key: ${JSON.stringify(k)}})), dispatchEvent(new KeyboardEvent('keyup', {key: ${JSON.stringify(k)}})), 1`);
 
 // start from a calm News page
 // landscape for the recording only (the saved orientation is left alone)

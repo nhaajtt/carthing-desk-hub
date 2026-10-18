@@ -155,7 +155,7 @@ Car Thing health on Servers → Now comes from one more cron line on server 2 (r
 
 ## 10. Optional: night
 
-`NIGHT_DIM=23:00-06:30` (the default; `off` to disable) turns the backlight off between those times. The first knob turn, button press or tap only wakes the screen, for `WAKE_MINUTES` (2), and every further input keeps it awake.
+Off by default: the screen goes off when you hold the round button. `NIGHT_DIM=23:00-06:30` turns the backlight off between those times as well. The first knob turn, button press or tap only wakes the screen, for `WAKE_MINUTES` (2), and every further input keeps it awake.
 
 ## 11. Optional: iPhone over Bluetooth
 

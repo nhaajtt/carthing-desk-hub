@@ -16,6 +16,8 @@ import { createGitHub } from './github.mjs';
 import { cover } from './covers.mjs';
 import { lyrics, translateLyrics } from './lyrics.mjs';
 import { createDesk } from './desk.mjs';
+import { createNet } from './net.mjs';
+import { createWords } from './words.mjs';
 import { createReminders } from './reminders.mjs';
 
 const PORT = Number(process.env.PORT || 8787);
@@ -453,7 +455,7 @@ function applyServer1Stats(b) {
 
 const assetLabel = (a) => {
   const i = INDICES.find((x) => x.key === a);
-  return i ? i.name : a === 'XAU' ? 'Gold' : a === 'XAG' ? 'Silver' : a;
+  return i ? i.name : a === 'XAU' ? 'Gold' : a === 'XAG' ? 'Silver' : a === 'usdvnd' ? 'USD/VND' : a;
 };
 function priceOf(a) {
   if (state.crypto[a]) return state.crypto[a].price;
@@ -461,12 +463,14 @@ function priceOf(a) {
   if (a === 'XAG') return state.metals.xag;
   return state.yahoo[a]?.price ?? null;
 }
-const alerts = createAlerts({ state, changed, config, priceOf, labelOf: assetLabel });
+const alerts = createAlerts({ state, changed, config, priceOf, labelOf: assetLabel, stateDir: STATE_DIR });
 
 // ---------------------------------------------------------------- 24 h graphs, security, updates, GitHub
 
 createHistory({ state, stateDir: STATE_DIR });
 const desk = createDesk({ state, changed, stateDir: STATE_DIR, tz: WX_TZ, notify: alerts.notify, lang: () => state.display.lang });
+createNet({ state, changed, stateDir: STATE_DIR, notify: alerts.notify, lang: () => state.display.lang });
+const words = createWords({ state, changed, stateDir: STATE_DIR, tz: WX_TZ });
 // light the screen for something that matters (a reminder): at night and while the phone is away
 function wakeDisplay() {
   if (state.display.night?.active) { wakeUntil = Date.now() + WAKE_MS; updateNight(); }
@@ -567,9 +571,10 @@ function saveDisplay() {
   changed();
 }
 
-// Night: the backlight goes off between NIGHT_DIM's two times (local, WX_TZ). Any knob turn or button press
-// lights it for WAKE_MINUTES; that first touch only wakes the screen.
-const NIGHT = (process.env.NIGHT_DIM || '23:00-06:30').match(/^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$/);
+// Night (optional, off unless NIGHT_DIM is set): the backlight goes off between NIGHT_DIM's two times (local,
+// WX_TZ). Any knob turn or button press lights it for WAKE_MINUTES; that first touch only wakes the screen.
+// Without it, the screen goes off only when you hold the round button (or the iPhone leaves the desk).
+const NIGHT = (process.env.NIGHT_DIM || 'off').match(/^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$/);
 const WAKE_MS = Number(process.env.WAKE_MINUTES || 2) * 60000;
 let wakeUntil = 0;
 function updateNight() {
@@ -703,6 +708,35 @@ const server = http.createServer((req, res) => {
     spotify.art(url.searchParams.get('u') || '')
       .then((a) => { res.writeHead(200, { 'Content-Type': a.type, 'Cache-Control': 'max-age=86400' }); res.end(a.buf); })
       .catch(() => { res.writeHead(404); res.end(); });
+    return;
+  }
+
+  // vocabulary cards: remembered or not, and five more words on request
+  if (url.pathname === '/api/words/grade' && req.method === 'POST') {
+    if (!fromCarThing(req)) { res.writeHead(403); return res.end(); }
+    readRaw(req, 100).then((b) => {
+      let j = {};
+      try { j = JSON.parse(b.toString() || '{}'); } catch {}
+      if (!words.grade(j.id, j.known === true)) { res.writeHead(400); return res.end(); }
+      res.end('ok');
+    }).catch(() => { res.writeHead(413); res.end(); });
+    return;
+  }
+  if (url.pathname === '/api/words/more' && req.method === 'POST') {
+    if (!fromCarThing(req)) { res.writeHead(403); return res.end(); }
+    words.more();
+    return res.end('ok');
+  }
+
+  // a price level set on the Car Thing (Markets zoom): fires once
+  if (url.pathname === '/api/alerts/level' && req.method === 'POST') {
+    if (!fromCarThing(req)) { res.writeHead(403); return res.end(); }
+    readRaw(req, 200).then((b) => {
+      let j = {};
+      try { j = JSON.parse(b.toString() || '{}'); } catch {}
+      if (!alerts.setLevel(String(j.asset || '').slice(0, 20), j.kind, j.value)) { res.writeHead(400); return res.end(); }
+      res.end('ok');
+    }).catch(() => { res.writeHead(413); res.end(); });
     return;
   }
 

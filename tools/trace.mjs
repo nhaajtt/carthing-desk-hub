@@ -15,7 +15,7 @@ ws.onmessage = (m) => {
 };
 await new Promise((r) => (ws.onopen = r));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const key = (k) => call('Runtime.evaluate', { expression: `dispatchEvent(new KeyboardEvent('keydown', {key: '${k}'})), 1` });
+const key = (k) => call('Runtime.evaluate', { expression: `dispatchEvent(new KeyboardEvent('keydown', {key: '${k}'})), dispatchEvent(new KeyboardEvent('keyup', {key: '${k}'})), 1` });
 
 await call('Runtime.evaluate', { expression: 'setPage(0), 1' });
 await sleep(1500);

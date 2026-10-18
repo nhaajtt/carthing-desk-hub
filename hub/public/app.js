@@ -3,7 +3,7 @@
 const $ = (id) => document.getElementById(id);
 const pages = [...document.querySelectorAll('.page')];
 // page order: News, Markets, Weather, Calendar, Music, Servers, Focus, Mei (Ask). Settings is a pop-up menu, not a page.
-const NEWS = 0, MARKETS = 1, WEATHER = 2, CALENDAR = 3, MUSIC = 4, SERVERS = 5, FOCUS = 6, PHONE = 7, ASK = 8;
+const NEWS = 0, MARKETS = 1, WEATHER = 2, CALENDAR = 3, MUSIC = 4, SERVERS = 5, FOCUS = 6, PHONE = 7, WORDS = 8, ASK = 9;
 let page = 0;
 let editing = false;
 let S = null;
@@ -212,14 +212,67 @@ function renderZoom() {
       return tile(esc(name), esc(sub || ''), num(q.price, decimals ?? 2), chg(pct(q.price, q.prev)) + `<span class="zs">${spark(q.spark, 200, 40, q.price >= q.prev)}</span>`);
     }).join('')}</div>`;
   }
+  html += levelChips(ZOOM_ASSET[zoom]()) + `<div class="zhint">${tr('Press the knob to set a price alert')}</div>`;
   if (z._html !== html) { z._html = html; z.innerHTML = html; }
 }
-function marketZoom(n) { zoom = zoom === n ? 0 : n; renderZoom(); }
+function marketZoom(n) { zoom = zoom === n ? 0 : n; alertEdit = null; renderZoom(); renderAlertEdit(); }
+
+// ---- price alerts set right here: in a zoomed view, press the knob, turn to the level, press to save.
+// The hub fires each one once (banner) and forgets it.
+const ZOOM_ASSET = { 1: () => ((S.config && S.config.crypto) || ['BTC'])[0], 2: () => 'XAU', 3: () => 'usdvnd', 4: () => 'vnindex' };
+let alertEdit = null; // { asset, price, step, value }
+function priceNow(a) {
+  if (S.crypto && S.crypto[a]) return S.crypto[a].price;
+  if (a === 'XAU') return S.metals && S.metals.xau;
+  return S.yahoo && S.yahoo[a] && S.yahoo[a].price;
+}
+const levelText = (a, v) => (a === 'usdvnd' ? vnd(v) : num(v, v >= 1000 ? 0 : 2));
+function alertStart() {
+  const a = ZOOM_ASSET[zoom] && ZOOM_ASSET[zoom]();
+  const p = a && priceNow(a);
+  if (!p) return;
+  const step = a === 'usdvnd' ? 10 : 2.5 * Math.pow(10, Math.floor(Math.log10(p)) - 2);
+  alertEdit = { asset: a, price: p, step, value: Math.round(p / step) * step };
+  renderAlertEdit();
+}
+function alertKnob(dir) { alertEdit.value = Math.max(alertEdit.step, alertEdit.value + dir * alertEdit.step); renderAlertEdit(); }
+function alertSave() {
+  const { asset, price, value } = alertEdit;
+  const kind = value >= price ? 'above' : 'below';
+  alertEdit = null;
+  renderAlertEdit();
+  fetch('/api/alerts/level', { method: 'POST', body: JSON.stringify({ asset, kind, value }) })
+    .then((r) => toast(r.ok ? `🔔 ${tr(kind === 'above' ? 'Alert when it reaches {v}' : 'Alert when it falls to {v}', { v: levelText(asset, value) })}` : tr('Only the Car Thing can do this')))
+    .catch(() => toast(tr('Could not reach the hub')));
+}
+function alertClear() {
+  const { asset } = alertEdit;
+  alertEdit = null;
+  renderAlertEdit();
+  fetch('/api/alerts/level', { method: 'POST', body: JSON.stringify({ asset, kind: 'clear' }) }).then((r) => r.ok && toast(tr('Alerts cleared'))).catch(() => {});
+}
+function renderAlertEdit() {
+  const el = $('alertEdit');
+  el.classList.toggle('on', !!alertEdit);
+  if (!alertEdit) return;
+  const { asset, price, value } = alertEdit;
+  const d = (value / price - 1) * 100;
+  setHTML(el, `<b>🔔 ${esc(asset === 'usdvnd' ? 'USD/VND' : asset === 'XAU' ? tr('Gold') : asset === 'vnindex' ? 'VN-Index' : asset)} ${value >= price ? '≥' : '≤'} ${levelText(asset, value)}</b>`
+    + `<span>${tr('now')} ${levelText(asset, price)} · ${d >= 0 ? '+' : ''}${d.toFixed(2)}%</span>`
+    + `<small>${tr('Turn to set · press to save · Back to cancel · 4 clears the alerts')}</small>`);
+}
+// the levels already set, shown on the zoomed view
+function levelChips(a) {
+  const l = (S.levels || []).find((x) => x.asset === a);
+  if (!l) return '';
+  return `<div class="zlv">${l.above != null ? `<span>🔔 ≥ ${levelText(a, l.above)}</span>` : ''}${l.below != null ? `<span>🔔 ≤ ${levelText(a, l.below)}</span>` : ''}</div>`;
+}
 
 // ---------------------------------------------------------------- preset buttons: what 1-4 do depends on the page
 
 function presetButton(n) {
   if (setMode) return;
+  if (alertEdit) { if (n === 4) alertClear(); return; }
   if (page === NEWS && n <= 2) return newsTopic(newsCat + (n === 1 ? 1 : -1));
   if (page === MARKETS) return marketZoom(n);
   if (page === ASK && n === 1) return briefingNow();
@@ -230,6 +283,7 @@ function presetButton(n) {
   if (page === FOCUS) return pomoSet([15, 25, 45, 60][n - 1]);
   if (page === PHONE && n === 3) return togglePrivacy(); // 1 and 2 are held keys, see the keydown handler
   if (page === PHONE && n === 4) return replyBySiri();
+  if (page === WORDS) return n === 1 ? wordGrade(true) : n === 2 ? wordGrade(false) : n === 3 ? wordsMore() : undefined;
 }
 
 // ---------------------------------------------------------------- alerts (banner on every page, history on Settings)
@@ -242,7 +296,7 @@ function renderAlerts() {
   if (alertSeen === null) alertSeen = newest ? newest.id : 0; // do not replay old alerts after a reload
   if (newest && newest.id > alertSeen) {
     alertSeen = newest.id;
-    showBanner(newest.dir, `${{ up: '▲', down: '▼', sec: '⚠', rain: '☔', ci: '✖', desk: '🧍', remind: '⏰' }[newest.dir] || '•'} ${newest.text}`, 30000);
+    showBanner(newest.dir, `${{ up: '▲', down: '▼', sec: '⚠', rain: '☔', ci: '✖', desk: '🧍', remind: '⏰', net: '🌐' }[newest.dir] || '•'} ${newest.text}`, 30000);
   }
 }
 function showBanner(cls, text, ms) {
@@ -595,7 +649,7 @@ function areaChart(values, w, h, lo, hi) {
 function srvHistory() {
   const h = S.history;
   if (!h) return `<div class="srv-empty">${tr('No history yet.')}</div>`;
-  const col = (key, name) => {
+  const col = (key, name, extra = '') => {
     const d = h[key] || {};
     const row = (k, label, fmt, lo, hi) => {
       const vals = (d[k] || []).filter((x) => x != null);
@@ -608,9 +662,15 @@ function srvHistory() {
       ${row('cpu', 'CPU', (v) => `${num(v, 0)}%`, 0, 100)}
       ${row('mem', 'Memory', (v) => `${num(v, 0)}%`, 0, 100)}
       ${row('temp', 'Temp', degF, 0, 100)}
+      ${extra}
       <div class="hg-x"><span>${tr('24 h ago')}</span><span>${tr('12 h')}</span><span>${tr('now')}</span></div></div>`;
   };
-  return col('server2', 'Server 2') + col('server1', 'Server 1');
+  const n = S.net && S.net.hist;
+  const lat = n ? n.ms.filter((x) => x != null) : [];
+  const internet = n ? `<div class="hg"><div class="hg-k">Internet<b>${S.net.ok ? `${S.net.ms} ms` : tr('down')}</b>`
+    + `<small>${lat.length ? tr('peak {v}', { v: `${Math.max(...lat)} ms` }) : ''}${n.loss.some((x) => x) ? ` · ${tr('{n}% lost', { n: Math.max(...n.loss.filter((x) => x != null)) })}` : ''}</small></div>`
+    + `<div class="hg-c">${areaChart(n.ms, 300, 70, 0, Math.max(100, ...lat))}</div></div>` : '';
+  return col('server2', 'Server 2', internet) + col('server1', 'Server 1');
 }
 
 function srvSecurity() {
@@ -680,6 +740,7 @@ function renderServersNow() {
     setHTML($('srv2'), `
       <div class="head"><div><b>Server 2</b> <span>${s2.ip} · ${tr('laptop')}</span></div><span class="state up">${tr('Online')}</span></div>
       ${statsBlock(s2, s2.battery != null ? meter('Battery', s2.battery / 100, `${s2.battery}%`, true) : '')}
+      ${netLine()}
       ${containersBlock(s2.containers)}`);
   }
   const s1 = S.servers.server1;
@@ -693,6 +754,13 @@ function renderServersNow() {
       ${containersBlock(st && st.containers)}`);
   }
   renderCarThingHealth();
+}
+
+// the internet line, measured by the hub every 30 s (TCP connect to 1.1.1.1 / 8.8.8.8)
+function netLine() {
+  const n = S.net;
+  if (!n) return '';
+  return `<div class="kv"><span>Internet</span><b class="${n.ok ? '' : 'bad'}">${n.ok ? `${n.ms} ms` : tr('down since {t}', { t: timeOf(n.downSince || n.at) })}</b></div>`;
 }
 
 // the Car Thing itself, read over SSH from server 2 every 2 minutes (tools/carthing-stats.sh)
@@ -959,6 +1027,40 @@ function lyricTick() {
   if (p.playing && i + 1 < lyr.lines.length) lyTimer = setTimeout(lyricTick, Math.max(120, (lyr.lines[i + 1].t - p.pos) * 1000));
 }
 
+// desk clock: after 10 quiet minutes the screen becomes a large clock with the weather, what is next on the
+// calendar and the phone's battery; the first touch or key only brings the page back
+const AMBIENT_MS = 10 * 60000;
+function ambientCheck() {
+  const amb = $('ambient');
+  const p = musicPos();
+  const busy = setMode || PH.call || PH.pairing || screenOff() || $('digest').classList.contains('on')
+    || (page === MUSIC && p && p.playing) || (S && S.voice && ['starting', 'listening', 'thinking', 'answer'].includes(S.voice.phase));
+  const want = !!S && !busy && Date.now() - lastInput > AMBIENT_MS;
+  if (want !== amb.classList.contains('on')) amb.classList.toggle('on', want);
+  if (want) renderAmbient();
+}
+function leaveAmbient() {
+  const amb = $('ambient');
+  if (!amb.classList.contains('on')) return false;
+  amb.classList.remove('on');
+  return true;
+}
+function renderAmbient() {
+  const d = new Date(now());
+  setText($('amTime'), dtf(loc(), { timeZone: tz(), hour: 'numeric', minute: '2-digit' }).format(d));
+  setText($('amDate'), dtf(loc(), { timeZone: tz(), weekday: 'long', day: 'numeric', month: 'long' }).format(d));
+  const bits = [];
+  const w = S.weather && S.weather.current;
+  if (w) {
+    const [desc, icon] = wmo(w.weather_code);
+    bits.push(`<span>${w.is_day ? icon : icon.replace('☀️', '🌙').replace('🌤️', '🌙')} ${num(deg(w.temperature_2m), 0)}${degSym()} · ${esc(tr(desc))}</span>`);
+  }
+  const next = calEvents().filter((e) => !e.allDay && e.start > now()).sort((a, b) => a.start - b.start)[0];
+  if (next) bits.push(`<span>📅 ${esc(next.title)} · ${untilText(next.start)}</span>`);
+  if (PH.connected && PH.battery != null) bits.push(`<span>📱 ${PH.battery}%</span>`);
+  setHTML($('amRow'), bits.join(''));
+}
+
 // immersive mode: after a few quiet seconds while music plays, the cover grows and the lyrics take the rest.
 // The first touch or key only leaves it.
 let lastInput = Date.now();
@@ -972,6 +1074,7 @@ function immersiveCheck() {
 }
 function leaveImmersive() {
   lastInput = Date.now();
+  if (leaveAmbient()) return true;
   const music = pages[MUSIC];
   if (!music.classList.contains('immersive')) return false;
   music.classList.remove('immersive');
@@ -1220,7 +1323,14 @@ $('digest').addEventListener('click', hideDigest);
 
 // ---- the iPhone page: what the phone got, newest first; clear one on the phone; Siri and the camera
 
-const CAT_ICON = { 1: '📞', 2: '☎', 3: '📮', 4: '💬', 5: '📅', 6: '✉️', 7: '📰', 8: '❤️', 9: '💼', 10: '📍', 11: '🎬' };
+// a letter on a colour taken from the app's name, instead of an emoji: colour emoji are slow to draw on this chip
+function appBadge(n) {
+  const name = n.app || '?';
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.codePointAt(0)) % 360;
+  return `<span class="ip-ic${n.cat === 2 ? ' call' : ''}" style="--h:${h}">${esc([...name][0].toUpperCase())}</span>`;
+}
+const SPEAKER = '<svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5v14l-4.5-4.5H4z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
 let ipSel = -1, ipConfirm = null, ipConfirmTimer = null;
 // the list on the iPhone page: "find my iPhone" first while the phone is connected, then its notifications
 const ipItems = () => (PH.connected ? [{ find: true }] : []).concat(PH.notes || []);
@@ -1246,16 +1356,19 @@ function renderIphone() {
     + (PH.connected && PH.battery != null ? `<span>🔋 ${PH.battery}%</span>` : '') + (privacy ? '<span>🙈</span>' : '') + '</div>');
   const items = ipItems();
   if (ipSel >= items.length) ipSel = items.length - 1;
-  setHTML(list, items.map((n, i) => (n.find
-    ? `<div class="ip-row find${i === ipSel ? ' sel' : ''}${finding ? ' on' : ''}" data-i="${i}"><span class="ip-ic">🔊</span><div class="ip-tx">`
+  // only the rows around the selection: the list shows about six, and every row costs layout when the page slides in
+  const from = Math.max(0, Math.min(ipSel - 3, items.length - 8));
+  setHTML(list, items.slice(from, from + 8).map((n, j) => [n, from + j]).map(([n, i]) => (n.find
+    ? `<div class="ip-row find${i === ipSel ? ' sel' : ''}${finding ? ' on' : ''}" data-i="${i}"><span class="ip-ic">${SPEAKER}</span><div class="ip-tx">`
       + `<div class="ip-ti">${tr(finding ? 'Stop the sound' : 'Find my iPhone')}</div><div class="ip-msg">${tr('Plays music loudly on the iPhone')} · ${phoneDistance()}</div></div></div>`
     : `<div class="ip-row${n.cat === 2 ? ' missed' : ''}${i === ipSel ? ' sel' : ''}${ipConfirm === n.uid ? ' confirm' : ''}" data-i="${i}">`
-      + `<span class="ip-ic">${CAT_ICON[n.cat] || '🔔'}</span><div class="ip-tx"><div class="ip-top"><b>${esc(n.app || '')}</b><span>${ago(noteMs(n))}</span></div>`
+      + `${appBadge(n)}<div class="ip-tx"><div class="ip-top"><b>${esc(n.app || '')}</b><span>${ago(noteMs(n))}</span></div>`
       + `<div class="ip-ti">${esc(n.title || '')}</div>${privacy || !n.msg ? '' : `<div class="ip-msg">${esc(n.msg)}</div>`}</div></div>`)).join('')
     + (PH.notes && PH.notes.length ? '' : `<div class="ip-empty">${tr(PH.connected ? 'No notifications' : 'The iPhone is not connected')}</div>`));
   pages[PHONE].classList.toggle('browsing', ipSel >= 0);
-  const sel = list.children[ipSel];
-  if (sel) sel.scrollIntoView({ block: 'nearest' });
+  // scrolling asks for a layout right away: only while choosing, never while the page is about to slide in
+  const sel = ipSel >= 0 && list.children[ipSel - from];
+  if (sel && !entering) sel.scrollIntoView({ block: 'nearest' });
 }
 function ipKnob(step) {
   const k = ipItems().length;
@@ -1688,6 +1801,7 @@ function setPage(i) {
   setEditing(false);
   if (setMode) setModeTo(null);
   if (zoom) { zoom = 0; renderZoom(); }
+  if (alertEdit) { alertEdit = null; renderAlertEdit(); }
   // the open story stays open behind Mei's page, so you can ask her about it
   if (page !== ASK && (newsSel >= 0 || newsDetail)) { closeDetail(); newsSel = -1; }
   const dir = page === prev ? 0 : (i > prev ? 1 : -1);
@@ -1719,6 +1833,7 @@ function toast(msg) {
 function knob(step) {
   if (PH.call || PH.pairing) return;
   if (setMode) return settingsKnob(step);
+  if (alertEdit) return alertKnob(step);
   if (page === NEWS && (newsSel >= 0 || newsDetail)) return newsKnob(step);
   if (page === PHONE && ipSel >= 0) return ipKnob(step);
   if (!editing) return setPage(page + step);
@@ -1729,6 +1844,7 @@ function knob(step) {
 
 function back() {
   if (setMode) return settingsBack();
+  if (alertEdit) { alertEdit = null; return renderAlertEdit(); }
   if (page === MARKETS && zoom) return marketZoom(zoom);
   if (page === NEWS && newsBack()) return;
   if (page === PHONE && ipBack()) return;
@@ -1738,11 +1854,13 @@ function back() {
 
 function press() {
   if (setMode) return settingsPress();
+  if (page === MARKETS && zoom) return alertEdit ? alertSave() : alertStart();
   if (page === ASK) askToggle();
   else if (page === NEWS) newsEnter();
   else if (page === MUSIC) setEditing(!editing); // volume mode; play/pause is button 2
   else if (page === FOCUS) pomoToggle();
   else if (page === PHONE) ipPress();
+  else if (page === WORDS) { wdFlip = !wdFlip; renderWords(); }
   else if (editing) setEditing(false);
 }
 
@@ -1794,16 +1912,50 @@ addEventListener('keydown', (e) => {
     if (page === PHONE && HOLD[n]) { if (!e.repeat && !held) { held = HOLD[n]; phonePost('/key', { key: held, down: true }); } return; }
     return presetButton(n);
   }
-  if (k === 'm' || k === 'M') return settingsButton(); // the round settings button, top right
-  if (isBack) return back();
-  if (k === 'Enter' || k === ' ') return press();
+  // the knob press, Back and the round settings button (top right) act when released, so that holding them
+  // can do something else (see LONG below)
+  const kind = keyKind(k);
+  if (kind) { if (!e.repeat && !pressing) pressing = { kind, long: false, timer: setTimeout(longPress, LONG_MS) }; return; }
   if (k === 'ArrowRight' || k === 'ArrowDown') return knob(1);
   if (k === 'ArrowLeft' || k === 'ArrowUp') return knob(-1);
 });
 
 const HOLD = { 1: 'siri', 2: 'shutter' };
 let held = null;
+
+// Held for 0.6 s: the knob plays or pauses music from any page, Back goes home to News, the round button
+// switches the screen off (any touch brings it back)
+const LONG_MS = 600;
+let pressing = null;
+const keyKind = (k) => (k === 'Enter' || k === ' ' ? 'enter' : k === 'm' || k === 'M' ? 'menu'
+  : k === 'Escape' || k === 'Backspace' || k === 'BrowserBack' || k === 'GoBack' ? 'back' : null);
+const SHORT = { enter: () => press(), back: () => back(), menu: () => settingsButton() };
+const LONG = {
+  enter() { musicAction('toggle'); toast('⏯'); },
+  back() {
+    if (setMode) setModeTo(null);
+    if (editing) setEditing(false);
+    if (zoom) { zoom = 0; renderZoom(); }
+    if (page !== NEWS) setPage(NEWS);
+  },
+  menu() {
+    if (setMode) setModeTo(null);
+    fetch('/api/display/away', { method: 'POST', body: '{"away":true}' }).catch(() => {});
+  },
+};
+function longPress() {
+  if (!pressing) return;
+  pressing.long = true;
+  LONG[pressing.kind]();
+}
 addEventListener('keyup', (e) => {
+  const kind = keyKind(e.key);
+  if (kind && pressing && pressing.kind === kind) {
+    clearTimeout(pressing.timer);
+    const p = pressing;
+    pressing = null;
+    if (!p.long) SHORT[kind]();
+  }
   if (held && /^[1-4]$/.test(e.key)) { phonePost('/key', { key: held, down: false }); held = null; }
 });
 
@@ -1842,6 +1994,7 @@ function tickClock() {
   musicProgress();
   if (PH.pairing) renderPairing();
   immersiveCheck();
+  ambientCheck();
   if (page === PHONE && new Date().getSeconds() % 30 === 0) renderIphone(); // "5m ago" labels
   if (S && page === ASK) renderAsk();
   if (S && page === CALENDAR && new Date().getSeconds() === 0) renderCalendar();
@@ -1859,7 +2012,42 @@ function renderDesk() {
     + `<div class="dk-week">${d.week.map((w, i) => `<div class="dk-day${i === 6 ? ' today' : ''}"><i style="height:${Math.round((w.minutes / max) * 40)}px"></i><span>${tr(w.day)}</span></div>`).join('')}</div>`);
 }
 
-const RENDER = { [FOCUS]: renderDesk, [NEWS]: renderNews, [MARKETS]: renderMarkets, [ASK]: renderAsk, [WEATHER]: renderWeather, [CALENDAR]: renderCalendar, [MUSIC]: renderMusic, [SERVERS]: renderServers, [PHONE]: renderIphone };
+// ---------------------------------------------------------------- words: vocabulary cards (the schedule is on the hub)
+let wdFlip = false, wdShown = null;
+function renderWords() {
+  const w = S.words, card = $('wdCard'), foot = $('wdFoot');
+  if (!w || !w.configured) { setHTML(card, `<div class="wd-empty">${tr('Vocabulary cards need GEMINI_API_KEY on the hub.')}</div>`); setHTML(foot, ''); return; }
+  const c = w.due[0];
+  if (!c) {
+    card.classList.remove('flip');
+    setHTML(card, `<div class="wd-empty"><b>${tr('All done for today 🎉')}</b><span>${tr('{n} words learned so far', { n: w.learned })}</span></div>`);
+    setHTML(foot, `<span><i class="kb">3</i>${tr('5 more words')}</span>`);
+    return;
+  }
+  if (wdShown !== c.id) { wdShown = c.id; wdFlip = false; }
+  card.classList.toggle('flip', wdFlip);
+  setHTML(card, `<div class="wd-word">${esc(c.word)}</div><div class="wd-ipa">${esc(c.ipa)}${c.pos ? ` · ${esc(tr(c.pos))}` : ''}</div>`
+    + (wdFlip
+      ? `<div class="wd-vi">${esc(c.vi)}</div><div class="wd-ex">${esc(c.ex)}</div><div class="wd-exvi">${esc(c.exVi)}</div>`
+      : `<div class="wd-hint">${tr('Press the knob to see the meaning')}</div>`));
+  setHTML(foot, `<span>${tr('{n} left today', { n: w.left })}</span><span><i class="kb">1</i>${tr('Knew it')}</span>`
+    + `<span><i class="kb">2</i>${tr('Not yet')}</span><span><i class="kb">3</i>${tr('5 more words')}</span>`);
+}
+function wordGrade(known) {
+  const c = S.words && S.words.due[0];
+  if (!c) return;
+  // move on at once; the hub sends the new list (a forgotten word comes back at the end)
+  S.words.due.shift();
+  S.words.left = Math.max(0, S.words.left - 1);
+  wdShown = null;
+  renderWords();
+  fetch('/api/words/grade', { method: 'POST', body: JSON.stringify({ id: c.id, known }) }).catch(() => {});
+}
+function wordsMore() {
+  fetch('/api/words/more', { method: 'POST' }).then((r) => toast(tr(r.ok ? 'Fetching 5 more words…' : 'Only the Car Thing can do this'))).catch(() => {});
+}
+
+const RENDER = { [WORDS]: renderWords, [FOCUS]: renderDesk, [NEWS]: renderNews, [MARKETS]: renderMarkets, [ASK]: renderAsk, [WEATHER]: renderWeather, [CALENDAR]: renderCalendar, [MUSIC]: renderMusic, [SERVERS]: renderServers, [PHONE]: renderIphone };
 function render() {
   if (!S) return;
   applyLang();

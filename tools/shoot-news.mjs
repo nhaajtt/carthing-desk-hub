@@ -9,7 +9,7 @@ const call = (method, params = {}) => new Promise((r) => { wait[++id] = r; ws.se
 ws.onmessage = (m) => { const d = JSON.parse(m.data); if (wait[d.id]) wait[d.id](d.result); };
 await new Promise((r) => (ws.onopen = r));
 const ev = (expression) => call('Runtime.evaluate', { expression, returnByValue: true }).then((r) => r.result?.value);
-const key = (k) => ev(`dispatchEvent(new KeyboardEvent('keydown', {key: '${k}'})), 1`);
+const key = (k) => ev(`dispatchEvent(new KeyboardEvent('keydown', {key: '${k}'})), dispatchEvent(new KeyboardEvent('keyup', {key: '${k}'})), 1`);
 const shot = async (name) => { const r = await call('Page.captureScreenshot', { format: 'png' }); fs.writeFileSync(`/t/shots/${name}.png`, Buffer.from(r.data, 'base64')); console.log('saved', name); };
 const before = await ev("localStorage.getItem('orient') || 'land'");
 await ev("localStorage.setItem('orient', 'land'), location.reload(), 1"); await sleep(9000);

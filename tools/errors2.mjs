@@ -15,6 +15,6 @@ await call('Runtime.enable');
 const ev = (expression) => call('Runtime.evaluate', { expression, returnByValue: true }).then((r) => r.result?.value);
 await ev(`localStorage.setItem('orient', '${orient}'), 1`);
 await call('Page.reload'); await new Promise((r) => setTimeout(r, 8000));
-for (const k of keys) { await ev(`dispatchEvent(new KeyboardEvent('keydown', {key: '${k}'})), 1`); await new Promise((r) => setTimeout(r, 1500)); }
+for (const k of keys) { await ev(`dispatchEvent(new KeyboardEvent('keydown', {key: '${k}'})), dispatchEvent(new KeyboardEvent('keyup', {key: '${k}'})), 1`); await new Promise((r) => setTimeout(r, 1500)); }
 console.log('page now', await ev('page'), 'orient', await ev('document.body.dataset.orient'));
 process.exit(0);

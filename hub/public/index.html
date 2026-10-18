@@ -51,6 +51,7 @@
         </div>
         </div>
       <div class="mzoom" id="mzoom"></div>
+      <div class="alert-edit" id="alertEdit"></div>
     </section>
 
     <!-- 3. Weather -->
@@ -126,7 +127,13 @@
       </div>
     </section>
 
-    <!-- 9. Mei, the desk cat (voice assistant) -->
+    <!-- 9. Words: vocabulary cards, reviewed on a Leitner schedule kept on the hub -->
+    <section class="page words" data-name="Words">
+      <div class="wd-card" id="wdCard"></div>
+      <div class="wd-foot" id="wdFoot"></div>
+    </section>
+
+    <!-- 10. Mei, the desk cat (voice assistant) -->
     <section class="page ask" data-name="Mei" data-phase="idle">
       <div class="ask-head"><div class="ask-name">Mei <span class="ask-chip" id="askChip">ready</span></div><div class="ask-sub" data-t="your desk cat · powered by Gemini">your desk cat · powered by Gemini</div></div>
       <div class="ask-hello" id="askHello"><span data-t="Hi! I'm Mei 🐾">Hi! I'm Mei 🐾</span><small data-t="Ask me about prices, the weather, your servers… or anything at all.">Ask me about prices, the weather, your servers… or anything at all.</small></div>
@@ -200,6 +207,8 @@
   </div>
   <!-- back at the desk: what the iPhone got while you were away -->
   <div class="digest" id="digest"><div class="dg-card" id="dgCard"></div></div>
+  <!-- desk clock after 10 quiet minutes -->
+  <div class="ambient" id="ambient"><div class="am-time" id="amTime"></div><div class="am-date" id="amDate"></div><div class="am-row" id="amRow"></div></div>
   <div class="alert-banner" id="alertBanner"></div>
   <div class="toast" id="toast"></div>
 </div>

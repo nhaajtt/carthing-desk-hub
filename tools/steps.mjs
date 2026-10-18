@@ -20,7 +20,7 @@ await call('Runtime.enable');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 for (let [op, arg] of JSON.parse(json.trim().startsWith('[') ? json : fs.readFileSync(json, 'utf8'))) {
   if (op === 'evalfile') { op = 'eval'; arg = fs.readFileSync(arg, 'utf8'); }
-  if (op === 'key') await call('Runtime.evaluate', { expression: `dispatchEvent(new KeyboardEvent('keydown', {key: ${JSON.stringify(arg)}})), 1` });
+  if (op === 'key') await call('Runtime.evaluate', { expression: `dispatchEvent(new KeyboardEvent('keydown', {key: ${JSON.stringify(arg)}})), dispatchEvent(new KeyboardEvent('keyup', {key: ${JSON.stringify(arg)}})), 1` });
   if (op === 'eval') { const r = await call('Runtime.evaluate', { expression: arg, returnByValue: true, awaitPromise: true }); console.log('=>', JSON.stringify(r.result?.value ?? r.exceptionDetails?.text ?? null)); }
   if (op === 'wait') await sleep(arg);
   if (op === 'reload') { await call('Page.reload'); await sleep(arg || 8000); }

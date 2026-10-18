@@ -11,7 +11,7 @@ ws.onmessage = (m) => { const d = JSON.parse(m.data); if (wait[d.id]) wait[d.id]
 await new Promise((r) => (ws.onopen = r));
 const ev = (expression) => call('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }).then((r) => r.result?.value);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const key = (k) => ev(`dispatchEvent(new KeyboardEvent('keydown', {key: '${k}'})), 1`);
+const key = (k) => ev(`dispatchEvent(new KeyboardEvent('keydown', {key: '${k}'})), dispatchEvent(new KeyboardEvent('keyup', {key: '${k}'})), 1`);
 const shot = async (name, clip) => {
   const r = await call('Page.captureScreenshot', { format: 'png', ...(clip ? { clip: { ...clip, scale: 1 }, captureBeyondViewport: true } : {}) });
   fs.writeFileSync(`${OUT}/${name}.png`, Buffer.from(r.data, 'base64'));

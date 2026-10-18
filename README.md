@@ -33,7 +33,7 @@ The Car Thing never touches the internet. It only talks to the hub, the hub only
 | ⏱ **Focus** | A Pomodoro timer: buttons 1–4 set 15, 25, 45 or 60 minutes. Below it, **time at the desk** today and over the week, counted from the iPhone's presence, with a nudge to stand up after an hour without a break. |
 | ⚙️ **Quick menu** | The round button opens screen brightness, restart, shut down, rotate (each press turns the screen another 90°), language and iPhone (pair, or forget the paired one). |
 | 🇻🇳 **English / Tiếng Việt** | The language tile switches the whole screen: pages, hints, dates and the clock, the banners the hub raises, and Mei's morning briefing. |
-| 🌙 **Night** | From 23:00 to 06:30 the backlight goes off. Touch anything and it lights up for two minutes; that first touch only wakes the screen. |
+| 🌙 **Screen off** | Hold the round button to switch the screen off; touch anything to bring it back (that first touch only wakes it). An automatic night window (`NIGHT_DIM`) is available but off by default. |
 | 🔌 **Self-healing** | If the hub goes quiet the screen says so and keeps reconnecting, and it reloads itself when the hub comes back with new code. A watcher on the device restarts the kiosk if it got stuck on an error page, and the hardware watchdog reboots it if it ever freezes. |
 
 ### Controls
