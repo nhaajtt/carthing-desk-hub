@@ -2,10 +2,15 @@ package main
 
 // Since iOS 18, Settings → Bluetooth no longer lists accessories that only ask for notifications, but it still
 // lists Bluetooth remotes. So the Car Thing also presents itself as a media remote (HID over GATT, consumer
-// controls only: no keyboard, so the iPhone keeps its on-screen keyboard). It never sends a key press;
-// the remote is only the way in. Its report map can only be read over an authenticated (code-paired) link.
+// controls only: no keyboard, so the iPhone keeps its on-screen keyboard). Its report map can only be read over
+// an authenticated (code-paired) link. Two keys are ever sent, and only while a button is held on the iPhone
+// page: Siri (voice command) and volume up, which takes a photo in the Camera app.
 
 import (
+	"fmt"
+	"sync"
+	"time"
+
 	"github.com/godbus/dbus/v5"
 	"github.com/godbus/dbus/v5/prop"
 )
@@ -17,12 +22,54 @@ const (
 	ifDesc     = "org.bluez.GattDescriptor1"
 )
 
-// consumer control, report 1: play/pause, next, previous, volume up, volume down, mute, 2 bits padding
+// consumer control, report 1: play/pause, next, previous, volume up, volume down, mute, voice command,
+// 1 bit padding. The bit numbers below follow this order.
 var reportMap = []byte{
 	0x05, 0x0c, 0x09, 0x01, 0xa1, 0x01, 0x85, 0x01,
-	0x15, 0x00, 0x25, 0x01, 0x75, 0x01, 0x95, 0x06,
-	0x09, 0xcd, 0x09, 0xb5, 0x09, 0xb6, 0x09, 0xe9, 0x09, 0xea, 0x09, 0xe2,
-	0x81, 0x02, 0x95, 0x02, 0x81, 0x03, 0xc0,
+	0x15, 0x00, 0x25, 0x01, 0x75, 0x01, 0x95, 0x07,
+	0x09, 0xcd, 0x09, 0xb5, 0x09, 0xb6, 0x09, 0xe9, 0x09, 0xea, 0x09, 0xe2, 0x09, 0xcf,
+	0x81, 0x02, 0x95, 0x01, 0x81, 0x03, 0xc0,
+}
+
+const (
+	keyVolumeUp = 3
+	keySiri     = 6
+	keyHoldMax  = 10 * time.Second // a key the page forgot to release lets go by itself
+)
+
+var (
+	reportProps *prop.Properties
+	keyMu       sync.Mutex
+	keyBits     byte
+	keyTimer    *time.Timer
+)
+
+// sendKey presses or releases one key on the remote; the phone gets the new report as a notification
+func sendKey(bit uint, down bool) error {
+	if reportProps == nil {
+		return fmt.Errorf("remote not ready")
+	}
+	mu.Lock()
+	connected := st.Connected
+	mu.Unlock()
+	if !connected {
+		return fmt.Errorf("iPhone not connected")
+	}
+	keyMu.Lock()
+	defer keyMu.Unlock()
+	if down {
+		keyBits |= 1 << bit
+	} else {
+		keyBits &^= 1 << bit
+	}
+	if keyTimer != nil {
+		keyTimer.Stop()
+	}
+	if keyBits != 0 {
+		keyTimer = time.AfterFunc(keyHoldMax, func() { sendKey(bit, false) })
+	}
+	reportProps.SetMust(ifChar, "Value", []byte{keyBits})
+	return nil
 }
 
 type gattObj struct {
@@ -83,8 +130,16 @@ func exportGatt() error {
 		for k, v := range o.props {
 			m[o.iface][k] = &prop.Prop{Value: v}
 		}
-		if _, err := prop.Export(conn, o.path, m); err != nil {
+		if o == report {
+			// a changed Value is what BlueZ sends to the phone as a key report
+			m[o.iface]["Value"] = &prop.Prop{Value: []byte{0}, Emit: prop.EmitTrue}
+		}
+		p, err := prop.Export(conn, o.path, m)
+		if err != nil {
 			return err
+		}
+		if o == report {
+			reportProps = p
 		}
 	}
 	return nil

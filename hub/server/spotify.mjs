@@ -143,6 +143,9 @@ export function createSpotify({ state, changed, stateDir }) {
         pl.isPlaying = !pl.isPlaying;
         break;
       }
+      // explicit pause / play: the screen pauses Spotify during a phone call and resumes it after
+      case 'pause': if (pl?.isPlaying) { await api('PUT', '/me/player/pause'); pl.isPlaying = false; } break;
+      case 'play': if (pl && !pl.isPlaying) { await api('PUT', '/me/player/play'); pl.isPlaying = true; } break;
       case 'next': await api('POST', '/me/player/next'); break;
       case 'prev': await api('POST', '/me/player/previous'); break;
       case 'volume': {

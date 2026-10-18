@@ -114,7 +114,15 @@ const VI = {
   '{s} s left · Back to cancel': 'còn {s} giây · Back để huỷ',
   'Press the knob again to forget this iPhone · Back to cancel': 'Bấm núm lần nữa để quên iPhone này · Back để huỷ',
   Phone: 'Điện thoại', 'Unknown caller': 'Không rõ người gọi', Answer: 'Nghe', Decline: 'Từ chối',
-  'Liking works with Spotify only': 'Chỉ thả tim được với Spotify',
+  'Siri (hold)': 'Siri (giữ)', 'Camera shutter': 'Chụp ảnh', 'Hide messages': 'Ẩn tin nhắn', 'Show messages': 'Hiện tin nhắn',
+  'Messages hidden on this screen': 'Đã ẩn nội dung tin nhắn trên màn hình này', 'Messages shown': 'Đã hiện nội dung tin nhắn',
+  'At the desk': 'Ở bàn', Away: 'Đi vắng', 'Not connected': 'Chưa kết nối', 'Only on the Car Thing': 'Chỉ có trên Car Thing',
+  'No iPhone paired': 'Chưa ghép iPhone', 'Press the knob to pair your iPhone': 'Bấm núm để ghép iPhone',
+  'No notifications': 'Không có thông báo', 'The iPhone is not connected': 'iPhone chưa kết nối',
+  'Press again to clear it on the iPhone': 'Bấm lần nữa để xoá trên iPhone', 'Cleared on the iPhone': 'Đã xoá trên iPhone',
+  'While you were away': 'Trong lúc bạn đi', 'Missed calls': 'Cuộc gọi nhỡ', 'Any button closes this': 'Bấm nút bất kỳ để đóng',
+  'Good morning 👋': 'Chào buổi sáng 👋', 'Good afternoon 👋': 'Chào buổi chiều 👋', 'Good evening 👋': 'Chào buổi tối 👋',
+  'iPhone battery at {n}%': 'Pin iPhone còn {n}%', 'iPhone is fully charged: you can unplug it': 'iPhone đã đầy pin, có thể rút sạc',
   'The Bluetooth helper is not running': 'Chương trình Bluetooth trên Car Thing chưa chạy',
 
   // offline card

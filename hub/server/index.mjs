@@ -14,6 +14,7 @@ import { createSecurity } from './security.mjs';
 import { createRegistry } from './registry.mjs';
 import { createGitHub } from './github.mjs';
 import { cover } from './covers.mjs';
+import { lyrics } from './lyrics.mjs';
 
 const PORT = Number(process.env.PORT || 8787);
 const LAT = Number(process.env.LAT || 37.3382);
@@ -619,7 +620,7 @@ const server = http.createServer((req, res) => {
   // plain-text percentage, polled by the sync script on the Car Thing
   if (url.pathname === '/api/brightness' && req.method === 'GET') {
     res.setHeader('Content-Type', 'text/plain');
-    return res.end(String(state.display.night?.dark ? 0 : state.display.brightness));
+    return res.end(String(state.display.night?.dark || state.display.away ? 0 : state.display.brightness));
   }
 
   // screen language, chosen in the quick menu: 'en' or 'vi'
@@ -641,6 +642,18 @@ const server = http.createServer((req, res) => {
     if (!fromCarThing(req)) { res.writeHead(403); return res.end(); }
     if (state.display.night?.active) { wakeUntil = Date.now() + WAKE_MS; updateNight(); }
     return res.end('ok');
+  }
+
+  // the paired iPhone left the desk (or came back): the screen goes off until it returns or is touched
+  if (url.pathname === '/api/display/away' && req.method === 'POST') {
+    if (!fromCarThing(req)) { res.writeHead(403); return res.end(); }
+    readRaw(req, 100).then((b) => {
+      let away = false;
+      try { away = JSON.parse(b.toString() || '{}').away === true; } catch {}
+      if (state.display.away !== away) { state.display.away = away; changed(); }
+      res.end(String(away));
+    }).catch(() => { res.writeHead(413); res.end(); });
+    return;
   }
 
   if (url.pathname === '/api/brightness' && req.method === 'POST') {
@@ -678,17 +691,27 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // timed lyrics for what is playing (LRCLIB)
+  if (url.pathname === '/api/media/lyrics') {
+    if (!fromCarThing(req)) { res.writeHead(403); return res.end(); }
+    const q = url.searchParams;
+    lyrics(q.get('t'), q.get('a'), q.get('al'), q.get('d'))
+      .then((l) => { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'max-age=86400' }); res.end(JSON.stringify(l)); })
+      .catch(() => { res.writeHead(502); res.end('null'); });
+    return;
+  }
+
   // picture for what the paired iPhone plays; only the Car Thing knows what that is
   if (url.pathname === '/api/media/cover') {
     if (!fromCarThing(req)) { res.writeHead(403); return res.end(); }
     const q = url.searchParams;
-    cover(q.get('app') || '', q.get('t') || '', q.get('a') || '')
+    cover(q.get('app') || '', q.get('t') || '', q.get('a') || '', q.get('al') || '')
       .then((a) => { res.writeHead(200, { 'Content-Type': a.type, 'Cache-Control': 'max-age=86400' }); res.end(a.buf); })
       .catch(() => { res.writeHead(404); res.end(); });
     return;
   }
 
-  const sp = url.pathname.match(/^\/api\/spotify\/(toggle|next|prev|volume|like)$/);
+  const sp = url.pathname.match(/^\/api\/spotify\/(toggle|pause|play|next|prev|volume|like)$/);
   if (sp && req.method === 'POST') {
     if (!fromCarThing(req)) { res.writeHead(403); return res.end(); }
     readRaw(req, 500)

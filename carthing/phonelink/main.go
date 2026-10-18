@@ -29,6 +29,8 @@ type Note struct {
 	Sub    string `json:"sub,omitempty"`
 	Msg    string `json:"msg,omitempty"`
 	At     int64  `json:"at"`
+	Date   string `json:"date,omitempty"` // when the phone got it, "yyyyMMddTHHmmSS" in the phone's local time
+	Old    bool   `json:"old,omitempty"`  // already on the phone when it connected
 	bundle string
 }
 
@@ -44,6 +46,14 @@ type Media struct {
 	At       int64   `json:"at"`
 	Volume   float64 `json:"volume"` // 0..1
 	Cmds     []int   `json:"cmds"`   // remote commands the playing app accepts
+	Queue    Queue   `json:"queue"`
+}
+
+type Queue struct {
+	Index   int `json:"index"` // 0-based position in the queue
+	Count   int `json:"count"`
+	Shuffle int `json:"shuffle"` // 0 off, 1 one, 2 all
+	Repeat  int `json:"repeat"`  // 0 off, 1 one, 2 all
 }
 
 type Pairing struct {
@@ -57,6 +67,8 @@ type State struct {
 	Connected bool     `json:"connected"`
 	Name      string   `json:"name,omitempty"`
 	Battery   *int     `json:"battery,omitempty"`
+	RSSI      *int     `json:"rssi,omitempty"` // smoothed signal strength of the link, dBm
+	Near      bool     `json:"near"`           // the phone is at the desk (see rssi.go)
 	Pairing   *Pairing `json:"pairing,omitempty"`
 	Media     *Media   `json:"media,omitempty"`
 	Call      *Note    `json:"call,omitempty"`
@@ -163,6 +175,23 @@ func serve(addr, origin string) {
 		}
 		return mediaCommand(byte(n))
 	})
+	post("/note/clear", func(v map[string]any) error {
+		uid, ok := v["uid"].(float64)
+		if !ok {
+			return fmt.Errorf("bad uid")
+		}
+		return clearNote(uint32(uid))
+	})
+	post("/key", func(v map[string]any) error {
+		down, _ := v["down"].(bool)
+		switch v["key"] {
+		case "siri":
+			return sendKey(keySiri, down)
+		case "shutter":
+			return sendKey(keyVolumeUp, down)
+		}
+		return fmt.Errorf("bad key")
+	})
 	post("/call", func(v map[string]any) error {
 		switch v["action"] {
 		case "answer":
@@ -212,11 +241,14 @@ func main() {
 	origin := flag.String("origin", "http://10.42.1.6:8787", "the hub page allowed to read and control")
 	flag.StringVar(&savePath, "state", "/var/lib/hub/phonelink.json", "where the paired phone's address is kept")
 	pidfile := flag.String("pidfile", "/run/hub-phone.pid", "")
+	flag.IntVar(&nearDBm, "near", -62, "signal strength (dBm) above which the phone counts as at the desk")
+	flag.IntVar(&farDBm, "far", -78, "signal strength (dBm) below which the phone counts as away")
 	flag.Parse()
 	log.SetFlags(log.LstdFlags)
 	takePidfile(*pidfile)
 
 	go broadcast()
+	go watchSignal()
 	go func() {
 		for {
 			if err := runBluetooth(); err != nil {

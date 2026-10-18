@@ -3,7 +3,7 @@
 const $ = (id) => document.getElementById(id);
 const pages = [...document.querySelectorAll('.page')];
 // page order: News, Markets, Weather, Calendar, Music, Servers, Focus, Mei (Ask). Settings is a pop-up menu, not a page.
-const NEWS = 0, MARKETS = 1, WEATHER = 2, CALENDAR = 3, MUSIC = 4, SERVERS = 5, FOCUS = 6, ASK = 7;
+const NEWS = 0, MARKETS = 1, WEATHER = 2, CALENDAR = 3, MUSIC = 4, SERVERS = 5, FOCUS = 6, PHONE = 7, ASK = 8;
 let page = 0;
 let editing = false;
 let S = null;
@@ -228,6 +228,7 @@ function presetButton(n) {
   if (page === SERVERS) { srvView = n - 1; return renderServers(); }
   if (page === MUSIC) return musicAction(['prev', 'toggle', 'next', 'like'][n - 1]);
   if (page === FOCUS) return pomoSet([15, 25, 45, 60][n - 1]);
+  if (page === PHONE && n === 3) return togglePrivacy(); // 1 and 2 are held keys, see the keydown handler
 }
 
 // ---------------------------------------------------------------- alerts (banner on every page, history on Settings)
@@ -769,6 +770,9 @@ const ICON = {
   pause: '<svg viewBox="0 0 24 24"><rect x="6" y="5" width="4.2" height="14" rx="1.4" fill="currentColor"/><rect x="13.8" y="5" width="4.2" height="14" rx="1.4" fill="currentColor"/></svg>',
   heart: '<svg viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-7.5-10.1A4.2 4.2 0 0 1 12 7.6a4.2 4.2 0 0 1 7.5 2.3C19.5 15.4 12 20 12 20z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>',
   hearted: '<svg viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-7.5-10.1A4.2 4.2 0 0 1 12 7.6a4.2 4.2 0 0 1 7.5 2.3C19.5 15.4 12 20 12 20z" fill="currentColor"/></svg>',
+  shuffle: '<svg viewBox="0 0 24 24"><path d="M4 7h3.5c4 0 5 10 9 10H20M4 17h3.5c1.6 0 2.7-1.6 3.6-3.6M13 9.6C13.9 8 15 7 16.5 7H20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M17.5 4.5 20 7l-2.5 2.5M17.5 14.5 20 17l-2.5 2.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  repeat: '<svg viewBox="0 0 24 24"><path d="M5 11V9.5A2.5 2.5 0 0 1 7.5 7H19M19 13v1.5a2.5 2.5 0 0 1-2.5 2.5H5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M16.5 4.5 19 7l-2.5 2.5M7.5 19.5 5 17l2.5-2.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  repeat1: '<svg viewBox="0 0 24 24"><path d="M5 11V9.5A2.5 2.5 0 0 1 7.5 7H19M19 13v1.5a2.5 2.5 0 0 1-2.5 2.5H5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M16.5 4.5 19 7l-2.5 2.5M7.5 19.5 5 17l2.5-2.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><text x="12" y="14.6" font-size="7" font-weight="800" text-anchor="middle" fill="currentColor">1</text></svg>',
 };
 const setIcon = (el, name) => { if (el.dataset.icon !== name) { el.innerHTML = ICON[name]; el.dataset.icon = name; } };
 setIcon($('mPlay'), 'play');
@@ -806,16 +810,142 @@ function renderPhoneMusic(m) {
   const sp = S && S.spotify && S.spotify.player;
   const art = sp && sp.art && sp.title === m.title
     ? `/api/spotify/art?u=${encodeURIComponent(sp.art)}`
-    : `/api/media/cover?${new URLSearchParams({ app: m.app || '', t: m.title, a: m.artist || '' })}`;
-  if (art !== shownArt) { shownArt = art; $('mArt').style.backgroundImage = art ? `url("${art}")` : 'none'; }
+    : `/api/media/cover?${new URLSearchParams({ app: m.app || '', t: m.title, a: m.artist || '', al: m.album || '' })}`;
+  if (art !== shownArt) { shownArt = art; $('mArt').style.backgroundImage = art ? `url("${art}")` : 'none'; tintFrom(art); }
   setText($('mTitle'), m.title);
   setText($('mArtist'), m.artist);
   setText($('mAlbum'), m.album);
   setIcon($('mPlay'), m.state === 1 ? 'pause' : 'play');
-  setIcon($('mLike'), 'heart');
-  $('mLike').parentElement.classList.remove('on');
+  // button 4 shuffles on the phone (liking is a Spotify thing); repeat is the chip next to it
+  const q = m.queue || {};
+  setIcon($('mLike'), 'shuffle');
+  $('mLike').parentElement.classList.toggle('on', !!q.shuffle);
+  setHTML($('mQueue'), `${q.count > 1 ? `<span>${q.index + 1} / ${q.count}</span>` : ''}`
+    + `<span class="q${q.shuffle ? ' on' : ''}" data-q="8">${ICON.shuffle}</span>`
+    + `<span class="q${q.repeat ? ' on' : ''}" data-q="7">${q.repeat === 1 ? ICON.repeat1 : ICON.repeat}</span>`);
   setText($('mDev'), `${PH.name || 'iPhone'}${m.app ? ` · ${m.app}` : ''} · ${tr('volume {v}%', { v: Math.round(m.volume * 100) })}`);
   musicProgress();
+  loadLyrics();
+  lyricTick();
+}
+
+// where the song is now (seconds), how long it is, and whether it is moving
+function musicPos() {
+  const m = musicSource() === 'phone' && phoneMedia();
+  if (m) return { pos: Math.min(m.duration, m.elapsed + (m.state === 1 ? (m.rate || 1) * (Date.now() - m.at) / 1000 : 0)), dur: m.duration, playing: m.state === 1 };
+  const sp = S && S.spotify, p = sp && sp.player;
+  if (!p) return null;
+  return { pos: Math.min(p.duration, p.progress + (p.isPlaying ? now() - sp.at : 0)) / 1000, dur: p.duration / 1000, playing: p.isPlaying };
+}
+function trackInfo() {
+  const m = musicSource() === 'phone' && phoneMedia();
+  if (m) return { title: m.title, artist: m.artist, album: m.album, dur: m.duration };
+  const p = S && S.spotify && S.spotify.player;
+  return p ? { title: p.title, artist: p.artist, album: p.album, dur: p.duration / 1000 } : null;
+}
+
+// the Music page takes its colours from the cover: drawn once, 12 × 12, into a canvas. Covers come through
+// the hub (same origin), so the canvas can be read.
+let tintOf = null;
+function tintFrom(url) {
+  const music = pages[MUSIC];
+  if (url === tintOf) return;
+  tintOf = url;
+  if (!url) { music.style.removeProperty('--np'); music.style.removeProperty('--np-2'); return; }
+  const img = new Image();
+  img.onload = () => {
+    if (tintOf !== url) return;
+    const c = document.createElement('canvas');
+    c.width = c.height = 12;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    g.drawImage(img, 0, 0, 12, 12);
+    const d = g.getImageData(0, 0, 12, 12).data;
+    let r = 0, gr = 0, b = 0, w = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      const wt = 1 + (Math.max(d[i], d[i + 1], d[i + 2]) - Math.min(d[i], d[i + 1], d[i + 2])) / 24; // colour beats grey
+      r += d[i] * wt; gr += d[i + 1] * wt; b += d[i + 2] * wt; w += wt;
+    }
+    const [h, s] = hsl(r / w, gr / w, b / w);
+    music.style.setProperty('--np', `hsl(${h} ${Math.max(50, s)}% 62%)`);
+    music.style.setProperty('--np-2', `hsl(${h} ${Math.max(45, s)}% 24%)`);
+  };
+  img.src = url;
+}
+function hsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+  if (!d) return [0, 0];
+  const s = d / (1 - Math.abs(2 * l - 1));
+  const h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [Math.round((h * 60 + 360) % 360), Math.round(s * 100)];
+}
+
+// lyrics (LRCLIB through the hub), shown in immersive mode. The current line lights up and the column moves
+// with one transform per line: a timer wakes up when the next line is due, nothing runs per frame.
+let lyr = { key: '', lines: null, synced: false }, lyIdx = -2, lyTimer = null;
+function loadLyrics() {
+  const t = trackInfo();
+  const key = t ? `${t.title}\n${t.artist}` : '';
+  if (key === lyr.key) return;
+  lyr = { key, lines: null, synced: false };
+  lyIdx = -2;
+  lyricsEmpty();
+  if (!t || !onCarThing) return;
+  fetch(`/api/media/lyrics?${new URLSearchParams({ t: t.title, a: t.artist || '', al: t.album || '', d: Math.round(t.dur || 0) })}`)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((l) => {
+      if (lyr.key !== key || !l || !l.lines.length) return;
+      lyr = { key, lines: l.lines, synced: l.synced };
+      $('mLyCol').innerHTML = l.lines.map((x) => `<div class="ly">${esc(x.text) || '♪'}</div>`).join('');
+      $('mLyCol').style.transform = '';
+      lyIdx = -2;
+      lyricTick();
+    })
+    .catch(() => {});
+}
+// no lyrics: the title and artist, large
+function lyricsEmpty() {
+  const t = trackInfo();
+  $('mLyCol').innerHTML = t ? `<div class="ly on big">${esc(t.title)}</div><div class="ly">${esc(t.artist || '')}</div>` : '';
+  $('mLyCol').style.transform = '';
+}
+function lyricTick() {
+  clearTimeout(lyTimer);
+  if (!lyr.lines || !lyr.synced || !pages[MUSIC].classList.contains('immersive')) return;
+  const p = musicPos();
+  if (!p) return;
+  let i = -1;
+  while (i + 1 < lyr.lines.length && lyr.lines[i + 1].t <= p.pos + 0.2) i++;
+  if (i !== lyIdx) {
+    const col = $('mLyCol');
+    if (col.children[lyIdx]) col.children[lyIdx].classList.remove('on');
+    lyIdx = i;
+    const cur = col.children[Math.max(0, i)];
+    if (i >= 0 && cur) cur.classList.add('on');
+    // .ly-col starts at the middle of the panel: move the current line's centre there
+    col.style.transform = `translate3d(0, ${-(cur ? cur.offsetTop + cur.offsetHeight / 2 : 0)}px, 0)`;
+  }
+  if (p.playing && i + 1 < lyr.lines.length) lyTimer = setTimeout(lyricTick, Math.max(120, (lyr.lines[i + 1].t - p.pos) * 1000));
+}
+
+// immersive mode: after a few quiet seconds while music plays, the cover grows and the lyrics take the rest.
+// The first touch or key only leaves it.
+let lastInput = Date.now();
+function immersiveCheck() {
+  const music = pages[MUSIC];
+  const p = page === MUSIC && !editing && !setMode && !slide && musicPos();
+  const want = !!(p && p.playing && Date.now() - lastInput > 8000);
+  if (want === music.classList.contains('immersive')) return;
+  music.classList.toggle('immersive', want);
+  if (want) { if (!lyr.lines) lyricsEmpty(); lyIdx = -2; lyricTick(); }
+}
+function leaveImmersive() {
+  lastInput = Date.now();
+  const music = pages[MUSIC];
+  if (!music.classList.contains('immersive')) return false;
+  music.classList.remove('immersive');
+  clearTimeout(lyTimer);
+  return true;
 }
 
 function renderMusic() {
@@ -835,12 +965,16 @@ function renderMusic() {
     $('mAlbum').textContent = '';
     $('mDev').textContent = sp.error ? `Spotify: ${sp.error}` : '';
     setIcon($('mPlay'), 'play');
+    setHTML($('mQueue'), '');
     return;
   }
   if (p.art !== shownArt) {
     shownArt = p.art;
-    $('mArt').style.backgroundImage = p.art ? `url("/api/spotify/art?u=${encodeURIComponent(p.art)}")` : 'none';
+    const url = p.art ? `/api/spotify/art?u=${encodeURIComponent(p.art)}` : null;
+    $('mArt').style.backgroundImage = url ? `url("${url}")` : 'none';
+    tintFrom(url);
   }
+  setHTML($('mQueue'), '');
   $('mTitle').textContent = p.title;
   $('mArtist').textContent = p.artist;
   $('mAlbum').textContent = p.album;
@@ -850,6 +984,8 @@ function renderMusic() {
   const d = p.device;
   $('mDev').textContent = d ? `${d.name}${d.canVolume && d.volume != null ? ` · ${tr('volume {v}%', { v: d.volume })}` : ''}` : '';
   musicProgress();
+  loadLyrics();
+  lyricTick();
 }
 
 function spotifyAction(act, body) {
@@ -858,12 +994,15 @@ function spotifyAction(act, body) {
     .catch(() => toast(tr('Could not reach the hub')));
 }
 
-// AMS remote commands: 2 play/pause, 3 next, 4 previous, 5 volume up, 6 volume down
+// AMS remote commands: 2 play/pause, 3 next, 4 previous, 5 volume up, 6 volume down, 7 repeat, 8 shuffle
 function musicAction(act) {
   if (musicSource() !== 'phone') return spotifyAction(act);
-  if (act === 'like') return toast(tr('Liking works with Spotify only'));
-  phonePost('/media', { cmd: { prev: 4, toggle: 2, next: 3 }[act] });
+  phonePost('/media', { cmd: { prev: 4, toggle: 2, next: 3, like: 8 }[act] });
 }
+$('mQueue').addEventListener('click', (e) => {
+  const q = e.target.closest('[data-q]');
+  if (q && musicSource() === 'phone') phonePost('/media', { cmd: Number(q.dataset.q) });
+});
 
 let volTimer = null, volDelta = 0;
 function volumeAdjust(step) {
@@ -888,26 +1027,31 @@ document.querySelectorAll('.m-ctrl button').forEach((b) => b.addEventListener('c
 // phonelink runs on the Car Thing itself and serves only this page, on 127.0.0.1. What it reads from the
 // phone (notifications, calls, what is playing) never goes to the hub, so the LAN preview never sees it.
 
-const PHONE = 'http://127.0.0.1:5055';
+const PHONELINK = 'http://127.0.0.1:5055';
 const onCarThing = /CrKey\//.test(navigator.userAgent);
 let PH = { paired: false, connected: false, notes: [] };
-let noteSeen = null, callShown = null;
+let noteSeen = null, callShown = null, pausedForCall = false;
+let privacy = false; // hide message text on this screen (iPhone page, button 3)
+try { privacy = localStorage.getItem('privacy') === '1'; } catch {}
 
 function phonePost(path, body) {
   if (!onCarThing) return toast(tr('Only the Car Thing can do this'));
   // a plain-text body keeps this a simple request (no CORS preflight)
-  return fetch(PHONE + path, { method: 'POST', body: JSON.stringify(body || {}) })
+  return fetch(PHONELINK + path, { method: 'POST', body: JSON.stringify(body || {}) })
     .then((r) => { if (!r.ok) r.text().then((t) => toast(t || `iPhone: ${r.status}`)); })
     .catch(() => toast(tr('The Bluetooth helper is not running')));
 }
 
 function phoneConnect() {
   if (!onCarThing) return;
-  const es = new EventSource(PHONE + '/events');
+  const es = new EventSource(PHONELINK + '/events');
   es.onmessage = (ev) => {
+    const prev = PH;
     PH = JSON.parse(ev.data);
+    phoneChanged(prev);
     renderPhone();
     if (page === MUSIC && !slide) renderMusic();
+    if (page === PHONE && !slide) renderIphone();
   };
   es.onerror = () => { es.close(); PH = { paired: false, connected: false, notes: [] }; renderPhone(); setTimeout(phoneConnect, 10000); };
 }
@@ -919,16 +1063,19 @@ function renderPhone() {
   setText($('phoneBat'), PH.connected && PH.battery != null ? `${PH.battery}%` : '');
   setText($('phoneLabel'), PH.paired ? PH.name || 'iPhone' : tr('Pair iPhone'));
 
-  // a new notification: a short banner (not for what was already there when the stream started)
-  const n = PH.notes && PH.notes[0];
-  if (noteSeen === null) noteSeen = n ? n.uid : 0;
-  else if (n && n.uid !== noteSeen) {
-    noteSeen = n.uid;
-    const msg = n.msg && n.msg.length > 110 ? n.msg.slice(0, 108) + '…' : n.msg;
+  // a new notification: a short banner. Not for what was already there when the stream started, nor for what
+  // the phone had before it connected (those fill the iPhone page quietly).
+  const notes = PH.notes || [];
+  const top = Math.max(0, ...notes.map((x) => x.uid));
+  if (noteSeen === null) noteSeen = top;
+  const n = notes.find((x) => !x.old && x.uid > noteSeen);
+  if (n) {
+    const msg = privacy ? '' : n.msg && n.msg.length > 110 ? n.msg.slice(0, 108) + '…' : n.msg;
     showBanner('phone', `${n.cat === 2 ? '☎' : '💬'} ${n.app ? n.app + ' · ' : ''}${n.title}${msg ? ': ' + msg : ''}`, 9000);
   }
+  noteSeen = Math.max(noteSeen, top);
 
-  // an incoming call takes the whole screen, and wakes it at night
+  // an incoming call takes the whole screen, wakes it at night, and pauses Spotify playing elsewhere
   const c = PH.call;
   $('call').classList.toggle('on', !!c);
   if (c) {
@@ -936,11 +1083,162 @@ function renderPhone() {
     setText($('callName'), c.title || tr('Unknown caller'));
     if (callShown !== c.uid) {
       callShown = c.uid;
-      if (S && S.display && S.display.night && S.display.night.dark) fetch('/api/display/wake', { method: 'POST' }).catch(() => {});
+      if (screenOff()) wakeScreen();
+      const sp = S && S.spotify && S.spotify.player;
+      if (sp && sp.isPlaying) { pausedForCall = true; spotifyAction('pause'); }
     }
-  } else callShown = null;
+  } else if (callShown !== null) {
+    callShown = null;
+    if (pausedForCall) { pausedForCall = false; spotifyAction('play'); }
+  }
   renderPairing();
 }
+
+// ---- presence, battery, the "while you were away" card
+
+let awaySince = null, digestTimer = null, phoneSeen = false;
+function phoneChanged(prev) {
+  const wasNear = prev.connected && prev.near, isNear = PH.connected && PH.near;
+  // left the desk: the screen goes off and a running focus timer pauses. Not on the first message after a
+  // (re)load, which says nothing about where the phone was before.
+  if (phoneSeen && wasNear && !isNear) {
+    awaySince = awaySince || Date.now();
+    fetch('/api/display/away', { method: 'POST', body: '{"away":true}' }).catch(() => {});
+    if (pomo.running) pomoToggle();
+  }
+  if (phoneSeen && !wasNear && isNear && S && S.display && S.display.away) {
+    fetch('/api/display/away', { method: 'POST', body: '{"away":false}' }).catch(() => {});
+    if (S.display.night && S.display.night.dark) wakeScreen();
+    toast(greeting());
+  }
+  phoneSeen = true;
+  // battery: once per crossing on the way down, and when it reaches full while charging
+  const a = prev.battery, b = PH.battery;
+  if (a != null && b != null && PH.connected && prev.connected) {
+    for (const lvl of [20, 10]) if (a > lvl && b <= lvl) showBanner('down', `🔋 ${tr('iPhone battery at {n}%', { n: b })}`, 15000);
+    if (b === 100 && a < 100) showBanner('phone', `🔌 ${tr('iPhone is fully charged: you can unplug it')}`, 15000);
+  }
+}
+function greeting() {
+  const h = Number(dtf('en-US', { timeZone: tz(), hour: 'numeric', hourCycle: 'h23' }).format(new Date(now())));
+  return tr(h < 5 || h >= 18 ? 'Good evening 👋' : h < 11 ? 'Good morning 👋' : 'Good afternoon 👋');
+}
+
+// the screen went dark (night, or the phone left) and came back: what arrived meanwhile
+function screenChanged(off) {
+  if (off) { awaySince = awaySince || Date.now(); return; }
+  const since = awaySince;
+  awaySince = null;
+  // after a reconnect the phone takes a few seconds to list what it got while away
+  if (since && Date.now() - since > 60000) setTimeout(() => showDigest(since), 6000);
+}
+
+// "yyyyMMddTHHmmSS" in the phone's local time (taken to be the hub's time zone) → epoch ms
+function wallMs(s) {
+  const m = /^(\d{4})(\d\d)(\d\d)T(\d\d)(\d\d)(\d\d)/.exec(s || '');
+  if (!m) return 0;
+  const guess = Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
+  const p = Object.fromEntries(dtf('en-US', { timeZone: tz(), hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    .formatToParts(new Date(guess)).map((x) => [x.type, x.value]));
+  return guess - (Date.UTC(+p.year, p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - guess);
+}
+const noteMs = (n) => wallMs(n.date) || n.at;
+
+function showDigest(since) {
+  const list = (PH.notes || []).filter((n) => noteMs(n) > since);
+  if (!list.length) return;
+  const calls = list.filter((n) => n.cat === 2);
+  const apps = {};
+  for (const n of list) if (n.cat !== 2) apps[n.app || '?'] = (apps[n.app || '?'] || 0) + 1;
+  const rows = Object.entries(apps).sort((x, y) => y[1] - x[1])
+    .map(([app, k]) => `<div class="dg-row"><span>💬 ${esc(app)}</span><em>${k}</em></div>`);
+  if (calls.length) rows.unshift(`<div class="dg-row missed"><span>☎ ${privacy ? tr('Missed calls') : esc([...new Set(calls.map((c) => c.title))].join(', '))}</span><em>${calls.length}</em></div>`);
+  $('dgCard').innerHTML = `<b>${tr('While you were away')}</b>${rows.slice(0, 6).join('')}<small>${tr('Any button closes this')}</small>`;
+  $('digest').classList.add('on');
+  clearTimeout(digestTimer);
+  digestTimer = setTimeout(hideDigest, 12000);
+}
+function hideDigest() {
+  clearTimeout(digestTimer);
+  const d = $('digest');
+  if (!d.classList.contains('on')) return false;
+  d.classList.remove('on');
+  return true;
+}
+$('digest').addEventListener('click', hideDigest);
+
+// ---- the iPhone page: what the phone got, newest first; clear one on the phone; Siri and the camera
+
+const CAT_ICON = { 1: '📞', 2: '☎', 3: '📮', 4: '💬', 5: '📅', 6: '✉️', 7: '📰', 8: '❤️', 9: '💼', 10: '📍', 11: '🎬' };
+let ipSel = -1, ipConfirm = null, ipConfirmTimer = null;
+function renderIphone() {
+  setText($('ipPriv'), tr(privacy ? 'Show messages' : 'Hide messages'));
+  const head = $('ipHead'), list = $('ipList');
+  if (!onCarThing) { setHTML(head, ''); setHTML(list, `<div class="ip-empty">${tr('Only on the Car Thing')}</div>`); return; }
+  if (!PH.paired) {
+    setHTML(head, '');
+    setHTML(list, `<div class="ip-empty"><b>${tr('No iPhone paired')}</b><span>${tr('Press the knob to pair your iPhone')}</span></div>`);
+    return;
+  }
+  const bars = PH.rssi == null ? 0 : Math.max(1, Math.min(4, Math.round((PH.rssi + 95) / 12)));
+  setHTML(head, `<div class="ip-name">${esc(PH.name || 'iPhone')}</div><div class="ip-stat">`
+    + (PH.connected ? `<span class="ip-bars b${bars}"><i></i><i></i><i></i><i></i></span>${tr(PH.near ? 'At the desk' : 'Away')}` : tr('Not connected'))
+    + (PH.connected && PH.battery != null ? `<span>🔋 ${PH.battery}%</span>` : '') + (privacy ? '<span>🙈</span>' : '') + '</div>');
+  const notes = PH.notes || [];
+  if (ipSel >= notes.length) ipSel = notes.length - 1;
+  setHTML(list, notes.length ? notes.map((n, i) => `<div class="ip-row${n.cat === 2 ? ' missed' : ''}${i === ipSel ? ' sel' : ''}${ipConfirm === n.uid ? ' confirm' : ''}" data-i="${i}">`
+    + `<span class="ip-ic">${CAT_ICON[n.cat] || '🔔'}</span><div class="ip-tx"><div class="ip-top"><b>${esc(n.app || '')}</b><span>${ago(noteMs(n))}</span></div>`
+    + `<div class="ip-ti">${esc(n.title || '')}</div>${privacy || !n.msg ? '' : `<div class="ip-msg">${esc(n.msg)}</div>`}</div></div>`).join('')
+    : `<div class="ip-empty">${tr(PH.connected ? 'No notifications' : 'The iPhone is not connected')}</div>`);
+  pages[PHONE].classList.toggle('browsing', ipSel >= 0);
+  const sel = list.children[ipSel];
+  if (sel) sel.scrollIntoView({ block: 'nearest' });
+}
+function ipKnob(step) {
+  const k = (PH.notes || []).length;
+  if (!k) return;
+  ipSel = Math.max(0, Math.min(k - 1, ipSel + step));
+  ipConfirm = null;
+  renderIphone();
+}
+// press: start choosing; on a chosen notification, press twice to clear it on the iPhone
+function ipPress() {
+  if (!PH.paired) return phonePost('/pair');
+  const notes = PH.notes || [];
+  if (ipSel < 0) { if (notes.length) { ipSel = 0; renderIphone(); } return; }
+  const n = notes[ipSel];
+  if (!n) return;
+  clearTimeout(ipConfirmTimer);
+  if (ipConfirm === n.uid) {
+    ipConfirm = null;
+    phonePost('/note/clear', { uid: n.uid });
+    toast(tr('Cleared on the iPhone'));
+  } else {
+    ipConfirm = n.uid;
+    toast(tr('Press again to clear it on the iPhone'));
+    ipConfirmTimer = setTimeout(() => { ipConfirm = null; if (page === PHONE) renderIphone(); }, 3000);
+  }
+  renderIphone();
+}
+function ipBack() {
+  if (ipSel < 0) return false;
+  ipSel = -1;
+  ipConfirm = null;
+  renderIphone();
+  return true;
+}
+function togglePrivacy() {
+  privacy = !privacy;
+  try { localStorage.setItem('privacy', privacy ? '1' : '0'); } catch {}
+  toast(tr(privacy ? 'Messages hidden on this screen' : 'Messages shown'));
+  renderIphone();
+}
+$('ipList').addEventListener('click', (e) => {
+  const row = e.target.closest('.ip-row');
+  if (!row) return;
+  ipSel = Number(row.dataset.i);
+  ipPress();
+});
 
 function renderPairing() {
   const p = PH.pairing;
@@ -1293,6 +1591,8 @@ function setPage(i) {
   pages.forEach((p, j) => p.classList.toggle('on', j === page));
   document.body.dataset.page = page;
   if (page === ASK) mitStart();
+  if (page !== PHONE) { ipSel = -1; ipConfirm = null; }
+  if (page !== MUSIC) leaveImmersive();
   // build the incoming page before it starts to move, so the slide's first frame is not a long one
   entering = true;
   try { render(); } finally { entering = false; }
@@ -1313,6 +1613,7 @@ function knob(step) {
   if (PH.call || PH.pairing) return;
   if (setMode) return settingsKnob(step);
   if (page === NEWS && (newsSel >= 0 || newsDetail)) return newsKnob(step);
+  if (page === PHONE && ipSel >= 0) return ipKnob(step);
   if (!editing) return setPage(page + step);
   setEditing(true); // keep edit mode alive while turning
   if (page === MUSIC) volumeAdjust(step);
@@ -1323,6 +1624,7 @@ function back() {
   if (setMode) return settingsBack();
   if (page === MARKETS && zoom) return marketZoom(zoom);
   if (page === NEWS && newsBack()) return;
+  if (page === PHONE && ipBack()) return;
   if (page === ASK && S && ['answer', 'error'].includes(S.voice && S.voice.phase)) return void fetch('/api/voice/dismiss', { method: 'POST' }).catch(() => {});
   if (editing) setEditing(false); // Back only ever leaves a mode; the knob press enters one
 }
@@ -1333,13 +1635,23 @@ function press() {
   else if (page === NEWS) newsEnter();
   else if (page === MUSIC) setEditing(!editing); // volume mode; play/pause is button 2
   else if (page === FOCUS) pomoToggle();
+  else if (page === PHONE) ipPress();
   else if (editing) setEditing(false);
 }
 
 // ---------------------------------------------------------------- night: the screen is off; the first touch only wakes it
 
 let wakeSent = 0, wokeAt = 0;
+// the screen is dark at night, and while the paired iPhone is away from the desk
+const screenOff = () => !!(S && S.display && ((S.display.night && S.display.night.dark) || S.display.away));
+function wakeScreen() { fetch('/api/display/wake', { method: 'POST' }).catch(() => {}); }
 function nightGate() {
+  // the phone left and the screen went off: any touch brings it back
+  if (S && S.display && S.display.away) {
+    const t = Date.now();
+    if (t - wakeSent > 3000) { wakeSent = wokeAt = t; fetch('/api/display/away', { method: 'POST', body: '{"away":false}' }).catch(() => {}); }
+    return true;
+  }
   const n = S && S.display && S.display.night;
   if (!n || !n.active) return false;
   const t = Date.now();
@@ -1353,10 +1665,12 @@ function nightGate() {
   return n.dark || t - wokeAt < 2500;
 }
 // taps on the dark screen must not press whatever is under the finger
-addEventListener('click', (e) => { const n = S && S.display && S.display.night; if (n && n.dark) { e.stopPropagation(); e.preventDefault(); } }, true);
+addEventListener('click', (e) => { if (screenOff()) { e.stopPropagation(); e.preventDefault(); } }, true);
 
 addEventListener('keydown', (e) => {
   if (nightGate()) return;
+  // the first key only closes the "while you were away" card, or leaves immersive Music
+  if (hideDigest() | leaveImmersive()) return;
   const k = e.key;
   const isBack = k === 'Escape' || k === 'Backspace' || k === 'BrowserBack' || k === 'GoBack';
   // a ringing call or an open pairing window owns the buttons until it is over
@@ -1367,12 +1681,23 @@ addEventListener('keydown', (e) => {
   }
   if (PH.pairing) { if (isBack) phonePost('/pair/cancel'); return; }
   // upside down, the preset buttons sit along the bottom in reverse order: keep 1 on the left
-  if (/^[1-4]$/.test(k)) return presetButton(orient === 'flip' ? 5 - Number(k) : Number(k));
+  if (/^[1-4]$/.test(k)) {
+    const n = orient === 'flip' ? 5 - Number(k) : Number(k);
+    // on the iPhone page, 1 and 2 are keys of the phone's remote: Siri and the camera shutter, held as long as you hold
+    if (page === PHONE && HOLD[n]) { if (!e.repeat && !held) { held = HOLD[n]; phonePost('/key', { key: held, down: true }); } return; }
+    return presetButton(n);
+  }
   if (k === 'm' || k === 'M') return settingsButton(); // the round settings button, top right
   if (isBack) return back();
   if (k === 'Enter' || k === ' ') return press();
   if (k === 'ArrowRight' || k === 'ArrowDown') return knob(1);
   if (k === 'ArrowLeft' || k === 'ArrowUp') return knob(-1);
+});
+
+const HOLD = { 1: 'siri', 2: 'shutter' };
+let held = null;
+addEventListener('keyup', (e) => {
+  if (held && /^[1-4]$/.test(e.key)) { phonePost('/key', { key: held, down: false }); held = null; }
 });
 
 let wheelAcc = 0, wheelAt = 0;
@@ -1382,7 +1707,7 @@ addEventListener('wheel', (e) => {
   if (t - wheelAt > 400) wheelAcc = 0;
   wheelAt = t;
   wheelAcc += d;
-  if (Math.abs(wheelAcc) >= 1) { const dir = wheelAcc > 0 ? 1 : -1; wheelAcc = 0; if (!nightGate()) knob(dir); }
+  if (Math.abs(wheelAcc) >= 1) { const dir = wheelAcc > 0 ? 1 : -1; wheelAcc = 0; if (!nightGate() && !(hideDigest() | leaveImmersive())) knob(dir); }
 }, { passive: true });
 
 // touch: swipe left/right to change page; tap to talk to Mei or start/pause the focus timer.
@@ -1394,7 +1719,7 @@ let tx = null;
 addEventListener('touchstart', (e) => { tx = appX(e.touches[0]); }, { passive: true });
 addEventListener('touchend', (e) => {
   if (tx == null || setMode || PH.call || PH.pairing) { tx = null; return; }
-  if (nightGate()) { tx = null; return; }
+  if (nightGate() || hideDigest() | leaveImmersive()) { tx = null; return; }
   const dx = appX(e.changedTouches[0]) - tx;
   tx = null;
   if (Math.abs(dx) > 60) setPage(page + (dx < 0 ? 1 : -1));
@@ -1409,12 +1734,14 @@ function tickClock() {
   pomoTick();
   musicProgress();
   if (PH.pairing) renderPairing();
+  immersiveCheck();
+  if (page === PHONE && new Date().getSeconds() % 30 === 0) renderIphone(); // "5m ago" labels
   if (S && page === ASK) renderAsk();
   if (S && page === CALENDAR && new Date().getSeconds() === 0) renderCalendar();
   checkLink();
 }
 
-const RENDER = { [NEWS]: renderNews, [MARKETS]: renderMarkets, [ASK]: renderAsk, [WEATHER]: renderWeather, [CALENDAR]: renderCalendar, [MUSIC]: renderMusic, [SERVERS]: renderServers };
+const RENDER = { [NEWS]: renderNews, [MARKETS]: renderMarkets, [ASK]: renderAsk, [WEATHER]: renderWeather, [CALENDAR]: renderCalendar, [MUSIC]: renderMusic, [SERVERS]: renderServers, [PHONE]: renderIphone };
 function render() {
   if (!S) return;
   applyLang();
@@ -1423,7 +1750,9 @@ function render() {
   try { renderAlerts(); } catch (e) { console.error(e); }
   try { watchBriefing(); calReminders(); } catch (e) { console.error(e); }
   if (setMode) renderBrightness();
-  document.body.classList.toggle('night-dark', !!(S.display && S.display.night && S.display.night.dark));
+  const off = screenOff();
+  document.body.classList.toggle('night-dark', off);
+  if (off !== !!render.off) { render.off = off; screenChanged(off); }
   if (!render.sky && S.weather) { render.sky = true; try { renderWeather(); } catch {} } // sky colour on first load
 }
 

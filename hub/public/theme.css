@@ -576,3 +576,78 @@ body.sliding .odo .reel { transition: none; }
 .portrait .call-name { font-size: 38px; }
 .portrait .call-btns { gap: 18px; }
 .portrait .call-btns button { width: 140px; }
+
+/* ---------- Music: colours from the cover, queue chips, immersive mode with lyrics */
+.music { --np: var(--gold); --np-2: #2c2460; isolation: isolate; }
+.music::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(110% 90% at 22% 50%, color-mix(in srgb, var(--np-2) 90%, transparent), transparent 72%);
+}
+.music .pomo-fill { background: var(--np); }
+.music .m-ctrl button.big { background: var(--np); box-shadow: 0 0 26px color-mix(in srgb, var(--np) 50%, transparent); }
+.music .m-ctrl button.on { color: var(--np); }
+.m-queue { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; color: var(--muted); }
+.m-queue:empty { display: none; }
+.m-queue .q { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: rgba(44, 36, 96, 0.7); color: var(--muted); }
+.m-queue .q svg { width: 17px; height: 17px; }
+.m-queue .q.on { color: var(--np); box-shadow: inset 0 0 0 1.5px var(--np); }
+.portrait .m-queue { justify-content: center; }
+.m-lyrics { display: none; }
+.music.immersive .mx, .music.immersive .edit-badge { display: none; }
+.music.immersive .art { width: 320px; height: 320px; }
+.music.immersive .m-lyrics {
+  display: block; position: relative; flex: 1; align-self: stretch; overflow: hidden; animation: fade 0.6s ease-out;
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000 22%, #000 78%, transparent); mask-image: linear-gradient(180deg, transparent, #000 22%, #000 78%, transparent);
+}
+.ly-col { position: absolute; left: 0; right: 0; top: 50%; transition: transform 0.5s var(--ease); will-change: transform; }
+.ly { padding: 6px 0; font: 700 22px/1.3 var(--display); color: rgba(246, 242, 255, 0.3); transition: color 0.3s; }
+.ly.on { color: var(--text); }
+.ly.big { font-size: 34px; line-height: 1.15; }
+.portrait .music.immersive .art { width: 230px; height: 230px; }
+.portrait .music.immersive .m-lyrics { width: 100%; text-align: center; }
+
+/* ---------- iPhone page: header, notifications, the remote's keys */
+.iphone { flex-direction: column; gap: 8px; padding: 12px 16px; }
+.ip-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.ip-head:empty { display: none; }
+.ip-name { font: 800 24px var(--display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ip-stat { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.ip-bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 13px; margin-right: 4px; }
+.ip-bars i { width: 3px; border-radius: 1px; background: rgba(255, 255, 255, 0.18); }
+.ip-bars i:nth-child(1) { height: 4px; } .ip-bars i:nth-child(2) { height: 7px; } .ip-bars i:nth-child(3) { height: 10px; } .ip-bars i:nth-child(4) { height: 13px; }
+.ip-bars.b1 i:nth-child(-n+1), .ip-bars.b2 i:nth-child(-n+2), .ip-bars.b3 i:nth-child(-n+3), .ip-bars.b4 i { background: var(--up); }
+.ip-list {
+  flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 2px;
+  -webkit-mask-image: linear-gradient(180deg, #000 88%, transparent); mask-image: linear-gradient(180deg, #000 88%, transparent);
+}
+.ip-row { flex: none; display: flex; gap: 10px; padding: 7px 8px; border-radius: 10px; border-bottom: 1px dashed rgba(255, 255, 255, 0.08); }
+.ip-row.sel { background: rgba(255, 194, 61, 0.13); box-shadow: inset 3px 0 0 var(--gold); }
+.ip-row.confirm { background: rgba(255, 111, 156, 0.16); box-shadow: inset 3px 0 0 var(--down); }
+.ip-ic { flex: none; width: 26px; font-size: 19px; line-height: 1.3; text-align: center; }
+.ip-tx { flex: 1; min-width: 0; }
+.ip-top { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--muted); }
+.ip-top b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ip-top span { flex: none; }
+.ip-ti { font: 600 16px/1.25 var(--display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ip-row.missed .ip-ti { color: var(--down); }
+.ip-msg { margin-top: 1px; font-size: 13.5px; line-height: 1.3; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ip-empty { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; color: var(--muted); font-size: 15px; }
+.ip-empty b { font: 800 22px var(--display); color: var(--text); }
+.ip-keys { display: flex; gap: 16px; font-size: 12px; color: var(--muted); }
+.ip-keys > span { display: flex; align-items: center; }
+
+/* ---------- "while you were away" */
+.digest { position: absolute; inset: 0; z-index: 14; display: none; align-items: center; justify-content: center; background: rgba(12, 9, 34, 0.9); }
+.digest.on { display: flex; animation: fade 0.3s ease-out; }
+.dg-card { width: min(460px, 88%); display: flex; flex-direction: column; gap: 8px; white-space: normal; }
+.dg-card b { font: 800 26px var(--display); margin-bottom: 4px; }
+.dg-row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 14px; border-radius: 14px; background: rgba(44, 36, 96, 0.7); font-size: 17px; }
+.dg-row span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dg-row em { flex: none; font-style: normal; font-weight: 800; color: var(--gold); }
+.dg-row.missed span { color: var(--down); }
+.dg-card small { margin-top: 4px; font-size: 12.5px; color: var(--muted); }
+
+/* nine tabs: a little tighter in landscape so the clock keeps one line */
+.clock { white-space: nowrap; }
+body:not(.portrait) .tab { padding: 5px 8px; font-size: 13.5px; }
+body:not(.portrait) .bar-right { gap: 8px; }

@@ -18,8 +18,8 @@ const (
 	amsUpdate = "2f7cabce-808d-411f-9a0c-bb92ba96c102"
 	amsAttr   = "c6b2f38c-23ab-46d8-a6ab-a3a870bbd5d7"
 
-	entPlayer, entTrack = 0, 2
-	flagTruncated       = 1
+	entPlayer, entQueue, entTrack = 0, 1, 2
+	flagTruncated                 = 1
 )
 
 var (
@@ -70,6 +70,7 @@ func startAMS(chars map[string]dbus.ObjectPath) bool {
 		log.Printf("ams subscribe: %v", err)
 	}
 	write(eu, []byte{entTrack, 0, 1, 2, 3})
+	write(eu, []byte{entQueue, 0, 1, 2, 3}) // position, length, shuffle, repeat
 	amsRemoteP, amsUpdateP, amsAttrP, amsOn = rc, eu, ea, true
 	log.Printf("media: on")
 	return true
@@ -103,6 +104,18 @@ func setMedia(ent, attr byte, v string) {
 			}
 		case ent == entPlayer && attr == 2:
 			m.Volume, _ = strconv.ParseFloat(v, 64)
+		case ent == entQueue:
+			n, _ := strconv.Atoi(v)
+			switch attr {
+			case 0:
+				m.Queue.Index = n
+			case 1:
+				m.Queue.Count = n
+			case 2:
+				m.Queue.Shuffle = n
+			case 3:
+				m.Queue.Repeat = n
+			}
 		case ent == entTrack && attr == 0:
 			m.Artist = v
 		case ent == entTrack && attr == 1:
@@ -115,7 +128,8 @@ func setMedia(ent, attr byte, v string) {
 	})
 }
 
-// commands: 0 play, 1 pause, 2 play/pause, 3 next, 4 previous, 5 volume up, 6 volume down
+// commands: 0 play, 1 pause, 2 play/pause, 3 next, 4 previous, 5 volume up, 6 volume down,
+// 7 next repeat mode, 8 next shuffle mode
 func mediaCommand(c byte) error {
 	setupMu.Lock()
 	rc := amsRemoteP

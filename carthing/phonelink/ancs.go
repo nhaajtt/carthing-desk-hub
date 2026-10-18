@@ -8,7 +8,9 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/godbus/dbus/v5"
@@ -22,13 +24,15 @@ const (
 
 	catIncomingCall = 1
 	flagPreExisting = 1 << 2
-	keepNotes       = 12
+	keepNotes       = 30
+	oldWindow       = 2 * time.Second // how long the phone takes to list what it already had at connect
 )
 
 type ancsJob struct {
 	uid    uint32
 	cat    int
-	action int // -1: fetch the text; 0 / 1: perform the positive / negative action
+	action int  // -1: fetch the text; 0 / 1: perform the positive / negative action
+	old    bool // already on the phone when we connected: fills the inbox, no banner
 }
 
 type ancsSession struct {
@@ -37,6 +41,9 @@ type ancsSession struct {
 	data    chan []byte
 	quit    chan struct{}
 	apps    map[string]string // bundle id → app name, for this connection
+
+	preMu sync.Mutex
+	pre   []ancsJob // notifications the phone already had, gathered for oldWindow
 }
 
 var ancs *ancsSession // under setupMu
@@ -81,14 +88,24 @@ func callAction(action int) error {
 	mu.Lock()
 	c := st.Call
 	mu.Unlock()
+	if c == nil {
+		return fmt.Errorf("no call")
+	}
+	return noteAction(c.UID, action)
+}
+
+// clearNote removes a notification on the iPhone itself (its negative action is "clear")
+func clearNote(uid uint32) error { return noteAction(uid, 1) }
+
+func noteAction(uid uint32, action int) error {
 	setupMu.Lock()
 	a := ancs
 	setupMu.Unlock()
-	if c == nil || a == nil {
-		return fmt.Errorf("no call")
+	if a == nil {
+		return fmt.Errorf("notifications are off")
 	}
 	select {
-	case a.jobs <- ancsJob{uid: c.UID, cat: catIncomingCall, action: action}:
+	case a.jobs <- ancsJob{uid: uid, action: action}:
 		return nil
 	default:
 		return fmt.Errorf("busy")
@@ -104,8 +121,15 @@ func (a *ancsSession) source(b []byte) {
 	uid := binary.LittleEndian.Uint32(b[4:8])
 	switch ev {
 	case 0, 1: // added, modified
-		// what was already on the phone before we connected is not news; a ringing call is
+		// what was already on the phone before we connected is not news (a ringing call is): keep only the
+		// newest of those, once the phone has listed them all
 		if flags&flagPreExisting != 0 && cat != catIncomingCall {
+			a.preMu.Lock()
+			if a.pre == nil {
+				time.AfterFunc(oldWindow, a.fetchOld)
+			}
+			a.pre = append(a.pre, ancsJob{uid: uid, cat: cat, action: -1, old: true})
+			a.preMu.Unlock()
 			return
 		}
 		select {
@@ -124,6 +148,24 @@ func (a *ancsSession) source(b []byte) {
 				}
 			}
 		})
+	}
+}
+
+func (a *ancsSession) fetchOld() {
+	a.preMu.Lock()
+	pre := a.pre
+	a.pre = nil
+	a.preMu.Unlock()
+	sort.Slice(pre, func(i, j int) bool { return pre[i].uid > pre[j].uid }) // UIDs grow with time
+	if len(pre) > keepNotes {
+		pre = pre[:keepNotes]
+	}
+	for _, j := range pre {
+		select {
+		case a.jobs <- j:
+		case <-a.quit:
+			return
+		}
 	}
 }
 
@@ -148,15 +190,15 @@ func (a *ancsSession) work() {
 }
 
 func (a *ancsSession) fetch(j ancsJob) {
-	// app id, title (64), subtitle (64), message (240)
-	req := []byte{0, 0, 0, 0, 0, 0, 1, 64, 0, 2, 64, 0, 3, 240, 0}
+	// app id, title (64), subtitle (64), message (240), date
+	req := []byte{0, 0, 0, 0, 0, 0, 1, 64, 0, 2, 64, 0, 3, 240, 0, 5}
 	binary.LittleEndian.PutUint32(req[1:], j.uid)
 	hdr := req[:5]
-	attrs, ok := a.ask(req, hdr, 4)
+	attrs, ok := a.ask(req, hdr, 5)
 	if !ok {
 		return
 	}
-	n := Note{UID: j.uid, Cat: j.cat, bundle: attrs[0], Title: attrs[1], Sub: attrs[2], Msg: attrs[3], At: nowMs()}
+	n := Note{UID: j.uid, Cat: j.cat, bundle: attrs[0], Title: attrs[1], Sub: attrs[2], Msg: attrs[3], Date: attrs[5], Old: j.old, At: nowMs()}
 	n.App = a.appName(n.bundle)
 	update(func(s *State) {
 		if j.cat == catIncomingCall {
@@ -165,9 +207,13 @@ func (a *ancsSession) fetch(j ancsJob) {
 		}
 		out := []Note{n}
 		for _, o := range s.Notes {
-			if o.UID != n.UID && len(out) < keepNotes {
+			if o.UID != n.UID {
 				out = append(out, o)
 			}
+		}
+		sort.Slice(out, func(i, j int) bool { return out[i].UID > out[j].UID }) // newest first
+		if len(out) > keepNotes {
+			out = out[:keepNotes]
 		}
 		s.Notes = out
 	})

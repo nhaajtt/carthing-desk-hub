@@ -86,8 +86,11 @@
           <button data-act="next" aria-label="Next track"><i class="kb">3</i><svg viewBox="0 0 24 24"><path d="M18 5v14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><path d="M5 5.5v13a1 1 0 0 0 1.5.9l9.3-6.4a1.2 1.2 0 0 0 0-2L6.5 4.6A1 1 0 0 0 5 5.5z" fill="currentColor"/></svg></button>
           <button data-act="like" aria-label="Like"><i class="kb">4</i><span id="mLike"></span></button>
         </div>
+        <div class="m-queue" id="mQueue"></div>
         <div class="m-dev" id="mDev"></div>
       </div>
+      <!-- immersive mode (after a few quiet seconds while music plays): lyrics beside a large cover -->
+      <div class="m-lyrics" id="mLyrics"><div class="ly-col" id="mLyCol"></div></div>
     </section>
 
     <!-- 6. Servers -->
@@ -109,7 +112,18 @@
       </div>
     </section>
 
-    <!-- 8. Mei, the desk cat (voice assistant) -->
+    <!-- 8. iPhone: notifications from the paired phone, Siri and the camera shutter -->
+    <section class="page iphone" data-name="iPhone">
+      <div class="ip-head" id="ipHead"></div>
+      <div class="ip-list" id="ipList"></div>
+      <div class="ip-keys">
+        <span><i class="kb">1</i><span data-t="Siri (hold)">Siri (hold)</span></span>
+        <span><i class="kb">2</i><span data-t="Camera shutter">Camera shutter</span></span>
+        <span><i class="kb">3</i><span id="ipPriv"></span></span>
+      </div>
+    </section>
+
+    <!-- 9. Mei, the desk cat (voice assistant) -->
     <section class="page ask" data-name="Mei" data-phase="idle">
       <div class="ask-head"><div class="ask-name">Mei <span class="ask-chip" id="askChip">ready</span></div><div class="ask-sub" data-t="your desk cat · powered by Gemini">your desk cat · powered by Gemini</div></div>
       <div class="ask-hello" id="askHello"><span data-t="Hi! I'm Mei 🐾">Hi! I'm Mei 🐾</span><small data-t="Ask me about prices, the weather, your servers… or anything at all.">Ask me about prices, the weather, your servers… or anything at all.</small></div>
@@ -181,6 +195,8 @@
       <span class="pair-left" id="pairLeft"></span>
     </div>
   </div>
+  <!-- back at the desk: what the iPhone got while you were away -->
+  <div class="digest" id="digest"><div class="dg-card" id="dgCard"></div></div>
   <div class="alert-banner" id="alertBanner"></div>
   <div class="toast" id="toast"></div>
 </div>

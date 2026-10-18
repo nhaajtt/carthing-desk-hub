@@ -17,21 +17,26 @@ async function youtube(title, channel) {
   return id ? `https://i.ytimg.com/vi/${id[1]}/mqdefault.jpg` : '';
 }
 
-async function itunes(title, artist) {
-  const q = new URLSearchParams({ term: `${title} ${artist}`.trim(), entity: 'song', limit: '1' });
+async function itunes(title, artist, album) {
+  const q = new URLSearchParams({ term: `${title} ${artist}`.trim(), entity: 'song', limit: '10' });
   const r = await fetch(`https://itunes.apple.com/search?${q}`, { signal: AbortSignal.timeout(8000) });
   if (!r.ok) throw new Error(`itunes ${r.status}`);
-  const hit = (await r.json()).results?.[0];
+  // the same album first (the first hit is often a remix or a compilation), then the same title
+  const hits = (await r.json()).results || [];
+  const same = (a, b) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
+  const hit = hits.find((h) => same(h.collectionName, album) && same(h.trackName, title)) || hits.find((h) => same(h.collectionName, album))
+    || hits.find((h) => same(h.trackName, title)) || hits[0];
   return hit?.artworkUrl100 ? hit.artworkUrl100.replace('100x100bb', '400x400bb') : '';
 }
 
-export async function cover(app, title, artist) {
+export async function cover(app, title, artist, album = '') {
   title = String(title).slice(0, 200);
   artist = String(artist).slice(0, 200);
+  album = String(album).slice(0, 200);
   if (!title) throw new Error('no title');
-  const key = `${app}\n${title}\n${artist}`;
+  const key = `${app}\n${title}\n${artist}\n${album}`;
   let url = found.get(key);
-  if (url === undefined) url = keep(found, key, /youtube/i.test(app) ? await youtube(title, artist) : await itunes(title, artist), 200);
+  if (url === undefined) url = keep(found, key, /youtube/i.test(app) ? await youtube(title, artist) : await itunes(title, artist, album), 200);
   if (!url) throw new Error('not found');
   if (images.has(url)) return images.get(url);
   const host = new URL(url).hostname;
