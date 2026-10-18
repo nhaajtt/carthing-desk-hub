@@ -28,8 +28,9 @@
 19. [News: 10 chủ đề và tóm tắt bài báo](#19-news)
 20. [Chế độ dọc, menu nổi, 4 nút theo trang](#20-chế-độ-dọc-menu-nổi-4-nút-theo-trang)
 21. [Màn hình tự tắt, và đợt nâng cấp thứ hai](#21-màn-hình-tự-tắt-và-đợt-nâng-cấp-thứ-hai)
-22. [Bảng tổng hợp lỗi](#22-bảng-tổng-hợp-lỗi)
-23. [Những điều rút ra](#23-những-điều-rút-ra)
+22. [Đợt nâng cấp thứ ba: ban đêm, bảo mật, cập nhật](#22-đợt-nâng-cấp-thứ-ba-ban-đêm-bảo-mật-cập-nhật)
+23. [Bảng tổng hợp lỗi](#23-bảng-tổng-hợp-lỗi)
+24. [Những điều rút ra](#24-những-điều-rút-ra)
 
 ---
 
@@ -463,7 +464,58 @@ Cách sửa: khi model chính trả 429, hub **tự gửi lại cùng yêu cầu
 * **GIF demo** ở đầu README: quay bằng `Page.startScreencast` của DevTools (671 khung hình trong 34 giây), ghép bằng ffmpeg trong một container dùng xong là xoá, ra GIF 560 px nặng 7,5 MB.
 * **GitHub:** bật Secret scanning và Push protection, thêm một workflow kiểm tra cú pháp và chạy test mỗi lần push.
 
-## 22. Bảng tổng hợp lỗi
+## 22. Đợt nâng cấp thứ ba: ban đêm, bảo mật, cập nhật
+
+### Những gì thêm vào
+
+* **Ban đêm (23:00 đến 6:30).** Hub trả về độ sáng `0`, và `brightness-sync` tắt hẳn đèn nền. Vặn núm, bấm nút hay chạm vào màn hình thì sáng lại 2 phút, mỗi lần dùng tiếp lại được cộng thêm. **Lần chạm đầu tiên chỉ để đánh thức**, không bấm vào thứ gì: chạm trong bóng tối mà lỡ bấm "Shut down" thì rất khó chịu. Lúc tối, mọi animation cũng dừng cho Car Thing nghỉ. Mức sáng ban ngày vẫn lưu trong cấu hình của `nocturned`; tắt và bật lại ban đêm chỉ ghi thẳng vào đèn nền, không khởi động lại `nocturned`, nên màn hình phản ứng trong vòng một lần poll (2 giây).
+* **Báo mưa 2 giờ tới.** Open-Meteo có dữ liệu theo từng 15 phút (`minutely_15`). Trang Weather có thêm một dải "Rain likely in about 20 min" kèm 9 cột nhỏ, và khoảng 30 phút trước khi mưa, banner xanh hiện lên ở mọi trang (tối đa 3 giờ một lần).
+* **Trang Servers có 4 chế độ** trên nút 1 đến 4:
+  1. **Now:** như cũ.
+  2. **24 h:** biểu đồ CPU, RAM, nhiệt độ của hai server, trung bình 10 phút, lưu vào `state/history.json` để khởi động lại hub không mất.
+  3. **Security:** số lần đăng nhập SSH thất bại (1 giờ và 24 giờ, kèm IP thử nhiều nhất), số gói tin firewall chặn (kèm nguồn và cổng), danh sách **cổng mở trên mọi interface**, cổng Docker publish ra `0.0.0.0` (nhắc lại: Docker bỏ qua UFW), và tình trạng cài đặt của Car Thing.
+  4. **Updates:** số gói `apt` chờ cập nhật, container nào có image mới hơn, và GitHub: lần chạy CI gần nhất của 4 repo mới push, số pull request và issue đang mở.
+* **Script kiểm tra Car Thing sau khi cập nhật Nocturne** (`check-carthing.sh`). Cập nhật Nocturne có thể ghi đè `/etc` và `/root`. Script so từng file với bản trong repo (SHA-256), kiểm tra kiosk còn trỏ về hub, key của hub còn trong `authorized_keys`, SSH vẫn từ chối mật khẩu, đồng bộ giờ còn bật, ba script phụ còn chạy; thiếu gì thì cài lại. Nếu bản cập nhật xoá mất key, script hỏi mật khẩu root một lần (mặc định của Nocturne) để đặt lại key rồi làm tiếp bằng key. Cron chạy nó mỗi giờ ở chế độ chỉ kiểm tra; thấy lệch là banner đỏ hiện lên.
+* **Thay đổi nhỏ theo yêu cầu:** trang News bỏ số trên từng chủ đề, nút 1 là chủ đề kế, nút 2 là chủ đề trước. Mei chuyển xuống trang cuối cùng. Nhãn "Landscape, upside down" tràn khỏi ô trong menu nên đổi thành "Upside down".
+
+### Lấy dữ liệu bảo mật mà không cấp thêm quyền
+
+Cách dễ nhất là cho hub đọc thẳng journal và `docker.sock` của host. Nhưng như thế thì một lỗi trong hub (thứ nhận dữ liệu từ Car Thing và từ internet) thành quyền root trên server. Nên làm ngược lại:
+
+* Một script nhỏ `host-report.sh` chạy bằng **cron của user thường** mỗi 5 phút. User này nằm trong nhóm `adm`, đủ để đọc journal, không cần `sudo`. Script ghi ra một file JSON.
+* Server 2: hub đọc file đó qua một **mount chỉ-đọc**. Server 1: agent đọc file (cũng chỉ-đọc) và gửi kèm số liệu, mỗi phút một lần, qua đường `/api/ingest` đã có token. Hub chỉ giữ đúng các trường mong đợi, cắt độ dài cố định.
+* Kiểm tra image mới: sidecar `docker-status` (vốn đã có `docker.sock`) báo thêm tên image và digest lúc pull. Hub hỏi registry bằng `HEAD` ẩn danh (Docker Hub không tính `HEAD` vào giới hạn pull), 6 giờ một lần.
+* Không mở thêm cổng nào. Hai kết nối ra ngoài mới, đều chỉ đọc: GitHub API và các registry.
+
+Lần đầu mỗi server gửi báo cáo, mọi cổng đang mở được coi là "đã biết". Từ đó về sau, một cổng mới mở trên mọi interface sẽ bật banner và được đánh dấu **new** trong một ngày.
+
+### Trang xem trước trên LAN không còn thấy mọi thứ
+
+Trang `10.10.10.20:8787` vốn cho bất kỳ máy nào trong LAN xem (chỉ đọc). Với lịch, kết quả bảo mật và GitHub thì "chỉ đọc" vẫn là lộ: danh sách cổng đang mở và IP đang dò SSH chính là bản đồ cho kẻ đang dò mạng. Giờ hub gửi hai bản trạng thái: Car Thing nhận đầy đủ, mọi máy khác nhận bản đã lược bỏ lịch, bảo mật, cập nhật, GitHub, câu trả lời của Mei và các banner bảo mật. Muốn một máy cụ thể xem đầy đủ thì thêm IP vào `PREVIEW_FULL_FROM`.
+
+Vì lý do tương tự, ảnh chụp trong README **không có** chế độ 24 h, Security và Updates: chúng hiện địa chỉ, cổng và tên container thật trong mạng nhà.
+
+### Lỗi #19: chạm trong bóng tối vẫn lọt một phím
+
+Thử trên máy thật: lúc màn hình tối, bấm hai lần sang phải cách nhau 300 ms. Lần đầu chỉ đánh thức, đúng. **Lần hai lại chuyển trang.** Lý do: hub trả lời và đẩy trạng thái "đã sáng" về trong khoảng 300 ms, trong khi đèn nền phải đợi `brightness-sync` poll (tối đa 2 giây) mới thật sự sáng. Với màn hình, "đã sáng" sớm hơn với mắt người gần 2 giây. Sửa: sau khi gửi lệnh đánh thức, mọi thao tác trong 2,5 giây tiếp theo vẫn bị nuốt. Thử lại: hai phím lúc tối không làm gì, phím thứ ba (đã sáng) chuyển trang bình thường.
+
+### Lỗi #20: `systemctl reload sshd` báo không có unit
+
+Lần chạy đầu của `check-carthing.sh` ở chế độ sửa báo `Unit sshd.service not found`. Trên Nocturne, SSH được **kích hoạt qua socket** (`sshd.socket`): mỗi kết nối mới chạy một tiến trình `sshd` riêng và tự đọc lại cấu hình. Không có gì để reload, chỉ cần `sshd -t` kiểm tra cú pháp. Hướng dẫn trong SETUP cũng sửa theo.
+
+### Lỗi #21: firewall "chặn" chính Car Thing hàng chục lần
+
+Bản đầu của `host-report.sh` đếm mọi dòng `[UFW BLOCK]`: hơn 2.000 mỗi ngày. Phần lớn là multicast IPv6 của router (`ff02::1`), thứ mọi mạng LAN đều có. Bỏ multicast và broadcast đi vẫn còn Car Thing → 8787 bị chặn 78 lần. Hoá ra đa số là **gói ACK/FIN đến muộn** của các kết nối đã đóng (long-poll của Mei, SSE), conntrack coi là không hợp lệ nên UFW ghi log. Giờ chỉ đếm **lần mở kết nối mới** (TCP có SYN, không có ACK) và gói UDP. Những gì còn lại là thật: Car Thing gõ vào cổng 8787 lúc hub đang khởi động lại (cổng Docker tạm thời biến mất), và vài lần Car Thing thử một cổng khác trên server 2. Firewall chặn đúng như thiết kế.
+
+### Những thứ chạm vào bàn phím mà không ai nghĩ tới
+
+Khi lật ngược màn hình 180°, núm vặn **không** bị ngược: xoay trong mặt phẳng màn hình thì chiều kim đồng hồ vẫn là chiều kim đồng hồ. Thứ bị ngược là những thứ dựa trên toạ độ:
+
+* **Vuốt** để đổi trang: trình duyệt báo toạ độ của màn hình, không phải của giao diện đã xoay, nên lật ngược thì vuốt trái thành vuốt phải, còn ở chế độ dọc thì vuốt ngang thành vuốt dọc. Giờ toạ độ được đổi sang hệ của giao diện trước khi tính.
+* **Chạm vào thanh độ sáng**: dùng `offsetX` (toạ độ trong chính phần tử, đã tính phép xoay) thay cho `clientX`.
+* **4 nút preset**: lật ngược thì chúng nằm ở cạnh dưới theo thứ tự 4-3-2-1. Hub đảo lại để nút bên trái luôn là nút 1.
+
+## 23. Bảng tổng hợp lỗi
 
 | # | Triệu chứng | Nguyên nhân gốc | Cách sửa |
 |---|---|---|---|
@@ -488,8 +540,11 @@ Cách sửa: khi model chính trả 429, hub **tự gửi lại cùng yêu cầu
 | 16 | Đồng hồ số BTC không cuộn | Cùng nguyên nhân: `/d/` thay vì `/\d/` | Như trên |
 | 17 | Gemini 429 sau vài câu hỏi | Gói miễn phí của model Flash mới chỉ có 20 lượt/ngày | Tự chuyển sang Flash-Lite khi gặp 429 |
 | 18 | Kẹt trang lỗi nếu hub tắt lúc Car Thing khởi động | Code tự kết nối lại nằm trong trang chưa tải được | `kiosk-watch.sh` khởi động lại kiosk khi hub trả lời |
+| 19 | Chạm lúc màn hình tối vẫn lọt một phím | Trạng thái "đã sáng" về trước khi đèn nền sáng thật (tối đa 2 giây) | Nuốt mọi thao tác trong 2,5 giây sau khi đánh thức |
+| 20 | `reload sshd` thất bại trên Car Thing | SSH của Nocturne kích hoạt qua socket, không có `sshd.service` | Chỉ cần `sshd -t` |
+| 21 | Số gói bị chặn cao bất thường | Đếm cả multicast và gói ACK/FIN muộn của kết nối đã đóng | Chỉ đếm lần mở kết nối mới |
 
-## 23. Những điều rút ra
+## 24. Những điều rút ra
 
 1. **Đo trên thiết bị thật, không đoán.** Font, FPS, mức âm thanh của micro, giờ hệ thống: lần nào thiết bị thật cũng khác với giả định.
 2. **"Không tin mặc định" là công cụ thiết kế, không chỉ là bảo mật.** Nó quyết định Car Thing không giữ key, hub không cầm `docker.sock`, agent chỉ đẩy dữ liệu đi, và firewall nằm trên đúng máy.

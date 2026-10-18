@@ -2,9 +2,9 @@
 
 # Car Thing Desk Hub
 
-**A bricked Spotify Car Thing, reborn as a desk companion:** live markets, news, weather, your calendar, Spotify, server health, a focus timer, and **Mei**, a little yellow cat you can talk to.
+**A bricked Spotify Car Thing, reborn as a desk companion:** live markets, news, weather, your calendar, Spotify, server health and security, a focus timer, and **Mei**, a little yellow cat you can talk to.
 
-<img src="docs/screenshots/tour.gif" width="720" alt="A tour of the pages on the Car Thing: news and a story summary, markets, Mei, weather, calendar, music, servers">
+<img src="docs/screenshots/tour.gif" width="720" alt="A tour of the pages on the Car Thing: news and a story summary, markets, weather, calendar, music, servers, focus, Mei">
 
 <sub>Recorded from the real device (800 × 480) over DevTools, not a mock-up. Every screenshot below is from the device too.</sub>
 
@@ -25,12 +25,13 @@ The Car Thing never touches the internet. It only talks to the hub, the hub only
 | 📰 **News** | Top stories, Việt Nam, Kinh doanh VN, Tech and Hacker News, refreshed every 2 minutes from Google News RSS and the Hacker News API. Tap a headline, or select it with the knob, for a one-paragraph summary of the actual article, in Vietnamese or English. |
 | 📈 **Markets** | BTC with a rolling odometer price and a 24 h chart; ETH, SOL, BNB, XRP and DOGE streamed in real time over the OKX websocket; gold and silver; SJC and 9999 ring gold in VND; Vietcombank FX; VN-Index, S&P 500, Nasdaq, DXY and oil. Price alerts pop up on any page. |
 | 🐈 **Mei** | Press the knob and talk. The four microphones record, the hub asks Gemini, and Mei answers in English or Vietnamese in a speech bubble. She remembers the last few minutes, so follow-ups work, and knows which story you had open ("what does this one say?"). Every morning at 7 she writes a short **briefing**: weather, today's calendar, BTC and gold, USD/VND, top headlines. While idle, Mei and her owner **Nhat** act out random little scenes. |
-| 🌤 **Weather** | Current conditions, AQI, 12-hour and 4-day forecast (Open-Meteo). The animated sky changes with the real weather. |
+| 🌤 **Weather** | Current conditions, AQI, 12-hour and 4-day forecast (Open-Meteo), and rain in the next two hours in 15-minute steps, with a banner about half an hour before it starts. The animated sky changes with the real weather. |
 | 📅 **Calendar** | Your Google Calendar through its secret iCal link (read-only, no OAuth): what's next with a countdown, then today, tomorrow or the week. Recurring events, exceptions and daylight-saving changes are handled on the hub. A banner pops up 10 minutes before each event, on any page. |
 | 🎵 **Music** | Spotify now playing and controls (PKCE, no client secret), album art proxied through the hub. |
-| 🖥 **Servers** | CPU, memory, disk, temperature, uptime and container health for two home servers. |
+| 🖥 **Servers** | Four views on buttons 1–4. **Now**: CPU, memory, disk, temperature, uptime and container health for two home servers. **24 h**: CPU, memory and temperature graphs. **Security**: failed SSH logins, what the firewall blocked, every port open on all interfaces (a new one raises a banner), and whether the Car Thing still has its setup. **Updates**: pending apt packages, containers with a newer image, and GitHub (latest CI run per repository, open pull requests and issues). |
 | ⏱ **Focus** | A Pomodoro timer: buttons 1–4 set 15, 25, 45 or 60 minutes. |
 | ⚙️ **Quick menu** | The round button opens screen brightness, restart, shut down and rotate (each press turns the screen another 90°). |
+| 🌙 **Night** | From 23:00 to 06:30 the backlight goes off. Touch anything and it lights up for two minutes; that first touch only wakes the screen. |
 | 🔌 **Self-healing** | If the hub goes quiet the screen says so and keeps reconnecting, and it reloads itself when the hub comes back with new code. A watcher on the device restarts the kiosk if it got stuck on an error page, and the hardware watchdog reboots it if it ever freezes. |
 
 ### Controls
@@ -45,20 +46,23 @@ The Car Thing never touches the internet. It only talks to the hub, the hub only
 
 | Page | 1 | 2 | 3 | 4 |
 |---|---|---|---|---|
-| News | Top stories | Việt Nam | Tech | Next topic |
+| News | Next topic | Previous topic | | |
 | Markets (zoom) | BTC | Gold | FX | Indices |
-| Mei | Today's briefing | | | |
 | Calendar | Today | Tomorrow | Week | |
 | Music | Previous | Play / pause | Next | Like |
+| Servers | Now | 24 h | Security | Updates |
 | Focus | 15 min | 25 min | 45 min | 60 min |
+| Mei | Today's briefing | | | |
 
-On **News**: press the knob to highlight a story, turn to move, press again (or just tap the story) for its summary. While a summary is open, turning the knob flips to the next story. Turn to Mei with the summary still open and ask her about it.
+Upside down, the preset buttons sit along the bottom edge in reverse order, so the hub swaps them: the one on your left is always 1.
+
+On **News**: press the knob to highlight a story, turn to move, press again (or just tap the story) for its summary. While a summary is open, turning the knob flips to the next story. Turn to Mei (the last page) with the summary still open and ask her about it.
 
 ## Gallery
 
 | | |
 |---|---|
-| <img src="docs/screenshots/01-news.png" width="400"><br>**News**, five topics, buttons 1–4 | <img src="docs/screenshots/16-news-summary.png" width="400"><br>**Story summary** (tap a headline) |
+| <img src="docs/screenshots/01-news.png" width="400"><br>**News**, five topics, buttons 1 and 2 to switch | <img src="docs/screenshots/16-news-summary.png" width="400"><br>**Story summary** (tap a headline) |
 | <img src="docs/screenshots/15-news-browse.png" width="400"><br>**Picking a story** with the knob | <img src="docs/screenshots/03-markets-btc.png" width="400"><br>**Markets → BTC** (button 1) |
 | <img src="docs/screenshots/04-markets-gold.png" width="400"><br>**Markets → Gold** (button 2) | <img src="docs/screenshots/05-markets-fx.png" width="400"><br>**Markets → FX** (button 3) |
 | <img src="docs/screenshots/09-mei-answer.png" width="400"><br>**Mei answering** a spoken question | <img src="docs/screenshots/08-mei-nhat-1.png" width="400"><br>**Mei and Nhat**: the fish sandwich heist |
@@ -102,21 +106,26 @@ flowchart LR
   subgraph s2["Server 2 (the brain)"]
     HUB["carthing-hub<br/>Node 22, read-only container"]
     DS2["docker-status<br/>read-only sidecar"]
+    HR2["host-report.sh · check-carthing.sh<br/>cron, no root"]
     FW["UFW + DOCKER-USER<br/>USB: only :8787 and NTP"]
   end
   subgraph s1["Server 1"]
     AG["hub-stats-agent<br/>push only, no ports"]
     DS1["docker-status sidecar"]
+    HR1["host-report.sh<br/>cron, no root"]
   end
-  NET(("Free APIs<br/>OKX · Yahoo · gold-api · PNJ<br/>Vietcombank · Open-Meteo<br/>Google News · HN · Gemini<br/>Spotify · Google Calendar (iCal)"))
+  NET(("Free APIs<br/>OKX · Yahoo · gold-api · PNJ<br/>Vietcombank · Open-Meteo<br/>Google News · HN · Gemini<br/>Spotify · Google Calendar (iCal)<br/>GitHub · image registries"))
 
   CT <-- "USB CDC-NCM<br/>10.42.1.0/29" --> FW --> HUB
   DS2 --> HUB
+  HR2 -- "read-only file" --> HUB
+  HR1 --> AG
   DS1 --> AG -- "token + source IP<br/>POST /api/ingest" --> HUB
   HUB -- "outbound HTTPS only" --> NET
 ```
 
-* **The Car Thing is a screen, not a computer you trust.** It runs Chromium in kiosk mode pointed at the hub, plus two tiny shell helpers: one applies the brightness you pick, the other records the microphones when you talk to Mei. It has no route to the LAN or the internet.
+* **The Car Thing is a screen, not a computer you trust.** It runs Chromium in kiosk mode pointed at the hub, plus three tiny shell helpers: one applies the brightness you pick (and switches the backlight off at night), one records the microphones when you talk to Mei, one reloads the kiosk if it gets stuck. It has no route to the LAN or the internet. After a Nocturne update, `check-carthing.sh` on server 2 checks all of that and puts back whatever the update reset.
+* **Security data without new privileges.** A small cron script on each server (run as the normal user, which can read the journal) writes failed SSH logins, firewall blocks, open ports and pending updates to a JSON file. The hub reads server 2's file through a read-only mount; server 1's agent sends its file along with the stats. Image update checks are anonymous `HEAD` requests to the registries.
 * **The hub is the brain.** One Node.js process with no dependencies gathers every data source, keeps all keys, and streams state to the screen over Server-Sent Events. It runs in a read-only container with every capability dropped and no `docker.sock`.
 * **Everything is free.** No paid API is required. The two optional extras that would cost money (Google Search grounding for Mei, and paid Gemini tiers) are off by default. When the main Gemini model runs out of its free daily quota, Mei switches to Flash-Lite on her own.
 
@@ -127,14 +136,15 @@ More detail: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** · the whole story
 ```
 hub/            the brain: Node 22 server, UI, config, compose file
   server/       index.mjs (data sources, HTTP/SSE), assistant.mjs (Mei), news.mjs, calendar.mjs,
-                spotify.mjs, alerts.mjs, docker-status.mjs
-  test/         node:test suite (calendar recurrence and time zones)
+                spotify.mjs, alerts.mjs, history.mjs, security.mjs, registry.mjs, github.mjs,
+                docker-status.mjs
+  test/         node:test suite (calendar recurrence and time zones, image references, host reports)
   public/       index.html, app.js (pages + controls), stage.js (Mei & Nhat),
                 style.css + theme.css, fonts/ (Bricolage Grotesque, OFL)
 agent/          server-1 stats agent (push only) + its compose file
 carthing/       files that live on the Car Thing: helpers, kiosk override and watcher, sshd, NTP, watchdog
-host/           server-2 host config: netplan, UFW / DOCKER-USER rules, sysctl, chrony
-tools/          setup scripts for secrets, DevTools helpers (screenshots, the GIF, error capture)
+host/           server-2 host config: netplan, UFW / DOCKER-USER rules, sysctl, chrony; host-report.sh (cron)
+tools/          setup scripts for secrets, check-carthing.sh (run after Nocturne updates), DevTools helpers (screenshots, the GIF, error capture)
 docs/           SETUP, ARCHITECTURE, SECURITY, DEVLOG, screenshots
 ```
 
@@ -146,7 +156,7 @@ See **[docs/SETUP.md](docs/SETUP.md)**. In short: flash Nocturne 4 onto the Car 
 
 * [Nocturne](https://github.com/usenocturne/nocturne): the firmware that makes the Car Thing usable again. This project runs on top of it and only replaces the page the kiosk shows.
 * [flashthing](https://github.com/JoeyEamigh/flashthing): flashing tool.
-* Data: [OKX](https://www.okx.com/docs-v5/), Yahoo Finance, [gold-api.com](https://gold-api.com), PNJ, Vietcombank, [Open-Meteo](https://open-meteo.com), Google News RSS, [Hacker News API](https://github.com/HackerNews/API), [Gemini API](https://ai.google.dev), [Spotify Web API](https://developer.spotify.com).
+* Data: [OKX](https://www.okx.com/docs-v5/), Yahoo Finance, [gold-api.com](https://gold-api.com), PNJ, Vietcombank, [Open-Meteo](https://open-meteo.com), Google News RSS, [Hacker News API](https://github.com/HackerNews/API), [Gemini API](https://ai.google.dev), [Spotify Web API](https://developer.spotify.com), [GitHub REST API](https://docs.github.com/rest).
 * Typeface: [Bricolage Grotesque](https://github.com/ateliertriay/bricolage) (SIL Open Font License, see `hub/public/fonts/OFL.txt`).
 
 This is a personal project and is not affiliated with Spotify, Nocturne, or any data provider. Respect each provider's terms; some of the endpoints used here are unofficial.

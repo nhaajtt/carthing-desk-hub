@@ -27,7 +27,10 @@ So the Car Thing must not hold secrets, must not reach anything except the hub, 
 | **Server-1 agent** | Push only, no listening ports. The hub requires both the source address and a bearer token (constant-time comparison). |
 | **Spotify linking** | One-time `state`, 10-minute expiry, never started from the Car Thing; the callback stays on loopback through an SSH tunnel. |
 | **Album art proxy** | Only `https://i.scdn.co/`. |
-| **Inbound internet** | None. Every integration is an outbound request. |
+| **Inbound internet** | None. Every integration is an outbound request (including the new ones: GitHub API and the image registries, both read-only). |
+| **LAN preview** | Read-only, and trimmed: no calendar events, security or update details, GitHub, Mei answers or security / CI banners for anyone but the Car Thing (or addresses you list in `PREVIEW_FULL_FROM`). A list of open ports and failed-login sources is a map for whoever is probing the LAN. |
+| **Host reports** | `host-report.sh` runs from the normal user's crontab (reads the journal as a member of `adm`, no sudo). Its output reaches the hub as a file through a read-only mount (server 2) or inside the agent's authenticated push (server 1), where the hub keeps only the expected fields, clipped to fixed lengths. No new ports. |
+| **Car Thing drift** | `check-carthing.sh` compares the device with the repository after Nocturne updates and hourly from cron, so a reset that turns password SSH back on or drops the hardening shows up as a red banner. Fixing needs a person to run it. |
 | **Repository** | GitHub secret scanning and push protection are on; CI checks syntax and runs the tests on every push. |
 
 ## Two traps worth knowing
@@ -40,6 +43,7 @@ So the Car Thing must not hold secrets, must not reach anything except the hub, 
 * Mei sends your recorded question and the dashboard snapshot to the Gemini API. On Google's free tier, inputs may be used to improve Google's products. Do not ask Mei anything sensitive, or use a paid tier.
 * Story summaries send the article text to Gemini in the same way.
 * The morning briefing and Mei's answers include **today's and tomorrow's calendar entries** (times, titles, locations) in what is sent to Gemini. Leave `CALENDAR_ICS` empty, or set `BRIEFING_AT=off`, if that is not acceptable for your calendar.
+* GitHub: with a token, names of private repositories and titles of their issues and pull requests are shown on the Car Thing (never on the LAN preview). Use a fine-grained token, read-only, limited to the repositories you want on the screen.
 * Recordings are not stored: the Car Thing deletes the WAV after upload, and the hub keeps it in memory only for the request.
 
 ## Reporting

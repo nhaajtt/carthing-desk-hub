@@ -41,7 +41,7 @@ Allow SSH from the LAN **before** enabling UFW over SSH (the script does it firs
 cd hub
 cp .env.example .env && chmod 600 .env    # fill INGEST_TOKEN, GEMINI_API_KEY, SPOTIFY_CLIENT_ID as wanted
 sudoedit docker-compose.yml                # group_add: the GID of /var/run/docker.sock (stat -c %g)
-mkdir -p state
+mkdir -p state host-report    # create both yourself, or Docker creates them owned by root
 docker compose up -d
 curl -s http://10.10.10.20:8787/health     # ok
 ```
@@ -76,14 +76,25 @@ scp ~/.ssh/carthing_ed25519.pub $CT:/root/.ssh/authorized_keys
 scp carthing/10-hub.conf $CT:/etc/systemd/timesyncd.conf.d/
 scp carthing/10-hardening.conf $CT:/etc/ssh/sshd_config.d/
 scp carthing/10-watchdog.conf $CT:/etc/systemd/system.conf.d/   # reboot by itself if it ever freezes
-ssh $CT 'sshd -t && systemctl unmask systemd-timesyncd; systemctl enable systemd-timesyncd; sync; mount -o remount,ro /; systemctl daemon-reexec; systemctl reload sshd; systemctl restart systemd-timesyncd chromium-kiosk'
+ssh $CT 'sshd -t && systemctl unmask systemd-timesyncd; systemctl enable systemd-timesyncd; sync; mount -o remount,ro /; systemctl daemon-reexec; systemctl restart systemd-timesyncd chromium-kiosk'
 ```
 
 Check the watchdog is armed: `journalctl -b | grep -i watchdog` should say `Watchdog running with a hardware timeout of 30s`.
 
-Test the key login **before** reloading sshd with the hardening file.
+Test the key login **before** copying the hardening file: sshd is socket-activated on Nocturne, so the next connection already uses it.
 
 To return to the stock Nocturne UI: `rm /var/lib/hub/kiosk-env` and restart `chromium-kiosk`.
+
+### After every Nocturne update
+
+An update can reset `/etc` and `/root` on the Car Thing: the kiosk override, key-only SSH, time sync, the watchdog. Put the repository's `carthing/` folder at `~/carthing-hub/carthing` on the brain, copy `tools/check-carthing.sh` next to the other tools, and run it:
+
+```bash
+~/carthing-tools/check-carthing.sh            # check, then put back whatever is missing or different
+~/carthing-tools/check-carthing.sh --check    # only report
+```
+
+It compares every file with the copy in `carthing/` (SHA-256), checks the kiosk points at the hub, the hub's key is in `authorized_keys`, sshd refuses passwords, time sync is on and the three helpers are running. If the update wiped the key, it asks for the root password once (Nocturne's default is `nocturne`) to put the key back, then continues with the key. Run hourly from cron with `--json`, it also feeds the Car Thing card on Servers → Security (see section 9).
 
 ## 5. Optional: stats from a second server
 
@@ -111,6 +122,34 @@ Several calendars are fine; each gets its own colour on the Calendar page.
 ## 8. Optional: morning briefing
 
 On by default at 07:00 in `WX_TZ`. Change it with `BRIEFING_AT=06:30` (or `off`) and `BRIEFING_LANG=Vietnamese` in `hub/.env`, then restart the hub. Button 1 on Mei's page asks for one any time.
+
+## 9. Optional: Servers → 24 h, Security and Updates
+
+The graphs need nothing: the hub keeps 24 hours of 10-minute averages in `state/history.json`.
+
+Security and update details come from `host/host-report.sh`, run from the normal user's crontab on each server (no root: members of `adm` can read the journal). It writes failed SSH logins, packets UFW blocked (new connections only, without multicast noise), sockets listening on every interface and pending apt updates to a JSON file.
+
+```bash
+# server 2: the hub reads ./host-report through a read-only mount (see docker-compose.yml)
+mkdir -p ~/carthing-hub/host-report
+crontab -e
+*/5 * * * * $HOME/carthing-tools/host-report.sh $HOME/carthing-hub/host-report/report.json
+17 * * * * $HOME/carthing-tools/check-carthing.sh --json $HOME/carthing-hub/host-report/carthing.json >/dev/null 2>&1
+
+# server 1: the agent reads ./report (read-only) and sends it with its stats once a minute
+mkdir -p /srv/apps/hub-stats-agent/report
+*/5 * * * * /srv/apps/hub-stats-agent/host-report.sh /srv/apps/hub-stats-agent/report/report.json
+```
+
+The first report from each server counts what is already open as known. After that, a port that starts listening on every interface (on the host, or a Docker port published on `0.0.0.0`) raises a banner and is marked **new** for a day. Five or more failed SSH logins in an hour also raise one (`SSH_ALERT`).
+
+Containers with a newer image: the docker-status sidecars report each image and the digest it was pulled by; every 6 hours the hub asks the registry (anonymous `HEAD`, which Docker Hub does not count as a pull) for the digest the same tag has now. Images built locally show as unknown and are left out of the count.
+
+GitHub: set `GITHUB_USER` in `hub/.env`. Public repositories need no token. For private ones, create a fine-grained token with read-only Metadata, Actions, Issues and Pull requests, and store it with `ssh -t user@brain ~/carthing-tools/set-github-token.sh`.
+
+## 10. Optional: night
+
+`NIGHT_DIM=23:00-06:30` (the default; `off` to disable) turns the backlight off between those times. The first knob turn, button press or tap only wakes the screen, for `WAKE_MINUTES` (2), and every further input keeps it awake.
 
 ## Development helpers
 
