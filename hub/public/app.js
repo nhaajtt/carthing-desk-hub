@@ -692,6 +692,25 @@ function renderServersNow() {
       <div class="kv"><span>${tr('Network latency')}</span><b>${s1.online ? num(s1.latency, 1) + ' ms' : '—'}</b></div>
       ${containersBlock(st && st.containers)}`);
   }
+  renderCarThingHealth();
+}
+
+// the Car Thing itself, read over SSH from server 2 every 2 minutes (tools/carthing-stats.sh)
+function renderCarThingHealth() {
+  const h = S.ctHealth, ct = $('srvCt');
+  ct.style.display = h ? '' : 'none';
+  if (!h) return;
+  const ok = h.reachable && now() - h.at < 6 * 60000;
+  const down = ok ? Object.values(h.helpers || {}).filter((v) => !v).length : 0;
+  setClass(ct, 'srv ct-health' + (ok ? '' : ' stale'));
+  setHTML(ct, `<div class="head"><div><b>Car Thing</b> <span>Nocturne ${esc(h.version || '')} · 10.42.1.2</span></div><span class="state ${ok ? 'up' : 'down'}">${tr(ok ? 'Online' : 'Offline')}</span></div>`
+    + (ok
+      ? `<div class="ct-meters">${meter('CPU', h.cpu / 100, `${num(h.cpu, 0)}%`)}${meter('Memory', h.memUsed / h.memTotal, `${Math.round(h.memUsed / 1048576)} MB`)}`
+        + `${meter('Storage', h.diskUsed / h.diskTotal, tr('{v} free', { v: gb(h.diskTotal - h.diskUsed) }))}</div>`
+        + `<div class="ct-kv"><span>${tr('Temperature')} <b>${degF(h.temp)}</b></span><span>${tr('Uptime')} <b>${dur(h.uptime)}</b></span>`
+        + `<span>Bluetooth <b class="${h.helpers.phone ? 'ok' : 'bad'}">${h.helpers.phone ? '✓' : '✗'}</b></span>`
+        + `<span>${tr('Helpers')} <b class="${down ? 'bad' : 'ok'}">${down ? tr('{n} stopped', { n: down }) : '✓'}</b></span></div>`
+      : `<div class="note">${tr('No answer from the Car Thing over SSH.')}</div>`));
 }
 
 // ---------------------------------------------------------------- focus timer (client side)

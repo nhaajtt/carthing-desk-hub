@@ -147,6 +147,12 @@ Containers with a newer image: the docker-status sidecars report each image and 
 
 GitHub: set `GITHUB_USER` in `hub/.env`. Public repositories need no token. For private ones, create a fine-grained token with read-only Metadata, Actions, Issues and Pull requests, and store it with `ssh -t user@brain ~/carthing-tools/set-github-token.sh`.
 
+Car Thing health on Servers → Now comes from one more cron line on server 2 (read-only SSH, every 2 minutes):
+
+```bash
+*/2 * * * * $HOME/carthing-tools/carthing-stats.sh $HOME/carthing-hub/host-report/carthing-stats.json >/dev/null 2>&1
+```
+
 ## 10. Optional: night
 
 `NIGHT_DIM=23:00-06:30` (the default; `off` to disable) turns the backlight off between those times. The first knob turn, button press or tap only wakes the screen, for `WAKE_MINUTES` (2), and every further input keeps it awake.

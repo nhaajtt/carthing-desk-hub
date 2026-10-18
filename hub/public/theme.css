@@ -668,3 +668,14 @@ body:not(.portrait) .bar-right { gap: 8px; }
 .dk-day.today i { background: var(--gold); }
 .dk-day.today span { color: var(--text); }
 .alert-banner.desk, .alert-banner.remind { background: linear-gradient(90deg, #3d2a07, #6b4a0e); color: #ffe6ad; box-shadow: 0 0 0 2px var(--gold), 0 14px 40px rgba(0, 0, 0, 0.5); }
+
+/* ---------- Servers → Now: the Car Thing's own health under the two servers */
+#srvGrid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: minmax(0, 1fr) auto; }
+#srvGrid .ct-health { grid-column: 1 / -1; gap: 6px; }
+.ct-meters { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 18px; }
+.ct-kv { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 13px; color: var(--muted); }
+.ct-kv b { color: var(--text); }
+.ct-kv b.ok { color: var(--up); }
+.ct-kv b.bad { color: var(--down); }
+.portrait #srvGrid { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) auto; }
+.portrait .ct-meters { grid-template-columns: 1fr; }

@@ -82,7 +82,22 @@ export function createSecurity({ state, changed, stateDir, hostDir, notify }) {
       }
     }
     readCarthing();
+    readCarthingHealth();
     changed();
+  }
+
+  // the Car Thing's CPU, memory, temperature, storage and helpers (carthing-stats.sh, every 2 minutes);
+  // numbers only, so it is shown on the LAN preview too
+  function readCarthingHealth() {
+    let h = null;
+    try { h = JSON.parse(fs.readFileSync(path.join(hostDir, 'carthing-stats.json'), 'utf8')); } catch { return; }
+    const helpers = {};
+    for (const k of ['brightness', 'voice', 'kiosk-watch', 'phone']) helpers[k] = h.helpers?.[k] === true;
+    state.ctHealth = h.reachable === false ? { at: num(h.at), reachable: false } : {
+      at: num(h.at), reachable: true, cpu: num(h.cpu), memTotal: num(h.memTotal), memUsed: num(h.memUsed), temp: num(h.temp),
+      load: (Array.isArray(h.load) ? h.load : []).slice(0, 3).map(num), uptime: num(h.uptime), diskTotal: num(h.diskTotal),
+      diskUsed: num(h.diskUsed), helpers, kiosk: str(h.kiosk, 20), version: str(h.version, 40),
+    };
   }
 
   function readCarthing() {

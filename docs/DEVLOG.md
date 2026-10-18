@@ -700,6 +700,7 @@ iOS chỉ gửi danh sách thông báo đang có **một lần**, khi chương t
 | Bản tin có điện thoại | Car Thing gửi hub **số đếm** (thông báo, cuộc gọi nhỡ trong 12 giờ, pin), không gửi nội dung; Mei nhắc trong bản tin 7 giờ sáng. |
 | Mei nhắc việc | Câu trả lời của Mei có thể kết thúc bằng dòng `R: <số phút> \| <việc>`; Gemini tự đổi giờ đồng hồ thành số phút từ "Local time" có sẵn trong dữ liệu. Hub lưu vào `state/reminders.json`, đến giờ thì banner và bật màn hình. |
 | Dịch lời bài hát | Khi màn hình ở tiếng Việt mà lời không có dấu tiếng Việt, hub gửi cả bài một lần cho Gemini Flash-Lite (khoảng 3 giây), trả về mảng đúng số dòng; lệch số dòng thì bỏ, không hiện bản dịch sai dòng. |
+| Sức khoẻ Car Thing | `carthing-stats.sh` trên server 2 đọc CPU, RAM, nhiệt độ, bộ nhớ, thời gian chạy và các chương trình phụ qua SSH mỗi 2 phút (chỉ đọc, đúng chiều tin cậy sẵn có, không mở cổng mới). Trang Máy chủ → Hiện tại có thêm thẻ Car Thing dưới hai server. |
 | Dọn server 2 | Xoá image `golang:1.24-bookworm` (1,27 GB); `build-phonelink.sh` giờ dùng bản Alpine nhỏ hơn và tự tải khi cần build. |
 
 ## 27. Bảng tổng hợp lỗi

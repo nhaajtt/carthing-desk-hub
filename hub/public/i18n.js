@@ -114,6 +114,7 @@ const VI = {
   '{s} s left · Back to cancel': 'còn {s} giây · Back để huỷ',
   'Press the knob again to forget this iPhone · Back to cancel': 'Bấm núm lần nữa để quên iPhone này · Back để huỷ',
   Phone: 'Điện thoại', 'Unknown caller': 'Không rõ người gọi', Answer: 'Nghe', Decline: 'Từ chối',
+  Storage: 'Bộ nhớ', '{v} free': 'trống {v}', Helpers: 'Chương trình phụ', 'No answer from the Car Thing over SSH.': 'Car Thing không trả lời qua SSH.',
   'Find my iPhone': 'Tìm iPhone', 'Stop the sound': 'Tắt tiếng', 'Plays music loudly on the iPhone': 'Phát nhạc to trên iPhone',
   'right here': 'ngay cạnh đây', 'about {m} m away': 'cách khoảng {m} m',
   'No app on the iPhone can play right now': 'Trên iPhone chưa có app nào phát nhạc được', 'Playing on the iPhone for 30 s': 'Đang phát trên iPhone trong 30 giây',

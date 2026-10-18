@@ -14,6 +14,7 @@
 | **docker-status** | Server 2 and Server 1 | The only container with `docker.sock` (read-only mount). Answers `GET /` with container names, state and health. No host port. |
 | **hub-stats-agent** | Server 1 (Docker) | Every 5 s pushes CPU, memory, disk, temperature, load, uptime and the container list to `POST /api/ingest`, plus the host report once a minute. No ports. |
 | **host-report.sh** | Server 2 and Server 1 (cron, normal user) | Every 5 min writes failed SSH logins, UFW blocks, sockets open on every interface and pending apt updates to a JSON file (read-only mount into the hub / the agent). |
+| **carthing-stats.sh** | Server 2 (cron, every 2 min) | Reads the Car Thing's CPU, memory, temperature, storage, uptime and whether the kiosk and helpers run, over SSH; writes `host-report/carthing-stats.json` for Servers → Now. Only reads on the device. |
 | **check-carthing.sh** | Server 2 (by hand, and hourly from cron with `--json`) | Compares the Car Thing's helpers and `/etc` files with `carthing/`, checks the kiosk override, key, sshd and time sync, and puts back what a Nocturne update reset. |
 
 ## Data sources (all free, no paid keys)
@@ -124,7 +125,7 @@ carthing/phonelink/
 | Hub → Internet | outbound HTTPS | data sources above |
 | iPhone ↔ Car Thing | Bluetooth LE, bonded with a 6-digit code (LE Secure Connections) | Notifications, media and battery from the phone; answer / decline and media commands to it. Only the paired phone; pairing is refused outside the 2-minute window. |
 | Kiosk page → phonelink | Car Thing loopback, `127.0.0.1:5055` | Only requests whose `Origin` is the hub page. |
-| Server 2 → Car Thing | USB, SSH with the hub key | `check-carthing.sh` (hourly, read-only checks; fixes only when run by hand) |
+| Server 2 → Car Thing | USB, SSH with the hub key | `check-carthing.sh` (hourly, read-only checks; fixes only when run by hand), `carthing-stats.sh` (every 2 min, read-only) |
 
 `net.ipv4.ip_nonlocal_bind=1` lets Docker publish `10.42.1.6:8787` before the Car Thing is plugged in.
 
