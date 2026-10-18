@@ -30,7 +30,8 @@ The Car Thing never touches the internet. It only talks to the hub, the hub only
 | 🎵 **Music** | Spotify now playing and controls (PKCE, no client secret), album art proxied through the hub. |
 | 🖥 **Servers** | Four views on buttons 1–4. **Now**: CPU, memory, disk, temperature, uptime and container health for two home servers. **24 h**: CPU, memory and temperature graphs. **Security**: failed SSH logins, what the firewall blocked, every port open on all interfaces (a new one raises a banner), and whether the Car Thing still has its setup. **Updates**: pending apt packages, containers with a newer image, and GitHub (latest CI run per repository, open pull requests and issues). |
 | ⏱ **Focus** | A Pomodoro timer: buttons 1–4 set 15, 25, 45 or 60 minutes. |
-| ⚙️ **Quick menu** | The round button opens screen brightness, restart, shut down and rotate (each press turns the screen another 90°). |
+| ⚙️ **Quick menu** | The round button opens screen brightness, restart, shut down, rotate (each press turns the screen another 90°) and language. |
+| 🇻🇳 **English / Tiếng Việt** | The language tile switches the whole screen: pages, hints, dates and the clock, the banners the hub raises, and Mei's morning briefing. |
 | 🌙 **Night** | From 23:00 to 06:30 the backlight goes off. Touch anything and it lights up for two minutes; that first touch only wakes the screen. |
 | 🔌 **Self-healing** | If the hub goes quiet the screen says so and keeps reconnecting, and it reloads itself when the hub comes back with new code. A watcher on the device restarts the kiosk if it got stuck on an error page, and the hardware watchdog reboots it if it ever freezes. |
 
@@ -48,6 +49,7 @@ The Car Thing never touches the internet. It only talks to the hub, the hub only
 |---|---|---|---|---|
 | News | Next topic | Previous topic | | |
 | Markets (zoom) | BTC | Gold | FX | Indices |
+| Weather | °C / °F | | | |
 | Calendar | Today | Tomorrow | Week | |
 | Music | Previous | Play / pause | Next | Like |
 | Servers | Now | 24 h | Security | Updates |

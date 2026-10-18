@@ -53,7 +53,7 @@ export function createGitHub({ state, changed, notify, every }) {
       if (run && run.status === 'completed') {
         const prev = lastRun.get(name);
         lastRun.set(name, run.id);
-        if (prev && prev !== run.id && run.conclusion === 'failure') notify('ci', `${name.split('/')[1]}: ${run.name} failed on ${run.head_branch}`);
+        if (prev && prev !== run.id && run.conclusion === 'failure') notify('ci', `${name.split('/')[1]}: ${run.name} ${state.display?.lang === 'vi' ? 'thất bại trên' : 'failed on'} ${run.head_branch}`);
       }
     }
     const q = encodeURIComponent(`user:${user} is:open archived:false`);

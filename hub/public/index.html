@@ -27,7 +27,7 @@
         <div class="nd-meta" id="ndMeta"></div>
         <div class="nd-title" id="ndTitle"></div>
         <div class="nd-sum" id="ndSum"></div>
-        <div class="nd-hint">Turn the knob for the next story · Back to close</div>
+        <div class="nd-hint" data-t="Turn the knob for the next story · Back to close">Turn the knob for the next story · Back to close</div>
       </div>
     </section>
 
@@ -39,13 +39,13 @@
       </div>
       <div class="lower">
         <div class="col">
-          <h3><i class="kb">2</i>Gold &amp; Silver</h3>
+          <h3><i class="kb">2</i><span data-t="Gold & Silver">Gold &amp; Silver</span></h3>
           <div class="rows" id="goldRows"></div>
           <h3 lang="vi"><i class="kb">3</i>Tỷ giá VND</h3>
           <div class="rows" id="fxRows"></div>
         </div>
         <div class="col index">
-          <h3><i class="kb">4</i>Indices</h3>
+          <h3><i class="kb">4</i><span data-t="Indices">Indices</span></h3>
           <div class="rows" id="indexRows"></div>
         </div>
         </div>
@@ -71,7 +71,7 @@
 
     <!-- 5. Music -->
     <section class="page music" data-name="Music" data-editable="1">
-      <div class="edit-badge">Volume · turn the knob · Back when done</div>
+      <div class="edit-badge" data-t="Volume · turn the knob · Back when done">Volume · turn the knob · Back when done</div>
       <div class="art" id="mArt"></div>
       <div class="mx">
         <div class="m-title" id="mTitle">—</div>
@@ -98,20 +98,20 @@
 
     <!-- 7. Focus -->
     <section class="page focus" data-name="Focus" data-editable="1">
-      <div class="edit-badge">Editing · turn knob to change minutes · Back to finish</div>
+      <div class="edit-badge" data-t="Editing · turn knob to change minutes · Back to finish">Editing · turn knob to change minutes · Back to finish</div>
       <div class="pomo">
         <div class="pomo-mode" id="pomoMode">Focus</div>
         <div class="pomo-time" id="pomoTime">25:00</div>
         <div class="pomo-ring"><div class="pomo-fill" id="pomoFill"></div></div>
-        <div class="pomo-hint">Press the knob to start or pause · buttons 1–4 set 15, 25, 45 or 60 minutes</div>
+        <div class="pomo-hint" data-t="Press the knob to start or pause · buttons 1–4 set 15, 25, 45 or 60 minutes">Press the knob to start or pause · buttons 1–4 set 15, 25, 45 or 60 minutes</div>
         <div class="pomo-count" id="pomoCount"></div>
       </div>
     </section>
 
     <!-- 8. Mei, the desk cat (voice assistant) -->
     <section class="page ask" data-name="Mei" data-phase="idle">
-      <div class="ask-head"><div class="ask-name">Mei <span class="ask-chip" id="askChip">ready</span></div><div class="ask-sub">your desk cat · powered by Gemini</div></div>
-      <div class="ask-hello" id="askHello">Hi! I'm Mei 🐾<small>Ask me about prices, the weather, your servers… or anything at all.</small></div>
+      <div class="ask-head"><div class="ask-name">Mei <span class="ask-chip" id="askChip">ready</span></div><div class="ask-sub" data-t="your desk cat · powered by Gemini">your desk cat · powered by Gemini</div></div>
+      <div class="ask-hello" id="askHello"><span data-t="Hi! I'm Mei 🐾">Hi! I'm Mei 🐾</span><small data-t="Ask me about prices, the weather, your servers… or anything at all.">Ask me about prices, the weather, your servers… or anything at all.</small></div>
       <div class="ask-bubble" id="askBubble"><div class="ask-q" id="askQ"></div><div class="ask-a" id="askA"></div><div class="ask-src" id="askSrc"></div></div>
       <div class="ask-think"><i></i><i></i><i></i></div>
       <div class="ask-waves"><span></span><span></span><span></span></div>
@@ -127,16 +127,19 @@
       <div class="ov-tiles">
         <div class="ov-tile" data-i="0">
           <svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="8" fill="none" stroke="currentColor" stroke-width="3.5"/><g stroke="currentColor" stroke-width="3.5" stroke-linecap="round"><path d="M24 4v6M24 38v6M4 24h6M38 24h6M9.9 9.9l4.2 4.2M33.9 33.9l4.2 4.2M9.9 38.1l4.2-4.2M33.9 14.1l4.2-4.2"/></g></svg>
-          <span>Brightness</span></div>
+          <span data-t="Brightness">Brightness</span></div>
         <div class="ov-tile" data-i="1">
           <svg viewBox="0 0 48 48"><path d="M38 24a14 14 0 1 1-4.1-9.9" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/><path d="M36 6v9h-9" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <span>Restart</span></div>
+          <span data-t="Restart">Restart</span></div>
         <div class="ov-tile" data-i="2">
           <svg viewBox="0 0 48 48"><path d="M24 6v16" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/><path d="M14.5 12.5a15 15 0 1 0 19 0" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/></svg>
-          <span>Shut down</span></div>
+          <span data-t="Shut down">Shut down</span></div>
         <div class="ov-tile" data-i="3">
           <svg viewBox="0 0 48 48"><rect x="15" y="6" width="18" height="30" rx="3.5" fill="none" stroke="currentColor" stroke-width="3.5"/><path d="M8 30a17 17 0 0 0 26 12" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/><path d="M28 38l6 4-1.5 6.5" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <span id="rotLabel">Rotate</span></div>
+        <div class="ov-tile" data-i="4">
+          <svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="18" fill="none" stroke="currentColor" stroke-width="3.5"/><path d="M6 24h36M24 6c-6 5-8.5 11-8.5 18s2.5 13 8.5 18M24 6c6 5 8.5 11 8.5 18s-2.5 13-8.5 18" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/></svg>
+          <span id="langLabel">English</span></div>
       </div>
       <div class="ov-slider" id="ovSlider">
         <svg viewBox="0 0 48 48" class="ov-sun"><circle cx="24" cy="24" r="7" fill="currentColor"/></svg>
@@ -150,13 +153,14 @@
   <div class="offline" id="offline">
     <div class="off-card">
       <div class="off-zz"><span>z</span><span>z</span><span>z</span></div>
-      <b>Reconnecting to the hub…</b>
-      <span>No data for <em id="offSince">0 s</em>. The screen comes back on its own when server 2 answers.</span>
+      <b data-t="Reconnecting to the hub…">Reconnecting to the hub…</b>
+      <span><span data-t="No data for">No data for</span> <em id="offSince">0 s</em>. <span data-t="The screen comes back on its own when server 2 answers.">The screen comes back on its own when server 2 answers.</span></span>
     </div>
   </div>
   <div class="alert-banner" id="alertBanner"></div>
   <div class="toast" id="toast"></div>
 </div>
+<script src="/i18n.js"></script>
 <script src="/app.js"></script>
 <script src="/stage.js"></script>
 </body>

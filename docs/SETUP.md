@@ -121,7 +121,7 @@ Several calendars are fine; each gets its own colour on the Calendar page.
 
 ## 8. Optional: morning briefing
 
-On by default at 07:00 in `WX_TZ`. Change it with `BRIEFING_AT=06:30` (or `off`) and `BRIEFING_LANG=Vietnamese` in `hub/.env`, then restart the hub. Button 1 on Mei's page asks for one any time.
+On by default at 07:00 in `WX_TZ`. Change it with `BRIEFING_AT=06:30` (or `off`) in `hub/.env`, then restart the hub. It is written in the screen language (quick menu → language); `BRIEFING_LANG=Vietnamese` pins one regardless. Button 1 on Mei's page asks for one any time.
 
 ## 9. Optional: Servers → 24 h, Security and Updates
 

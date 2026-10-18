@@ -568,3 +568,12 @@ body[data-orient="flip"] #app { transform: rotate(180deg); }
 /* ---------- night: backlight off, so stop every animation as well */
 body.night-dark *, body.night-dark *::before, body.night-dark *::after { animation-play-state: paused !important; }
 .portrait .nc-up .upd { display: none; }
+
+/* ---------- weather: °C / °F hint, quick menu with five tiles */
+.wx-unit { margin-top: 6px; font-size: 12px; color: var(--dim); }
+.ov-tiles { gap: 14px; }
+.ov-tile { width: 128px; height: 128px; }
+.portrait .ov-tiles { grid-template-columns: repeat(3, 128px); }
+.srv .head .state { white-space: nowrap; flex: none; }
+.srv .head > div { min-width: 0; }
+.srv.sec .head > div > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

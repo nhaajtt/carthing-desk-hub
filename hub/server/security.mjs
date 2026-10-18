@@ -35,6 +35,7 @@ export function createSecurity({ state, changed, stateDir, hostDir, notify }) {
   state.updates = state.updates || {};
 
   const NAMES = { server2: 'Server 2', server1: 'Server 1' };
+  const vi = () => state.display?.lang === 'vi';
 
   // entries open on every interface: the host's own sockets, plus Docker ports published on 0.0.0.0
   function openItems(s) {
@@ -56,7 +57,7 @@ export function createSecurity({ state, changed, stateDir, hostDir, notify }) {
     if (!fresh.length) return;
     fresh.forEach((k) => { known[k] = now; });
     save();
-    notify('sec', `${NAMES[s]}: newly open on every interface · ${fresh.slice(0, 3).join(', ')}`);
+    notify('sec', `${NAMES[s]}: ${vi() ? 'mới mở trên mọi interface' : 'newly open on every interface'} · ${fresh.slice(0, 3).join(', ')}`);
   }
   function save() { try { fs.writeFileSync(seenFile, JSON.stringify(seen)); } catch (e) { console.error('[security]', e.message); } }
 
@@ -75,7 +76,9 @@ export function createSecurity({ state, changed, stateDir, hostDir, notify }) {
       state.updates[s] = { ...r.apt, at: r.at };
       if (r.ssh.fail1h >= SSH_ALERT && Date.now() - (lastSshAlert[s] || 0) > 2 * 3600000) {
         lastSshAlert[s] = Date.now();
-        notify('sec', `${NAMES[s]}: ${r.ssh.fail1h} failed SSH logins in the last hour${r.ssh.top[0] ? `, most from ${r.ssh.top[0].ip}` : ''}`);
+        notify('sec', vi()
+          ? `${NAMES[s]}: ${r.ssh.fail1h} lần đăng nhập SSH thất bại trong 1 giờ qua${r.ssh.top[0] ? `, nhiều nhất từ ${r.ssh.top[0].ip}` : ''}`
+          : `${NAMES[s]}: ${r.ssh.fail1h} failed SSH logins in the last hour${r.ssh.top[0] ? `, most from ${r.ssh.top[0].ip}` : ''}`);
       }
     }
     readCarthing();
@@ -89,7 +92,10 @@ export function createSecurity({ state, changed, stateDir, hostDir, notify }) {
     state.security.carthing = { at: num(c.at), reachable: c.reachable !== false, version: str(c.version, 40), problems };
     const sig = `${c.reachable !== false}|${problems.join('|')}`;
     if (lastCarthing && sig !== lastCarthing && (problems.length || c.reachable === false)) {
-      notify('sec', c.reachable === false ? 'Car Thing check: no SSH access with the hub key' : `Car Thing setup changed: ${problems[0]}${problems.length > 1 ? ` (+${problems.length - 1})` : ''}`);
+      const more = problems.length > 1 ? ` (+${problems.length - 1})` : '';
+      notify('sec', c.reachable === false
+        ? (vi() ? 'Kiểm tra Car Thing: không SSH được bằng key của hub' : 'Car Thing check: no SSH access with the hub key')
+        : `${vi() ? 'Cài đặt Car Thing bị thay đổi' : 'Car Thing setup changed'}: ${problems[0]}${more}`);
     }
     lastCarthing = sig;
   }

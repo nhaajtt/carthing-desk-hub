@@ -96,7 +96,7 @@ function renderMarkets() {
   $('heroSym').textContent = `${coins[0]} / USDT`;
   $('heroChg').innerHTML = chg(pct(btc.price, btc.open24h));
   odometer($('heroPrice'), usd(btc.price));
-  $('heroMeta').innerHTML = `<span>24h low ${usd(btc.low24h)}</span><span>high ${usd(btc.high24h)}</span>`;
+  $('heroMeta').innerHTML = `<span>${tr('24h low')} ${usd(btc.low24h)}</span><span>${tr('high')} ${usd(btc.high24h)}</span>`;
   const sk = spark(btc.spark, 266, 54);
   if ($('heroSpark').dataset.sig !== sk.length + ':' + btc.spark.length) { $('heroSpark').innerHTML = sk; $('heroSpark').dataset.sig = sk.length + ':' + btc.spark.length; }
 
@@ -114,10 +114,10 @@ function renderMarkets() {
   const gold = $('goldRows');
   let el = rowEl(gold, 'xau');
   el.className += stale(m.at, 120000);
-  setVal(el, 'xau', m.xau, `<span class="label">Gold<small>XAU/USD · oz</small></span><span class="val">${usd(m.xau)}</span>${chg(y.gold ? pct(y.gold.price, y.gold.prev) : null)}`);
+  setVal(el, 'xau', m.xau, `<span class="label">${tr('Gold')}<small>XAU/USD · oz</small></span><span class="val">${usd(m.xau)}</span>${chg(y.gold ? pct(y.gold.price, y.gold.prev) : null)}`);
   el = rowEl(gold, 'xag');
   el.className += stale(m.at, 120000);
-  setVal(el, 'xag', m.xag, `<span class="label">Silver<small>XAG/USD · oz</small></span><span class="val">${num(m.xag, 2)}</span>${chg(y.silver ? pct(y.silver.price, y.silver.prev) : null)}`);
+  setVal(el, 'xag', m.xag, `<span class="label">${tr('Silver')}<small>XAG/USD · oz</small></span><span class="val">${num(m.xag, 2)}</span>${chg(y.silver ? pct(y.silver.price, y.silver.prev) : null)}`);
   for (const g of S.vngold.items || []) {
     el = rowEl(gold, g.code, '1fr auto');
     el.className += stale(S.vngold.at, 15 * 60000);
@@ -171,14 +171,14 @@ function renderZoom() {
     const coin = ((S.config && S.config.crypto) || ['BTC'])[0], c = S.crypto[coin];
     html = `<div class="zh">${coin} / USDT ${chg(pct(c.price, c.open24h))}</div>
       <div class="zbig">${usd(c.price)}</div>
-      <div class="zmeta"><span>24h low ${usd(c.low24h)}</span><span>open ${usd(c.open24h)}</span><span>high ${usd(c.high24h)}</span></div>
+      <div class="zmeta"><span>${tr('24h low')} ${usd(c.low24h)}</span><span>${tr('open')} ${usd(c.open24h)}</span><span>${tr('high')} ${usd(c.high24h)}</span></div>
       <div class="zchart">${spark(c.spark, 760, 210)}</div>`;
   } else if (zoom === 2) {
     const items = S.vngold.items || [];
     const vn = (code, name) => { const g = items.find((x) => x.code === code) || {}; return tile(name, 'triệu đ / lượng', `<i>mua</i> ${millions(g.buy)} <i>bán</i> ${millions(g.sell)}`); };
-    html = `<div class="zh">Gold &amp; Silver</div><div class="zgrid g2">
-      ${tile('Gold', 'XAU/USD · oz', usd(m.xau), chg(y.gold ? pct(y.gold.price, y.gold.prev) : null))}
-      ${tile('Silver', 'XAG/USD · oz', num(m.xag, 2), chg(y.silver ? pct(y.silver.price, y.silver.prev) : null))}
+    html = `<div class="zh">${esc(tr('Gold & Silver'))}</div><div class="zgrid g2">
+      ${tile(tr('Gold'), 'XAU/USD · oz', usd(m.xau), chg(y.gold ? pct(y.gold.price, y.gold.prev) : null))}
+      ${tile(tr('Silver'), 'XAG/USD · oz', num(m.xag, 2), chg(y.silver ? pct(y.silver.price, y.silver.prev) : null))}
       ${vn('SJC', 'Vàng SJC')}${vn('N24K', 'Nhẫn 9999')}</div>
       <div class="zchart small">${spark(y.gold && y.gold.spark, 760, 90)}</div>`;
   } else if (zoom === 3) {
@@ -188,7 +188,7 @@ function renderZoom() {
       ${vcb('USD')}${tile('USD', 'liên ngân hàng', vnd(ib.price), chg(pct(ib.price, ib.prev)))}${vcb('EUR')}
       ${vcb('JPY')}${vcb('CNY')}${vcb('AUD')}${vcb('GBP')}${vcb('SGD')}${vcb('KRW')}</div>`;
   } else if (zoom === 4) {
-    html = `<div class="zh">Indices</div><div class="zgrid g3">${((S.config && S.config.indices) || []).map(({ key, name, sub, decimals }) => {
+    html = `<div class="zh">${tr('Indices')}</div><div class="zgrid g3">${((S.config && S.config.indices) || []).map(({ key, name, sub, decimals }) => {
       const q = y[key] || {};
       return tile(esc(name), esc(sub || ''), num(q.price, decimals ?? 2), chg(pct(q.price, q.prev)) + `<span class="zs">${spark(q.spark, 200, 40, q.price >= q.prev)}</span>`);
     }).join('')}</div>`;
@@ -204,6 +204,7 @@ function presetButton(n) {
   if (page === NEWS && n <= 2) return newsTopic(newsCat + (n === 1 ? 1 : -1));
   if (page === MARKETS) return marketZoom(n);
   if (page === ASK && n === 1) return briefingNow();
+  if (page === WEATHER && n === 1) return toggleUnit();
   if (page === CALENDAR && n <= 3) { calView = n - 1; return renderCalendar(); }
   if (page === SERVERS) { srvView = n - 1; return renderServers(); }
   if (page === MUSIC) return spotifyAction(['prev', 'toggle', 'next', 'like'][n - 1]);
@@ -249,43 +250,70 @@ function aqiLabel(a) {
   if (a <= 300) return ['Very unhealthy', '#b05cff'];
   return ['Hazardous', '#8e2440'];
 }
-const hourLabel = (t) => {
-  const h = Number(t.slice(11, 13));
-  return `${h % 12 || 12}${h < 12 ? 'a' : 'p'}`;
+const hourLabel = (ts) => {
+  const h = Number(ts.slice(11, 13));
+  return lang === 'vi' ? `${h}h` : `${h % 12 || 12}${h < 12 ? 'a' : 'p'}`;
 };
+
+// °C / °F: the hub sends one (UNITS in .env); button 1 on the Weather page shows the other, remembered on this screen
+let tempUnit = null;
+try { tempUnit = ['C', 'F'].includes(localStorage.getItem('tempUnit')) ? localStorage.getItem('tempUnit') : null; } catch {}
+const hubF = () => !S || !S.units || S.units.temp === '°F';
+const wantF = () => (tempUnit ? tempUnit === 'F' : hubF());
+// a temperature from the hub (in the hub's unit) in the unit on screen
+function deg(v) {
+  if (v == null) return v;
+  if (hubF() === wantF()) return v;
+  return wantF() ? (v * 9) / 5 + 32 : ((v - 32) * 5) / 9;
+}
+const degSym = () => (wantF() ? '°F' : '°C');
+const windText = (v) => (hubF() === wantF() ? `${Math.round(v)} ${wantF() ? 'mph' : 'km/h'}` : wantF() ? `${Math.round(v / 1.609)} mph` : `${Math.round(v * 1.609)} km/h`);
+function toggleUnit() {
+  tempUnit = wantF() ? 'C' : 'F';
+  try { localStorage.setItem('tempUnit', tempUnit); } catch {}
+  toast(degSym());
+  render();
+}
 
 function renderWeather() {
   const w = S.weather;
   if (!w) return;
-  const u = S.units || { temp: '°F', wind: 'mph' };
   const cur = w.current;
-  const [desc, icon] = wmo(cur.weather_code);
+  const [descEn, icon] = wmo(cur.weather_code);
+  const desc = tr(descEn);
   const c = cur.weather_code;
   document.body.dataset.sky = c >= 51 ? 'rain' : !cur.is_day ? 'night' : c >= 2 ? 'cloudy' : 'clear';
   const a = S.aqi || {};
-  const [al, ac] = aqiLabel(a.us_aqi);
+  const [alEn, ac] = aqiLabel(a.us_aqi);
+  const al = tr(alEn);
   $('wxNow').className = 'wx-now' + stale(w.at, 30 * 60000);
   $('wxNow').innerHTML = `
     <div class="icon">${cur.is_day ? icon : icon.replace('☀️', '🌙').replace('🌤️', '🌙')}</div>
-    <div><div class="temp">${Math.round(cur.temperature_2m)}°</div></div>
+    <div><div class="temp">${Math.round(deg(cur.temperature_2m))}°</div></div>
     <div><div class="desc">${desc} · ${S.city}</div>
-      <div class="sub">Feels like ${Math.round(cur.apparent_temperature)}° · Humidity ${cur.relative_humidity_2m}%<br>
-      Wind ${Math.round(cur.wind_speed_10m)} ${u.wind} · UV ${a.uv_index != null ? num(a.uv_index, 0) : '—'}<br>
-      Today ${Math.round(w.daily[0].min)}° – ${Math.round(w.daily[0].max)}${u.temp}</div></div>
-    <div class="aqi"><div class="l">AQI (US)</div><div class="n" style="color:${ac}">${a.us_aqi ?? '—'}</div><div class="l">${al} · PM2.5 ${a.pm2_5 != null ? num(a.pm2_5, 0) : '—'}</div></div>`;
+      <div class="sub">${tr('Feels like {v}', { v: Math.round(deg(cur.apparent_temperature)) + '°' })} · ${tr('Humidity {v}%', { v: cur.relative_humidity_2m })}<br>
+      ${tr('Wind {v}', { v: windText(cur.wind_speed_10m) })} · UV ${a.uv_index != null ? num(a.uv_index, 0) : '—'}<br>
+      ${tr('Today {v}', { v: `${Math.round(deg(w.daily[0].min))}° – ${Math.round(deg(w.daily[0].max))}${degSym()}` })}</div>
+      <div class="wx-unit"><i class="kb">1</i>${tr('switch to {u}', { u: wantF() ? '°C' : '°F' })}</div></div>
+    <div class="aqi"><div class="l">${tr('AQI (US)')}</div><div class="n" style="color:${ac}">${a.us_aqi ?? '—'}</div><div class="l">${al} · PM2.5 ${a.pm2_5 != null ? num(a.pm2_5, 0) : '—'}</div></div>`;
   const nc = S.nowcast;
   const rain = $('wxRain');
   if (nc && now() - nc.at < 30 * 60000) {
     const top = Math.max(1, ...nc.bars.map((b) => b.mm));
     const bars = nc.bars.map((b) => `<i style="height:${Math.max(6, Math.round((100 * b.mm) / top))}%;opacity:${b.mm >= 0.1 || b.prob >= 60 ? 1 : 0.25}"></i>`).join('');
-    rain.className = 'wx-rain on' + (nc.text ? ' wet' : '');
-    rain.innerHTML = `<span class="wr-t">${nc.text ? '☔ ' + esc(nc.text) : 'No rain in the next 2 hours'}</span><span class="wr-bars">${bars}</span><span class="wr-k">now · 2 h</span>`;
+    // the sentence is built here, not on the hub, so it follows the screen language
+    const mins = (x) => Math.max(5, Math.round((x - now()) / 300000) * 5);
+    const text = nc.wetNow
+      ? (nc.endsAt ? tr('Rain now, easing in about {n} min', { n: mins(nc.endsAt) }) : tr('Rain now, for the next two hours'))
+      : nc.startsAt ? tr('Rain likely in about {n} min', { n: mins(nc.startsAt) }) : '';
+    rain.className = 'wx-rain on' + (text ? ' wet' : '');
+    rain.innerHTML = `<span class="wr-t">${text ? '☔ ' + esc(text) : tr('No rain in the next 2 hours')}</span><span class="wr-bars">${bars}</span><span class="wr-k">${tr('now · 2 h')}</span>`;
   } else rain.className = 'wx-rain';
-  $('wxHourly').innerHTML = w.hourly.map((h) => `<div>${hourLabel(h.t)}<span>${wmo(h.code)[1]}</span><b>${Math.round(h.temp)}°</b>${h.pop ?? 0}%</div>`).join('');
-  const dn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  $('wxHourly').innerHTML = w.hourly.map((h) => `<div>${hourLabel(h.t)}<span>${wmo(h.code)[1]}</span><b>${Math.round(deg(h.temp))}°</b>${h.pop ?? 0}%</div>`).join('');
+  const dn = new Intl.DateTimeFormat(loc(), { timeZone: 'UTC', weekday: 'short' });
   $('wxDaily').innerHTML = w.daily.map((d, i) => {
-    const day = i === 0 ? 'Today' : dn[new Date(d.t + 'T12:00:00Z').getUTCDay()];
-    return `<div class="day"><span class="ic">${wmo(d.code)[1]}</span><div class="tx">${day} · ${d.pop ?? 0}% rain<b>${Math.round(d.min)}° – ${Math.round(d.max)}°</b></div></div>`;
+    const day = i === 0 ? tr('Today') : dn.format(new Date(d.t + 'T12:00:00Z'));
+    return `<div class="day"><span class="ic">${wmo(d.code)[1]}</span><div class="tx">${tr('{day} · {p}% rain', { day, p: d.pop ?? 0 })}<b>${Math.round(deg(d.min))}° – ${Math.round(deg(d.max))}°</b></div></div>`;
   }).join('');
 }
 
@@ -295,10 +323,10 @@ let newsCat = 0, newsShownKey = '', newsShown = '', newsRotate = 0;
 let newsSel = -1;      // story highlighted while browsing with the knob (-1: not browsing)
 let newsDetail = null; // id of the story whose summary is open
 const summaries = new Map();
-function ago(t) {
-  if (!t) return '';
-  const m = Math.max(0, Math.round((now() - t) / 60000));
-  return m < 60 ? `${m}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`;
+function ago(at) {
+  if (!at) return '';
+  const m = Math.max(0, Math.round((now() - at) / 60000));
+  return m < 60 ? tr('{n}m ago', { n: m }) : m < 1440 ? tr('{n}h ago', { n: Math.round(m / 60) }) : tr('{n}d ago', { n: Math.round(m / 1440) });
 }
 const newsFeeds = () => (S && S.news && S.news.feeds) || [];
 const newsItems = () => { const f = newsFeeds()[newsCat]; return f ? f.items.slice(0, 6) : []; };
@@ -309,7 +337,7 @@ function renderNews() {
   newsCat = (newsCat + feeds.length) % feeds.length;
   const f = feeds[newsCat];
   const track = $('newsTrack');
-  const chips = feeds.map((x, i) => `<span class="nc ${i === newsCat ? 'on' : ''}">${esc(x.name)}</span>`).join('');
+  const chips = feeds.map((x, i) => `<span class="nc ${i === newsCat ? 'on' : ''}">${esc(tr(x.name))}</span>`).join('');
   if (track._html !== chips) {
     track._html = chips;
     track.innerHTML = chips;
@@ -319,13 +347,13 @@ function renderNews() {
     track.style.transform = `translate3d(${-shift}px,0,0)`;
   }
   // buttons 1 and 2 step through the topics; the hint stays put while the strip of topics slides
-  const up = `<i class="kb">1</i>next <i class="kb">2</i>back${f.at ? `<span class="upd"> · updated ${now() - f.at < 60000 ? 'just now' : ago(f.at)}</span>` : ''}`;
+  const up = `<i class="kb">1</i>${tr('next')} <i class="kb">2</i>${tr('back')}${f.at ? `<span class="upd"> · ${tr('updated {t}', { t: now() - f.at < 60000 ? tr('just now') : ago(f.at) })}</span>` : ''}`;
   if ($('newsUp')._html !== up) { $('newsUp')._html = up; $('newsUp').innerHTML = up; }
   const items = newsItems();
   if (newsSel >= items.length) newsSel = items.length - 1;
   const html = items.length
-    ? items.map((h, i) => `<div class="nh ${i === newsSel ? 'sel' : ''}" data-i="${i}"><b>${esc(h.title)}</b><span>${esc(h.source || '')}${h.at ? ` · ${ago(h.at)}` : ''}${h.score ? ` · ${h.score} points` : ''}</span></div>`).join('')
-    : '<div class="nh empty">Loading headlines…</div>';
+    ? items.map((h, i) => `<div class="nh ${i === newsSel ? 'sel' : ''}" data-i="${i}"><b>${esc(h.title)}</b><span>${esc(h.source || '')}${h.at ? ` · ${ago(h.at)}` : ''}${h.score ? ` · ${tr('{n} points', { n: h.score })}` : ''}</span></div>`).join('')
+    : `<div class="nh empty">${tr('Loading headlines…')}</div>`;
   if (html !== newsShown) {
     newsShown = html;
     $('newsList').innerHTML = html;
@@ -340,9 +368,9 @@ function showDetail(d, item) {
   $('ndMeta').textContent = [item.source, item.at ? ago(item.at) : '', d && d.host && d.host !== item.source ? d.host : ''].filter(Boolean).join(' · ');
   $('ndTitle').textContent = item.title;
   const sum = $('ndSum');
-  if (!d) { sum.className = 'nd-sum loading'; sum.textContent = 'Reading the article and summarising…'; return; }
+  if (!d) { sum.className = 'nd-sum loading'; sum.textContent = tr('Reading the article and summarising…'); return; }
   sum.className = d.error ? 'nd-sum err' : 'nd-sum';
-  sum.textContent = d.error ? `Could not summarise this story: ${d.error}` : d.summary;
+  sum.textContent = d.error ? tr('Could not summarise this story: {e}', { e: d.error }) : d.summary;
 }
 function openDetail(i) {
   const items = newsItems();
@@ -356,7 +384,7 @@ function openDetail(i) {
   showDetail(null, item);
   fetch(`/api/news/detail?id=${encodeURIComponent(item.id)}`)
     .then((r) => r.json())
-    .catch(() => ({ error: 'the hub did not answer' }))
+    .catch(() => ({ error: tr('the hub did not answer') }))
     .then((d) => { if (!d.error) summaries.set(item.id, d); if (newsDetail === item.id) showDetail(d, item); });
 }
 function closeDetail() { newsDetail = null; $('ndetail').classList.remove('on'); }
@@ -390,13 +418,15 @@ setInterval(() => { if (page === NEWS && newsSel < 0 && !newsDetail && S && Date
 let calView = 0; // 0 today, 1 tomorrow, 2 next 7 days (buttons 1-3)
 const CAL_VIEWS = ['Today', 'Tomorrow', 'Week'];
 const dayKey = (ms) => new Intl.DateTimeFormat('en-CA', { timeZone: tz() }).format(new Date(ms));
-const timeOf = (ms) => new Intl.DateTimeFormat('en-US', { timeZone: tz(), hour: 'numeric', minute: '2-digit' }).format(new Date(ms)).replace(':00', '').replace(/\s/g, '').toLowerCase();
+const timeOf = (ms) => (lang === 'vi'
+  ? new Intl.DateTimeFormat('vi-VN', { timeZone: tz(), hour: '2-digit', minute: '2-digit' }).format(new Date(ms))
+  : new Intl.DateTimeFormat('en-US', { timeZone: tz(), hour: 'numeric', minute: '2-digit' }).format(new Date(ms)).replace(':00', '').replace(/\s/g, '').toLowerCase());
 function untilText(ms) {
   const m = Math.round((ms - now()) / 60000);
-  if (m <= 0) return 'now';
-  if (m < 60) return `in ${m} min`;
+  if (m <= 0) return tr('now');
+  if (m < 60) return tr('in {n} min', { n: m });
   const h = Math.floor(m / 60), r = m % 60;
-  return h < 24 ? `in ${h} h${r ? ` ${r} min` : ''}` : `in ${Math.round(h / 24)} days`;
+  return h < 24 ? (r ? tr('in {h} h {m} min', { h, m: r }) : tr('in {h} h', { h })) : tr('in {n} days', { n: Math.round(h / 24) });
 }
 const calEvents = () => (S.calendar && S.calendar.events) || [];
 // an event belongs to every day it touches (all-day events end at midnight after their last day)
@@ -408,16 +438,16 @@ function renderCalendar() {
   const c = S.calendar || {};
   const t = now();
   const d = new Date(t);
-  const part = (o) => new Intl.DateTimeFormat('en-US', { timeZone: tz(), ...o }).format(d);
-  const views = CAL_VIEWS.map((v, i) => `<span class="nc ${i === calView ? 'on' : ''}"><i class="kb">${i + 1}</i>${v}</span>`).join('');
+  const part = (o) => new Intl.DateTimeFormat(loc(), { timeZone: tz(), ...o }).format(d);
+  const views = CAL_VIEWS.map((v, i) => `<span class="nc ${i === calView ? 'on' : ''}"><i class="kb">${i + 1}</i>${tr(v)}</span>`).join('');
   const headHtml = `<div class="cal-date"><b>${part({ day: 'numeric' })}</b><span>${part({ weekday: 'long' })}<small>${part({ month: 'long', year: 'numeric' })}</small></span></div><div class="cal-views">${views}</div>`;
   const head = $('calHead');
   if (head._html !== headHtml) { head._html = headHtml; head.innerHTML = headHtml; }
 
   if (!c.configured) {
     $('calNext').className = 'cal-next';
-    $('calNext').innerHTML = '<span class="cn-k">Next up</span><b>No calendar linked</b><span class="cn-t">Run set-calendar-url.sh on server 2</span>';
-    $('calList').innerHTML = '<div class="cal-none">Paste the secret iCal address of your Google Calendar into set-calendar-url.sh on server 2, and your events show up here.</div>';
+    $('calNext').innerHTML = `<span class="cn-k">${tr('Next up')}</span><b>${tr('No calendar linked')}</b><span class="cn-t">${tr('Run set-calendar-url.sh on server 2')}</span>`;
+    $('calList').innerHTML = `<div class="cal-none">${tr('Paste the secret iCal address of your Google Calendar into set-calendar-url.sh on server 2, and your events show up here.')}</div>`;
     $('calList')._html = '';
     return;
   }
@@ -426,21 +456,21 @@ function renderCalendar() {
   const live = next && next.start <= t;
   $('calNext').className = 'cal-next' + (live ? ' live' : '') + stale(c.at, 30 * 60000);
   const nextHtml = next
-    ? `<span class="cn-k">${live ? 'Happening now' : 'Next up'}</span><b>${esc(next.title)}</b><span class="cn-t">${timeOf(next.start)} – ${timeOf(next.end)} · ${live ? `ends ${untilText(next.end)}` : untilText(next.start)}</span>${next.location ? `<span class="cn-l">${esc(next.location)}</span>` : ''}`
-    : '<span class="cn-k">Next up</span><b>Nothing else scheduled</b><span class="cn-t">Enjoy the free time</span>';
+    ? `<span class="cn-k">${tr(live ? 'Happening now' : 'Next up')}</span><b>${esc(next.title)}</b><span class="cn-t">${timeOf(next.start)} – ${timeOf(next.end)} · ${live ? tr('ends {t}', { t: untilText(next.end) }) : untilText(next.start)}</span>${next.location ? `<span class="cn-l">${esc(next.location)}</span>` : ''}`
+    : `<span class="cn-k">${tr('Next up')}</span><b>${tr('Nothing else scheduled')}</b><span class="cn-t">${tr('Enjoy the free time')}</span>`;
   if ($('calNext')._html !== nextHtml) { $('calNext')._html = nextHtml; $('calNext').innerHTML = nextHtml; }
 
   const days = calView === 2 ? 7 : 1;
   const keys = Array.from({ length: days }, (_, i) => dayKey(t + (calView === 1 ? 1 : i) * 86400000));
   const label = (k, i) => (calView === 2 && i > 1
-    ? new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'long', month: 'short', day: 'numeric' }).format(new Date(k + 'T12:00:00Z'))
-    : ['Today', 'Tomorrow'][calView === 1 ? 1 : i]);
+    ? new Intl.DateTimeFormat(loc(), { timeZone: 'UTC', weekday: 'long', month: 'short', day: 'numeric' }).format(new Date(k + 'T12:00:00Z'))
+    : tr(['Today', 'Tomorrow'][calView === 1 ? 1 : i]));
   let html = '';
   keys.forEach((k, i) => {
     const list = evs.filter((e) => onDay(e, k) && (calView !== 0 || e.allDay || e.end > t));
-    if (days > 1) html += `<div class="cal-day">${label(k, i)}${list.length ? '' : ' <small>· free</small>'}</div>`;
-    if (!list.length) { if (days === 1) html += `<div class="cal-none">${calView === 0 ? 'Nothing left today' : 'Nothing planned'}</div>`; return; }
-    html += list.map((e) => `<div class="ce c${e.cal % 4}${!e.allDay && e.start <= t && e.end > t ? ' now' : ''}"><span class="ce-t">${e.allDay ? 'all day' : timeOf(e.start)}</span><span class="ce-x"><b>${esc(e.title)}</b>${e.location ? `<small>${esc(e.location)}</small>` : ''}</span></div>`).join('');
+    if (days > 1) html += `<div class="cal-day">${label(k, i)}${list.length ? '' : ` <small>· ${tr('free')}</small>`}</div>`;
+    if (!list.length) { if (days === 1) html += `<div class="cal-none">${tr(calView === 0 ? 'Nothing left today' : 'Nothing planned')}</div>`; return; }
+    html += list.map((e) => `<div class="ce c${e.cal % 4}${!e.allDay && e.start <= t && e.end > t ? ' now' : ''}"><span class="ce-t">${e.allDay ? tr('all day') : timeOf(e.start)}</span><span class="ce-x"><b>${esc(e.title)}</b>${e.location ? `<small>${esc(e.location)}</small>` : ''}</span></div>`).join('');
   });
   const list = $('calList');
   if (list._html !== html) { list._html = html; list.innerHTML = html; }
@@ -472,9 +502,10 @@ function meter(k, ratio, text, highIsGood = false) {
   const p = Math.max(0, Math.min(1, ratio || 0)) * 100;
   const risk = highIsGood ? 100 - p : p;
   const cls = risk > 90 ? 'bad' : risk > 75 ? 'warn' : '';
-  return `<div class="meter"><span class="k">${k}</span><div class="track"><div class="fill ${cls}" style="width:${p}%"></div></div><span class="v">${text}</span></div>`;
+  return `<div class="meter"><span class="k">${tr(k)}</span><div class="track"><div class="fill ${cls}" style="width:${p}%"></div></div><span class="v">${text}</span></div>`;
 }
-const degF = (c) => (c == null ? '—' : (S.units && S.units.temp === '°C' ? `${num(c, 0)}°C` : `${num(c * 9 / 5 + 32, 0)}°F`));
+// sensors report °C; shown in the unit chosen on the Weather page
+const degF = (c) => (c == null ? '—' : (wantF() ? `${num(c * 9 / 5 + 32, 0)}°F` : `${num(c, 0)}°C`));
 
 function statsBlock(st, extra = '') {
   return `
@@ -482,14 +513,14 @@ function statsBlock(st, extra = '') {
     ${meter('Memory', st.memUsed / st.memTotal, gb(st.memUsed))}
     ${meter('Disk', st.diskUsed / st.diskTotal, gb(st.diskUsed))}
     ${extra}
-    <div class="kv"><span>Temperature</span><b>${degF(st.temp)}</b></div>
-    <div class="kv"><span>Load (1/5/15)</span><b>${(st.load || []).map((l) => num(l, 2)).join(' · ')}</b></div>
-    <div class="kv"><span>Uptime</span><b>${dur(st.uptime || 0)}</b></div>`;
+    <div class="kv"><span>${tr('Temperature')}</span><b>${degF(st.temp)}</b></div>
+    <div class="kv"><span>${tr('Load (1/5/15)')}</span><b>${(st.load || []).map((l) => num(l, 2)).join(' · ')}</b></div>
+    <div class="kv"><span>${tr('Uptime')}</span><b>${dur(st.uptime || 0)}</b></div>`;
 }
 
 // running = fine; exited/created/paused = stopped (amber); unhealthy/restarting/dead = problem (red)
 function containersBlock(c) {
-  if (!c || !c.list || now() - c.at > 60000) return '<div class="ct"><div class="ct-sum">Containers <b>—</b></div></div>';
+  if (!c || !c.list || now() - c.at > 60000) return `<div class="ct"><div class="ct-sum">${tr('Containers')} <b>—</b></div></div>`;
   const bad = c.list.filter((x) => x.health === 'unhealthy' || x.state === 'restarting' || x.state === 'dead');
   const stopped = c.list.filter((x) => !bad.includes(x) && x.state !== 'running');
   const running = c.list.length - bad.length - stopped.length;
@@ -498,8 +529,8 @@ function containersBlock(c) {
     ...stopped.map((x) => `<div class="ct-stop">■ ${esc(x.name)} · ${esc(x.status)}</div>`),
   ];
   return `<div class="ct">
-    <div class="ct-sum">Containers <b>${running} running</b>${stopped.length ? ` · <span class="ct-stop">${stopped.length} stopped</span>` : ''}${bad.length ? ` · <span class="ct-bad">${bad.length} failing</span>` : ''}${!bad.length && !stopped.length ? ' <span class="ct-ok">✓ all up</span>' : ''}</div>
-    ${lines.slice(0, 4).join('')}${lines.length > 4 ? `<div class="ct-more">+${lines.length - 4} more</div>` : ''}
+    <div class="ct-sum">${tr('Containers')} <b>${tr('{n} running', { n: running })}</b>${stopped.length ? ` · <span class="ct-stop">${tr('{n} stopped', { n: stopped.length })}</span>` : ''}${bad.length ? ` · <span class="ct-bad">${tr('{n} failing', { n: bad.length })}</span>` : ''}${!bad.length && !stopped.length ? ` <span class="ct-ok">${tr('✓ all up')}</span>` : ''}</div>
+    ${lines.slice(0, 4).join('')}${lines.length > 4 ? `<div class="ct-more">${tr('+{n} more', { n: lines.length - 4 })}</div>` : ''}
   </div>`;
 }
 
@@ -508,7 +539,7 @@ let srvView = 0;
 const SRV_VIEWS = ['Now', '24 h', 'Security', 'Updates'];
 
 function renderServers() {
-  const views = SRV_VIEWS.map((v, i) => `<span class="nc ${i === srvView ? 'on' : ''}"><i class="kb">${i + 1}</i>${v}</span>`).join('');
+  const views = SRV_VIEWS.map((v, i) => `<span class="nc ${i === srvView ? 'on' : ''}"><i class="kb">${i + 1}</i>${tr(v)}</span>`).join('');
   if ($('srvViews')._html !== views) { $('srvViews')._html = views; $('srvViews').innerHTML = views; }
   $('srvGrid').style.display = srvView === 0 ? '' : 'none';
   $('srvAlt').style.display = srvView === 0 ? 'none' : '';
@@ -540,7 +571,7 @@ function areaChart(values, w, h, lo, hi) {
 
 function srvHistory() {
   const h = S.history;
-  if (!h) return '<div class="srv-empty">No history yet.</div>';
+  if (!h) return `<div class="srv-empty">${tr('No history yet.')}</div>`;
   const col = (key, name) => {
     const d = h[key] || {};
     const row = (k, label, fmt, lo, hi) => {
@@ -548,74 +579,74 @@ function srvHistory() {
       const last = vals.length ? vals[vals.length - 1] : null;
       const max = vals.length ? Math.max(...vals) : null;
       const range = k === 'temp' && vals.length ? [Math.min(...vals) - 3, Math.max(...vals) + 3] : [lo, hi];
-      return `<div class="hg"><div class="hg-k">${label}<b>${last == null ? '—' : fmt(last)}</b><small>${max == null ? '' : 'peak ' + fmt(max)}</small></div><div class="hg-c">${areaChart(d[k], 300, 70, range[0], range[1])}</div></div>`;
+      return `<div class="hg"><div class="hg-k">${tr(label)}<b>${last == null ? '—' : fmt(last)}</b><small>${max == null ? '' : tr('peak {v}', { v: fmt(max) })}</small></div><div class="hg-c">${areaChart(d[k], 300, 70, range[0], range[1])}</div></div>`;
     };
-    return `<div class="srv hist"><div class="head"><div><b>${name}</b> <span>last 24 hours · 10-minute averages</span></div></div>
+    return `<div class="srv hist"><div class="head"><div><b>${name}</b> <span>${tr('last 24 hours · 10-minute averages')}</span></div></div>
       ${row('cpu', 'CPU', (v) => `${num(v, 0)}%`, 0, 100)}
       ${row('mem', 'Memory', (v) => `${num(v, 0)}%`, 0, 100)}
       ${row('temp', 'Temp', degF, 0, 100)}
-      <div class="hg-x"><span>24 h ago</span><span>12 h</span><span>now</span></div></div>`;
+      <div class="hg-x"><span>${tr('24 h ago')}</span><span>${tr('12 h')}</span><span>${tr('now')}</span></div></div>`;
   };
   return col('server2', 'Server 2') + col('server1', 'Server 1');
 }
 
 function srvSecurity() {
   const sec = S.security;
-  if (!sec) return '<div class="srv-empty">Security details show on the Car Thing only.</div>';
+  if (!sec) return `<div class="srv-empty">${tr('Security details show on the Car Thing only.')}</div>`;
   const card = (key, name) => {
     const r = sec[key];
-    if (!r) return `<div class="srv sec"><div class="head"><div><b>${name}</b></div></div><div class="note">No report yet. host-report.sh runs from cron on this server (docs/SETUP.md).</div></div>`;
+    if (!r) return `<div class="srv sec"><div class="head"><div><b>${name}</b></div></div><div class="note">${tr('No report yet. host-report.sh runs from cron on this server (docs/SETUP.md).')}</div></div>`;
     const fresh = [...r.listen, ...r.docker].filter((x) => x.fresh);
     const loud = r.ssh.fail1h >= 5 || fresh.length;
-    const chips = (list) => list.map((x) => `<span class="port${x.fresh ? ' fresh' : ''}">${esc(x.p)}${x.fresh ? ' · new' : ''}</span>`).join('');
+    const chips = (list) => list.map((x) => `<span class="port${x.fresh ? ' fresh' : ''}">${esc(x.p)}${x.fresh ? ` · ${tr('new')}` : ''}</span>`).join('');
     const old = now() - r.at > 20 * 60000;
     return `<div class="srv sec${old ? ' stale' : ''}">
-      <div class="head"><div><b>${name}</b> <span>checked ${ago(r.at)}</span></div><span class="state ${loud ? 'down' : 'up'}">${loud ? 'Look' : 'Quiet'}</span></div>
-      <div class="kv"><span>Failed SSH logins</span><b>${r.ssh.fail1h} · ${r.ssh.fail24h}<small> 1 h · 24 h</small></b></div>
-      ${r.ssh.top[0] ? `<div class="sec-top">most from ${esc(r.ssh.top[0].ip)} (${r.ssh.top[0].n})</div>` : ''}
-      <div class="kv"><span>Blocked by the firewall</span><b>${r.ufw.block1h} · ${r.ufw.block24h}<small> 1 h · 24 h</small></b></div>
+      <div class="head"><div><b>${name}</b> <span>${tr('checked {t}', { t: ago(r.at) })}</span></div><span class="state ${loud ? 'down' : 'up'}">${tr(loud ? 'Look' : 'Quiet')}</span></div>
+      <div class="kv"><span>${tr('Failed SSH logins')}</span><b>${r.ssh.fail1h} · ${r.ssh.fail24h}<small> ${tr('1 h · 24 h')}</small></b></div>
+      ${r.ssh.top[0] ? `<div class="sec-top">${tr('most from {ip} ({n})', { ip: esc(r.ssh.top[0].ip), n: r.ssh.top[0].n })}</div>` : ''}
+      <div class="kv"><span>${tr('Blocked by the firewall')}</span><b>${r.ufw.block1h} · ${r.ufw.block24h}<small> ${tr('1 h · 24 h')}</small></b></div>
       ${r.ufw.top.slice(0, 2).map((t) => `<div class="sec-top">${esc(t.what)} · ${t.n}×</div>`).join('')}
-      <div class="sec-k">Open on every interface</div>
-      <div class="ports">${chips(r.listen) || '<span class="sec-none">nothing</span>'}</div>
-      ${r.docker.length ? `<div class="sec-k">Docker, published on 0.0.0.0 (skips UFW)</div><div class="ports">${chips(r.docker)}</div>` : ''}
+      <div class="sec-k">${tr('Open on every interface')}</div>
+      <div class="ports">${chips(r.listen) || `<span class="sec-none">${tr('nothing')}</span>`}</div>
+      ${r.docker.length ? `<div class="sec-k">${tr('Docker, published on 0.0.0.0 (skips UFW)')}</div><div class="ports">${chips(r.docker)}</div>` : ''}
     </div>`;
   };
   const c = sec.carthing;
   const ct = !c
-    ? '<div class="note">Not checked yet. check-carthing.sh runs hourly from cron on server 2.</div>'
+    ? `<div class="note">${tr('Not checked yet. check-carthing.sh runs hourly from cron on server 2.')}</div>`
     : !c.reachable
-      ? '<div class="sec-bad">No SSH access with the hub key. Run check-carthing.sh on server 2.</div>'
+      ? `<div class="sec-bad">${tr('No SSH access with the hub key. Run check-carthing.sh on server 2.')}</div>`
       : c.problems.length
-        ? `<div class="sec-bad">${c.problems.length} thing${c.problems.length > 1 ? 's' : ''} to put back</div>${c.problems.slice(0, 4).map((p) => `<div class="sec-top">${esc(p)}</div>`).join('')}<div class="note">Run check-carthing.sh on server 2 to fix.</div>`
-        : '<div class="sec-ok">✓ Setup intact</div><div class="note">Key-only SSH, watchdog, time sync, kiosk and helpers all in place.</div>';
+        ? `<div class="sec-bad">${trn(c.problems.length, '{n} thing to put back', '{n} things to put back')}</div>${c.problems.slice(0, 4).map((p) => `<div class="sec-top">${esc(p)}</div>`).join('')}<div class="note">${tr('Run check-carthing.sh on server 2 to fix.')}</div>`
+        : `<div class="sec-ok">${tr('✓ Setup intact')}</div><div class="note">${tr('Key-only SSH, watchdog, time sync, kiosk and helpers all in place.')}</div>`;
   return card('server2', 'Server 2') + card('server1', 'Server 1') + `<div class="srv sec ct-card"><div class="head"><div><b>Car Thing</b></div></div>
-    ${c ? `<div class="kv"><span>Nocturne</span><b>${esc(c.version || '—')}</b></div><div class="kv"><span>Checked</span><b>${ago(c.at)}</b></div>` : ''}${ct}</div>`;
+    ${c ? `<div class="kv"><span>Nocturne</span><b>${esc(c.version || '—')}</b></div><div class="kv"><span>${tr('Checked')}</span><b>${ago(c.at)}</b></div>` : ''}${ct}</div>`;
 }
 
 function srvUpdates() {
   const u = S.updates;
-  if (!u) return '<div class="srv-empty">Update details show on the Car Thing only.</div>';
+  if (!u) return `<div class="srv-empty">${tr('Update details show on the Car Thing only.')}</div>`;
   const server = (key, name, label) => {
     const a = u[key];
     // images built locally (or private) cannot be compared with a registry and are left out of the count
     const imgs = (u.images || []).filter((i) => i.server === label && i.update !== null);
     const newer = imgs.filter((i) => i.update === true);
-    return `<div class="up-s"><div class="up-h"><b>${name}</b>${a && a.reboot ? '<span class="port fresh">reboot needed</span>' : ''}</div>
-      <div class="kv"><span>apt packages</span><b>${a ? `${a.upgradable}${a.security ? ` <em>· ${a.security} security</em>` : ''}` : '—'}</b></div>
-      <div class="kv"><span>Images with a newer version</span><b>${imgs.length ? `${newer.length} of ${imgs.length}` : '—'}</b></div>
-      ${newer.slice(0, 3).map((i) => `<div class="sec-top">↑ ${esc(i.name)} · ${esc(i.image)}</div>`).join('')}${newer.length > 3 ? `<div class="sec-top">+${newer.length - 3} more</div>` : ''}</div>`;
+    return `<div class="up-s"><div class="up-h"><b>${name}</b>${a && a.reboot ? `<span class="port fresh">${tr('reboot needed')}</span>` : ''}</div>
+      <div class="kv"><span>${tr('apt packages')}</span><b>${a ? `${a.upgradable}${a.security ? ` <em>· ${tr('{n} security', { n: a.security })}</em>` : ''}` : '—'}</b></div>
+      <div class="kv"><span>${tr('Images with a newer version')}</span><b>${imgs.length ? tr('{a} of {b}', { a: newer.length, b: imgs.length }) : '—'}</b></div>
+      ${newer.slice(0, 3).map((i) => `<div class="sec-top">↑ ${esc(i.name)} · ${esc(i.image)}</div>`).join('')}${newer.length > 3 ? `<div class="sec-top">${tr('+{n} more', { n: newer.length - 3 })}</div>` : ''}</div>`;
   };
   const g = S.github || {};
   let gh;
-  if (!g.configured) gh = '<div class="note">Set GITHUB_USER in the hub .env to see CI runs and open issues here.</div>';
-  else if (!g.at) gh = '<div class="note">Asking GitHub…</div>';
+  if (!g.configured) gh = `<div class="note">${tr('Set GITHUB_USER in the hub .env to see CI runs and open issues here.')}</div>`;
+  else if (!g.at) gh = `<div class="note">${tr('Asking GitHub…')}</div>`;
   else {
     const dot = (ci) => (!ci ? 'none' : ci.status !== 'completed' ? 'run' : ci.conclusion === 'success' ? 'ok' : ci.conclusion === 'failure' ? 'bad' : 'none');
-    gh = g.repos.map((r) => `<div class="gh-r"><i class="gh-d ${dot(r.ci)}"></i><b>${esc(r.name)}</b><span>${r.ci ? `${esc(r.ci.workflow)} · ${r.ci.status !== 'completed' ? 'running' : esc(r.ci.conclusion || '')} · ${ago(r.ci.at)}` : 'no workflows'}</span></div>`).join('')
-      + `<div class="gh-o">Open: <b>${g.open.prs}</b> pull request${g.open.prs === 1 ? '' : 's'} · <b>${g.open.issues}</b> issue${g.open.issues === 1 ? '' : 's'}</div>`
+    gh = g.repos.map((r) => `<div class="gh-r"><i class="gh-d ${dot(r.ci)}"></i><b>${esc(r.name)}</b><span>${r.ci ? `${esc(r.ci.workflow)} · ${r.ci.status !== 'completed' ? tr('running') : esc(tr(r.ci.conclusion || ''))} · ${ago(r.ci.at)}` : tr('no workflows')}</span></div>`).join('')
+      + `<div class="gh-o">${tr('Open: {p} · {i}', { p: trn(g.open.prs, '{n} pull request', '{n} pull requests').replace(/^\d+/, (n) => `<b>${n}</b>`), i: trn(g.open.issues, '{n} issue', '{n} issues').replace(/^\d+/, (n) => `<b>${n}</b>`) })}</div>`
       + g.open.items.slice(0, 3).map((i) => `<div class="sec-top">${i.pr ? '⇄' : '●'} ${esc(i.repo)} #${i.n} · ${esc(i.title)}</div>`).join('');
   }
-  return `<div class="srv upd"><div class="head"><div><b>Updates</b> <span>${u.imagesAt ? `images checked ${ago(u.imagesAt)}` : 'images not checked yet'}</span></div></div>${server('server2', 'Server 2', 'server 2')}${server('server1', 'Server 1', 'server 1')}</div>
+  return `<div class="srv upd"><div class="head"><div><b>${tr('Updates')}</b> <span>${u.imagesAt ? tr('images checked {t}', { t: ago(u.imagesAt) }) : tr('images not checked yet')}</span></div></div>${server('server2', 'Server 2', 'server 2')}${server('server1', 'Server 1', 'server 1')}</div>
     <div class="srv upd"><div class="head"><div><b>GitHub</b> <span>${esc(g.user || '')}</span></div></div>${gh}</div>`;
 }
 
@@ -624,7 +655,7 @@ function renderServersNow() {
   if (s2) {
     $('srv2').className = 'srv' + stale(s2.at, 30000);
     $('srv2').innerHTML = `
-      <div class="head"><div><b>Server 2</b> <span>${s2.ip} · laptop</span></div><span class="state up">Online</span></div>
+      <div class="head"><div><b>Server 2</b> <span>${s2.ip} · ${tr('laptop')}</span></div><span class="state up">${tr('Online')}</span></div>
       ${statsBlock(s2, s2.battery != null ? meter('Battery', s2.battery / 100, `${s2.battery}%`, true) : '')}
       ${containersBlock(s2.containers)}`;
   }
@@ -633,9 +664,9 @@ function renderServersNow() {
     const st = s1.stats && now() - s1.stats.at < 60000 ? s1.stats : null;
     $('srv1').className = 'srv' + stale(s1.at, 60000);
     $('srv1').innerHTML = `
-      <div class="head"><div><b>Server 1</b> <span>${s1.ip} · BRIX</span></div><span class="state ${s1.online ? 'up' : 'down'}">${s1.online ? 'Online' : 'Offline'}</span></div>
-      ${st ? statsBlock(st) : `<div class="note">No stats from the server 1 agent yet.</div>`}
-      <div class="kv"><span>Network latency</span><b>${s1.online ? num(s1.latency, 1) + ' ms' : '—'}</b></div>
+      <div class="head"><div><b>Server 1</b> <span>${s1.ip} · BRIX</span></div><span class="state ${s1.online ? 'up' : 'down'}">${tr(s1.online ? 'Online' : 'Offline')}</span></div>
+      ${st ? statsBlock(st) : `<div class="note">${tr('No stats from the server 1 agent yet.')}</div>`}
+      <div class="kv"><span>${tr('Network latency')}</span><b>${s1.online ? num(s1.latency, 1) + ' ms' : '—'}</b></div>
       ${containersBlock(st && st.containers)}`;
   }
 }
@@ -654,7 +685,7 @@ function pomoTick() {
       pomo.mode = pomo.mode === 'focus' ? 'break' : 'focus';
       pomo.left = modeLen();
       pomo.endsAt = Date.now() + pomo.left * 1000;
-      toast(pomo.mode === 'focus' ? 'Break over — back to focus' : 'Session done — take a break');
+      toast(tr(pomo.mode === 'focus' ? 'Break over — back to focus' : 'Session done — take a break'));
       setPage(FOCUS);
       savePomo();
     }
@@ -662,10 +693,10 @@ function pomoTick() {
   const mm = String(Math.floor(pomo.left / 60)).padStart(2, '0'), ss = String(pomo.left % 60).padStart(2, '0');
   $('pomoTime').textContent = `${mm}:${ss}`;
   $('pomoTime').className = 'pomo-time ' + (pomo.running ? 'running' : 'paused');
-  $('pomoMode').textContent = (pomo.mode === 'focus' ? 'Focus' : 'Break') + (pomo.running ? '' : ' · paused');
+  $('pomoMode').textContent = tr(pomo.mode === 'focus' ? 'Focus' : 'Break') + (pomo.running ? '' : tr(' · paused'));
   $('pomoFill').style.width = `${100 * (1 - pomo.left / modeLen())}%`;
   pages[FOCUS].classList.toggle('break', pomo.mode !== 'focus');
-  $('pomoCount').textContent = `${pomo.done} session${pomo.done === 1 ? '' : 's'} completed`;
+  $('pomoCount').textContent = trn(pomo.done, '{n} session completed', '{n} sessions completed');
 }
 function pomoToggle() {
   pomo.running = !pomo.running;
@@ -673,15 +704,15 @@ function pomoToggle() {
   savePomo(); pomoTick();
 }
 function pomoSet(min) {
-  if (pomo.running) return toast('Pause the timer to change its length');
+  if (pomo.running) return toast(tr('Pause the timer to change its length'));
   pomo.mode = 'focus';
   pomo.focusMin = min;
   pomo.left = min * 60;
   savePomo(); pomoTick();
-  toast(`Focus · ${min} min`);
+  toast(tr('Focus · {n} min', { n: min }));
 }
 function pomoAdjust(step) {
-  if (pomo.running) return toast('Pause the timer to change its length');
+  if (pomo.running) return toast(tr('Pause the timer to change its length'));
   pomo.mode = 'focus';
   pomo.focusMin = Math.max(5, Math.min(90, pomo.focusMin + step * 5));
   pomo.left = pomo.focusMin * 60;
@@ -704,8 +735,8 @@ function brightAdjust(step) {
   clearTimeout(brightTimer);
   brightTimer = setTimeout(() => {
     fetch('/api/brightness', { method: 'POST', body: JSON.stringify({ pct: brightPending }) })
-      .then((r) => { if (!r.ok) toast('Brightness can only be changed on the Car Thing'); })
-      .catch(() => toast('Could not reach the hub'))
+      .then((r) => { if (!r.ok) toast(tr('Brightness can only be changed on the Car Thing')); })
+      .catch(() => toast(tr('Could not reach the hub')))
       .finally(() => { brightPending = null; });
   }, 250);
 }
@@ -739,15 +770,15 @@ function renderMusic() {
   const sp = S.spotify || {};
   const p = sp.player;
   if (!sp.configured || !sp.linked) {
-    $('mTitle').textContent = 'Spotify not linked';
-    $('mArtist').textContent = 'Linking is done once from a browser on the LAN.';
+    $('mTitle').textContent = tr('Spotify not linked');
+    $('mArtist').textContent = tr('Linking is done once from a browser on the LAN.');
     $('mAlbum').textContent = '';
     $('mDev').textContent = '';
     return;
   }
   if (!p) {
-    $('mTitle').textContent = 'Nothing playing';
-    $('mArtist').textContent = 'Start Spotify on any device, then control it here.';
+    $('mTitle').textContent = tr('Nothing playing');
+    $('mArtist').textContent = tr('Start Spotify on any device, then control it here.');
     $('mAlbum').textContent = '';
     $('mDev').textContent = sp.error ? `Spotify: ${sp.error}` : '';
     setIcon($('mPlay'), 'play');
@@ -764,20 +795,20 @@ function renderMusic() {
   setIcon($('mLike'), sp.liked ? 'hearted' : 'heart');
   $('mLike').parentElement.classList.toggle('on', !!sp.liked);
   const d = p.device;
-  $('mDev').textContent = d ? `${d.name}${d.canVolume && d.volume != null ? ` · volume ${d.volume}%` : ''}` : '';
+  $('mDev').textContent = d ? `${d.name}${d.canVolume && d.volume != null ? ` · ${tr('volume {v}%', { v: d.volume })}` : ''}` : '';
   musicProgress();
 }
 
 function spotifyAction(act, body) {
   fetch(`/api/spotify/${act}`, { method: 'POST', body: JSON.stringify(body || {}) })
-    .then((r) => { if (!r.ok) return r.text().then((t) => toast(r.status === 403 ? 'Controls work on the Car Thing only' : `Spotify: ${t || r.status}`)); })
-    .catch(() => toast('Could not reach the hub'));
+    .then((r) => { if (!r.ok) return r.text().then((t) => toast(r.status === 403 ? tr('Controls work on the Car Thing only') : `Spotify: ${t || r.status}`)); })
+    .catch(() => toast(tr('Could not reach the hub')));
 }
 
 let volTimer = null, volDelta = 0;
 function volumeAdjust(step) {
   const d = S && S.spotify && S.spotify.player && S.spotify.player.device;
-  if (!d || !d.canVolume) return toast('This device does not allow volume control');
+  if (!d || !d.canVolume) return toast(tr('This device does not allow volume control'));
   volDelta += step * 5;
   d.volume = Math.max(0, Math.min(100, (d.volume || 0) + step * 5));
   renderMusic();
@@ -825,18 +856,18 @@ function renderAsk() {
   const phase = v.phase || 'idle';
   pages[ASK].dataset.phase = phase;
   const secs = phase === 'listening' && v.startedAt ? Math.min(v.maxSeconds, Math.floor((now() - v.startedAt) / 1000)) : 0;
-  $('askChip').textContent = v.configured === false ? 'needs a key' : { idle: 'ready', starting: 'getting ready', listening: `listening · ${secs}s`, thinking: v.kind === 'briefing' ? 'writing your briefing' : 'thinking', answer: v.kind === 'briefing' ? 'briefing' : 'answered', error: 'oops' }[phase];
+  $('askChip').textContent = v.configured === false ? tr('needs a key') : { idle: tr('ready'), starting: tr('getting ready'), listening: tr('listening · {n}s', { n: secs }), thinking: tr(v.kind === 'briefing' ? 'writing your briefing' : 'thinking'), answer: tr(v.kind === 'briefing' ? 'briefing' : 'answered'), error: tr('oops') }[phase];
   $('askHint').textContent = v.configured === false
-    ? 'Gemini API key not set on the hub yet'
-    : { idle: 'Press the knob and ask me anything · button 1 for today’s briefing', starting: 'Waking up the microphone… start talking when it says Listening', listening: `Press the knob when you are done · max ${v.maxSeconds}s`, thinking: 'Hmm, let me think…', answer: 'Press the knob to ask again · Back to close', error: 'Press the knob to try again · Back to close' }[phase];
+    ? tr('Gemini API key not set on the hub yet')
+    : { idle: tr('Press the knob and ask me anything · button 1 for today’s briefing'), starting: tr('Waking up the microphone… start talking when it says Listening'), listening: tr('Press the knob when you are done · max {n}s', { n: v.maxSeconds }), thinking: tr('Hmm, let me think…'), answer: tr('Press the knob to ask again · Back to close'), error: tr('Press the knob to try again · Back to close') }[phase];
   const bubble = $('askBubble');
   if (phase === 'answer' || phase === 'error') {
     bubble.className = `ask-bubble on ${phase}${v.kind === "briefing" ? " briefing" : ""}`;
-    $('askQ').textContent = v.kind === 'briefing' ? 'Your briefing for today' : v.transcript ? `“${v.transcript}”` : '';
-    $('askA').textContent = phase === 'error' ? v.error : v.answer;
+    $('askQ').textContent = v.kind === 'briefing' ? tr('Your briefing for today') : v.transcript ? `“${v.transcript}”` : '';
+    $('askA').textContent = tr((phase === 'error' ? v.error : v.answer) || ''); // fixed hub messages have translations
     const src = phase === 'answer' ? [
-      (v.searches || []).length ? `Searched Google: ${v.searches.join(' · ')}` : '',
-      (v.sources || []).length ? `Sources: ${v.sources.join(', ')}` : '',
+      (v.searches || []).length ? tr('Searched Google: {q}', { q: v.searches.join(' · ') }) : '',
+      (v.sources || []).length ? tr('Sources: {s}', { s: v.sources.join(', ') }) : '',
     ].filter(Boolean).join('\n') : '';
     $('askSrc').textContent = src;
   } else {
@@ -850,8 +881,8 @@ function renderAsk() {
 let ctxPage = NEWS;
 function briefingNow() {
   fetch('/api/voice/briefing', { method: 'POST' })
-    .then((r) => { if (!r.ok) toast(r.status === 403 ? 'Briefings start on the Car Thing only' : 'Assistant unavailable'); })
-    .catch(() => toast('Could not reach the hub'));
+    .then((r) => { if (!r.ok) toast(tr(r.status === 403 ? 'Briefings start on the Car Thing only' : 'Assistant unavailable')); })
+    .catch(() => toast(tr('Could not reach the hub')));
 }
 
 // a new briefing (scheduled in the morning) brings Mei's page forward unless you are busy with something
@@ -872,15 +903,16 @@ function askToggle() {
   // what was on screen, so "what does this story say?" works (Mei's page itself has no context)
   const ctx = { page: pages[ctxPage].dataset.name, story: ctxPage === NEWS && newsDetail ? newsDetail : undefined };
   fetch(`/api/voice/${act}`, { method: 'POST', body: act === 'start' ? JSON.stringify(ctx) : '' })
-    .then((r) => { if (!r.ok) toast(r.status === 403 ? 'Mei only listens on the Car Thing' : 'Assistant unavailable'); })
-    .catch(() => toast('Could not reach the hub'));
+    .then((r) => { if (!r.ok) toast(tr(r.status === 403 ? 'Mei only listens on the Car Thing' : 'Assistant unavailable')); })
+    .catch(() => toast(tr('Could not reach the hub')));
 }
 
 
 // ---------------------------------------------------------------- quick menu (round settings button, top right)
 
 let setMode = null; // null (closed) | 'menu' | 'bright' | 'confirm'
-let setIdx = 0;     // 0 brightness, 1 restart, 2 shut down, 3 rotate
+let setIdx = 0;     // 0 brightness, 1 restart, 2 shut down, 3 rotate, 4 language
+const TILES = 5;
 let setTimer = null;
 
 function renderSettings() {
@@ -891,10 +923,10 @@ function renderSettings() {
   });
   $('ovSlider').classList.toggle('active', setMode === 'bright');
   $('setHint').textContent = setMode === 'bright'
-    ? 'Turn the knob to change brightness · press the knob or Back when done'
+    ? tr('Turn the knob to change brightness · press the knob or Back when done')
     : setMode === 'confirm'
-      ? `Press the knob again to ${setIdx === 1 ? 'restart' : 'shut down'} · Back to cancel`
-      : 'Turn the knob to choose · press the knob to select · Back to close';
+      ? tr(setIdx === 1 ? 'Press the knob again to restart · Back to cancel' : 'Press the knob again to shut down · Back to cancel')
+      : tr('Turn the knob to choose · press the knob to select · Back to close');
 }
 
 function setModeTo(m) {
@@ -907,19 +939,19 @@ function setModeTo(m) {
 
 function deviceAction(act) {
   fetch(`/api/device/${act}`, { method: 'POST' })
-    .then((r) => toast(r.ok ? (act === 'reboot' ? 'Restarting the Car Thing…' : 'Shutting down — unplug and replug to start again') : 'Only the Car Thing can do this'))
-    .catch(() => toast('Could not reach the hub'));
+    .then((r) => toast(tr(r.ok ? (act === 'reboot' ? 'Restarting the Car Thing…' : 'Shutting down — unplug and replug to start again') : 'Only the Car Thing can do this')))
+    .catch(() => toast(tr('Could not reach the hub')));
   setModeTo(null);
 }
 
 function settingsKnob(step) {
-  if (setMode === 'menu') { setIdx = (setIdx + step + 4) % 4; setModeTo('menu'); }
+  if (setMode === 'menu') { setIdx = (setIdx + step + TILES) % TILES; setModeTo('menu'); }
   else if (setMode === 'bright') { brightAdjust(step); setModeTo('bright'); }
   else if (setMode === 'confirm') setModeTo('menu');
 }
 
 function settingsPress() {
-  if (setMode === 'menu') { if (setIdx === 3) return rotate(); return setModeTo(setIdx === 0 ? 'bright' : 'confirm'); }
+  if (setMode === 'menu') { if (setIdx === 3) return rotate(); if (setIdx === 4) return switchLang(); return setModeTo(setIdx === 0 ? 'bright' : 'confirm'); }
   if (setMode === 'bright') return setModeTo('menu');
   if (setMode === 'confirm') deviceAction(setIdx === 1 ? 'reboot' : 'poweroff');
 }
@@ -950,6 +982,7 @@ $('overlay').addEventListener('click', (e) => {
     if (setMode === 'confirm' && i === setIdx) return deviceAction(i === 1 ? 'reboot' : 'poweroff');
     setIdx = i;
     if (i === 3) return rotate();
+    if (i === 4) return switchLang();
     return setModeTo(i === 0 ? 'bright' : 'confirm');
   }
   if (!e.target.closest('.ov-panel')) setModeTo(null);
@@ -1004,17 +1037,43 @@ try { orient = ORIENTS.includes(localStorage.getItem('orient')) ? localStorage.g
 function applyOrient() {
   document.body.dataset.orient = orient;
   document.body.classList.toggle('portrait', orient === 'cw' || orient === 'ccw');
-  $('rotLabel').textContent = ORIENT_NAME[orient];
+  $('rotLabel').textContent = tr(ORIENT_NAME[orient]);
   requestAnimationFrame(movePill);
 }
 function rotate() {
   orient = ORIENTS[(ORIENTS.indexOf(orient) + 1) % ORIENTS.length];
   try { localStorage.setItem('orient', orient); } catch {}
   applyOrient();
-  toast(ORIENT_NAME[orient]);
+  toast(tr(ORIENT_NAME[orient]));
   setModeTo('menu');
 }
 applyOrient();
+
+// ---------------------------------------------------------------- language (English / Tiếng Việt), kept on the hub
+
+function switchLang() {
+  const next = lang === 'vi' ? 'en' : 'vi';
+  fetch('/api/display/lang', { method: 'POST', body: JSON.stringify({ lang: next }) })
+    .then((r) => { if (!r.ok) toast(tr('Language can only be changed on the Car Thing')); })
+    .catch(() => toast(tr('Could not reach the hub')));
+  setModeTo('menu');
+}
+// called on every update: redraws the static text and the open page when the hub's language changes
+function applyLang() {
+  const want = S && S.display && S.display.lang === 'vi' ? 'vi' : 'en';
+  if (want === lang && applyLang.done) return;
+  lang = want;
+  applyLang.done = true;
+  try { localStorage.setItem('lang', lang); } catch {}
+  applyStaticText();
+  $('langLabel').textContent = lang === 'vi' ? 'Tiếng Việt' : 'English';
+  applyOrient();
+  renderSettings();
+  $('tabs').innerHTML = pages.map((p, j) => `<span class="tab ${j === page ? 'on' : ''}">${tr(p.dataset.name)}</span>`).join('');
+  requestAnimationFrame(movePill);
+  tickClock();
+}
+applyStaticText();
 
 // ---------------------------------------------------------------- navigation + input
 
@@ -1040,7 +1099,7 @@ function setPage(i) {
   if (dir) transition(pages[prev], pages[page], dir);
   document.body.dataset.page = page;
   // the knob changes pages; the four preset buttons act on the page that is open
-  $('tabs').innerHTML = pages.map((p, j) => `<span class="tab ${j === page ? 'on' : ''}">${p.dataset.name}</span>`).join('');
+  $('tabs').innerHTML = pages.map((p, j) => `<span class="tab ${j === page ? 'on' : ''}">${tr(p.dataset.name)}</span>`).join('');
   if (page === ASK) mitStart();
   movePill();
   render();
@@ -1141,7 +1200,7 @@ addEventListener('touchend', (e) => {
 // ---------------------------------------------------------------- clock + data stream
 
 function tickClock() {
-  $('clock').textContent = new Intl.DateTimeFormat('en-US', { timeZone: tz(), hour: 'numeric', minute: '2-digit' }).format(new Date(now()));
+  $('clock').textContent = new Intl.DateTimeFormat(loc(), { timeZone: tz(), hour: 'numeric', minute: '2-digit' }).format(new Date(now()));
   pomoTick();
   musicProgress();
   if (S && page === ASK) renderAsk();
@@ -1152,6 +1211,7 @@ function tickClock() {
 const RENDER = { [NEWS]: renderNews, [MARKETS]: renderMarkets, [ASK]: renderAsk, [WEATHER]: renderWeather, [CALENDAR]: renderCalendar, [MUSIC]: renderMusic, [SERVERS]: renderServers };
 function render() {
   if (!S) return;
+  applyLang();
   try { RENDER[page] && RENDER[page](); } catch (e) { console.error(e); }
   if (zoom && page === MARKETS) try { renderZoom(); } catch (e) { console.error(e); }
   try { renderAlerts(); } catch (e) { console.error(e); }

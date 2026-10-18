@@ -515,6 +515,15 @@ Khi lật ngược màn hình 180°, núm vặn **không** bị ngược: xoay t
 * **Chạm vào thanh độ sáng**: dùng `offsetX` (toạ độ trong chính phần tử, đã tính phép xoay) thay cho `clientX`.
 * **4 nút preset**: lật ngược thì chúng nằm ở cạnh dưới theo thứ tự 4-3-2-1. Hub đảo lại để nút bên trái luôn là nút 1.
 
+### °C/°F và tiếng Việt
+
+* **Nút 1 trên trang Weather đổi °C/°F.** Đây chỉ là lựa chọn hiển thị, lưu trên Car Thing: hub vẫn gửi đơn vị của nó, màn hình tự đổi nhiệt độ, gió (mph ↔ km/h), và cả nhiệt độ của hai server.
+* **Ô quả địa cầu trong menu nút tròn đổi English ↔ Tiếng Việt.** Ngôn ngữ được lưu **trên hub** chứ không phải trong trình duyệt, vì hub cũng tự viết chữ: banner giá, mưa, bảo mật, CI, và bản tin buổi sáng của Mei. Lưu ở hub thì tất cả đổi theo cùng lúc, và khởi động lại hub vẫn giữ.
+* Giao diện có 227 chuỗi chữ được dịch. Chuỗi tiếng Anh dùng làm khoá, `{n}` là chỗ điền số. Ngày tháng và đồng hồ dùng định dạng của `vi-VN` (19:50 thay vì 7:50 PM, "Thứ Bảy", "tháng 10 năm 2026").
+* Hàm dịch lúc đầu tên là `t()`, nhưng code có rất nhiều chỗ `const t = now()`. Trong những hàm đó `t('Next up')` sẽ thành "gọi một con số". Đổi tên thành `tr()` trước khi sửa bất kỳ dòng nào.
+* Lần thử đầu, đổi ngôn ngữ "không ăn". Hoá ra trang đang **tự tải lại** (hub vừa khởi động lại, mã phiên bản đổi) đúng lúc bấm phím. Thử lại khi trang đã yên thì chạy đúng.
+* Chụp đủ các trang bằng tiếng Việt trên máy thật thì thấy chữ dài hơn làm ô trạng thái ở trang Security bị xuống dòng; đã sửa cho chữ không xuống dòng.
+
 ## 23. Bảng tổng hợp lỗi
 
 | # | Triệu chứng | Nguyên nhân gốc | Cách sửa |

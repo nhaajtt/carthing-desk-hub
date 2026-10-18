@@ -57,6 +57,7 @@ hub/server/
 * **Liveness and updates.** Besides state pushes, the hub sends a named `hb` event every 10 s (SSE comments never reach JavaScript, so they cannot tell a quiet hub from a dead link). After 25 s of silence the UI shows a "Reconnecting" card and opens a fresh `EventSource` every 30 s. Every message also carries `v`, an id that changes each time the hub starts; when the UI sees a new one it reloads, so new UI code reaches the Car Thing without touching it.
 * **Calendar.** Times with a `TZID` are converted with `Intl` (offset checked twice so the hour around a DST change lands right). Recurring events are expanded in wall-clock time of their own zone, so a 10 am meeting stays at 10 am across DST. Daily and weekly series without `COUNT` start counting near the window instead of from their first year. `hub/test/calendar.test.mjs` covers these cases.
 * **Two views of the state.** The Car Thing (and addresses in `PREVIEW_FULL_FROM`) get everything. Any other client, i.e. the LAN preview, gets the state without calendar events, security and update details, GitHub, Mei's answers and the security / CI banners.
+* **Language.** English or Vietnamese is kept on the hub (`state.display.lang`, saved in `state/display.json`), not in the browser, because the hub writes text too: price, rain, security and CI banners, and Mei's briefing (unless `BRIEFING_LANG` pins one). The UI translates its own strings with `tr()`, and the fixed messages the hub sends (Mei's errors) by exact match. °C / °F is only a display choice, stored in the Car Thing's `localStorage`; the hub keeps sending its own unit.
 * **Night.** Between `NIGHT_DIM`'s times the hub answers `0` to `GET /api/brightness`. Any input on the Car Thing calls `POST /api/display/wake`, which lights it for `WAKE_MINUTES`; the UI swallows that first input (and anything in the 2.5 s the backlight needs to come on) so a tap in the dark does not press anything.
 * **Command channel.** `GET /api/voice/cmd` is a 25 s long-poll held open by `voice-agent.sh`. The hub answers it with `record <id> <seconds>`, `stop <id>`, `reboot` or `poweroff`.
 * **Audio.** The WAV arrives as 4-channel 32-bit PCM. The hub averages the channels, resamples to 16 kHz, removes the DC offset, drops the first 150 ms, measures 50 ms windows (noise = 20th percentile, loud = 95th percentile), and only calls Gemini when loud ≥ 4 × noise and ≥ RMS 20. Gain is normalised up to 40×.
@@ -66,6 +67,7 @@ hub/server/
 ```
 hub/public/
   index.html   pages: News, Markets, Weather, Calendar, Music, Servers, Focus, Mei; quick menu; offline card
+  i18n.js      English / Vietnamese strings, tr() and the locale for dates
   app.js       rendering, controls, quick menu, orientation, News browse/summary, Markets zoom, Calendar
   stage.js     Mei & Nhat: actors, scene toolkit, 7 scenes
   style.css    layout
@@ -95,7 +97,7 @@ hub/public/
 |---|---|
 | `GET /`, `/events`, `/api/state`, static files | anyone who can reach the port (read-only); everyone but the Car Thing gets the trimmed state |
 | `GET /api/brightness` | anyone (read-only) |
-| `POST /api/brightness`, `/api/display/wake`, `/api/voice/*` (start, stop, briefing, dismiss, and the recorder's channel), `/api/device/*`, `/api/spotify/{toggle,next,prev,volume,like}` | Car Thing only (`10.42.1.2`) |
+| `POST /api/brightness`, `/api/display/wake`, `/api/display/lang`, `/api/voice/*` (start, stop, briefing, dismiss, and the recorder's channel), `/api/device/*`, `/api/spotify/{toggle,next,prev,volume,like}` | Car Thing only (`10.42.1.2`) |
 | `POST /api/ingest` | `INGEST_FROM` address **and** bearer token |
 | `GET /spotify/link` | not the Car Thing |
 | `GET /callback` | valid one-time `state` (≤ 10 min old) |

@@ -46,7 +46,7 @@ const state = {
   units: IMPERIAL ? { temp: '°F', wind: 'mph' } : { temp: '°C', wind: 'km/h' },
   tz: WX_TZ,
   config: { crypto: CRYPTO, indices: INDICES.map(({ key, name, sub, decimals }) => ({ key, name, sub, decimals })) },
-  display: { brightness: 80 },
+  display: { brightness: 80, lang: 'en' },
   crypto: Object.fromEntries(CRYPTO.map((s) => [s, { price: null, open24h: null, high24h: null, low24h: null, spark: [], at: 0 }])),
   metals: { xau: null, xag: null, at: 0 },
   yahoo: {},
@@ -291,7 +291,7 @@ every(5 * 60000, 'nowcast', async () => {
   state.nowcast = { text, wetNow: wet(cur), startsAt, endsAt, bars: slots.slice(ci, ci + 9).map(({ t, mm, prob }) => ({ t, mm, prob })), at: now };
   if (startsAt && startsAt - now <= 30 * 60000 && now - lastRainNote > 3 * 3600000) {
     lastRainNote = now;
-    alerts.notify('rain', `${text} in ${CITY}`);
+    alerts.notify('rain', state.display.lang === 'vi' ? `Có thể mưa trong khoảng ${mins(startsAt)} phút nữa ở ${CITY}` : `${text} in ${CITY}`);
   }
 });
 
@@ -517,7 +517,8 @@ const assistant = createAssistant({ state, changed, snapshot, describe });
 // ---------------------------------------------------------------- morning briefing (once a day at BRIEFING_AT, local time)
 
 const BRIEFING_AT = process.env.BRIEFING_AT || '07:00'; // "off" to disable
-const BRIEFING_LANG = process.env.BRIEFING_LANG || 'English';
+// the briefing follows the screen language unless BRIEFING_LANG pins one
+const briefingLang = () => process.env.BRIEFING_LANG || (state.display.lang === 'vi' ? 'Vietnamese' : 'English');
 const BRIEFING_FILE = path.join(STATE_DIR, 'briefing.json');
 let lastBriefing = '';
 try { lastBriefing = JSON.parse(fs.readFileSync(BRIEFING_FILE, 'utf8')).date || ''; } catch {}
@@ -532,7 +533,7 @@ setInterval(() => {
   if (date === lastBriefing || mins < at || mins > at + 120) return;
   lastBriefing = date;
   try { fs.writeFileSync(BRIEFING_FILE, JSON.stringify({ date })); } catch (e) { console.error('[briefing]', e.message); }
-  assistant.briefing(BRIEFING_LANG);
+  assistant.briefing(briefingLang());
 }, 30000);
 
 // ---------------------------------------------------------------- display brightness (set from the Car Thing, applied there by a small sync script)
@@ -542,7 +543,10 @@ try { Object.assign(state.display, JSON.parse(fs.readFileSync(DISPLAY_FILE, 'utf
 
 function setBrightness(pct) {
   state.display.brightness = Math.max(5, Math.min(100, Math.round(pct)));
-  try { fs.writeFileSync(DISPLAY_FILE, JSON.stringify({ brightness: state.display.brightness })); } catch (e) { console.error('[display]', e.message); }
+  saveDisplay();
+}
+function saveDisplay() {
+  try { fs.writeFileSync(DISPLAY_FILE, JSON.stringify({ brightness: state.display.brightness, lang: state.display.lang })); } catch (e) { console.error('[display]', e.message); }
   changed();
 }
 
@@ -615,6 +619,20 @@ const server = http.createServer((req, res) => {
   if (url.pathname === '/api/brightness' && req.method === 'GET') {
     res.setHeader('Content-Type', 'text/plain');
     return res.end(String(state.display.night?.dark ? 0 : state.display.brightness));
+  }
+
+  // screen language, chosen in the quick menu: 'en' or 'vi'
+  if (url.pathname === '/api/display/lang' && req.method === 'POST') {
+    if (!fromCarThing(req)) { res.writeHead(403); return res.end(); }
+    readRaw(req, 100).then((b) => {
+      let lang = '';
+      try { lang = JSON.parse(b.toString() || '{}').lang; } catch {}
+      if (lang !== 'en' && lang !== 'vi') { res.writeHead(400); return res.end(); }
+      state.display.lang = lang;
+      saveDisplay();
+      res.end(lang);
+    }).catch(() => { res.writeHead(413); res.end(); });
+    return;
   }
 
   // any input on the Car Thing during the night lights the screen for a while
@@ -691,7 +709,7 @@ const server = http.createServer((req, res) => {
       }).catch(() => { res.writeHead(413); res.end(); });
       return;
     }
-    if (url.pathname === '/api/voice/briefing' && req.method === 'POST') { assistant.briefing(BRIEFING_LANG); return res.end('ok'); }
+    if (url.pathname === '/api/voice/briefing' && req.method === 'POST') { assistant.briefing(briefingLang()); return res.end('ok'); }
     if (url.pathname === '/api/voice/dismiss' && req.method === 'POST') { assistant.dismiss(); return res.end('ok'); }
     if (url.pathname === '/api/voice/stop' && req.method === 'POST') { assistant.stop(); return res.end('ok'); }
     if (url.pathname === '/api/voice/started') { assistant.started(url.searchParams.get('id')); return res.end('ok'); }

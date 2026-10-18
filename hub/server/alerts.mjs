@@ -43,6 +43,7 @@ export function createAlerts({ state, changed, config, priceOf, labelOf }) {
     changed();
   }
 
+  const vi = () => state.display?.lang === 'vi';
   const fmt = (p) => (Math.abs(p) >= 1000 ? Math.round(p).toLocaleString('en-US') : Number(p.toPrecision(5)).toString());
 
   function check() {
@@ -55,15 +56,15 @@ export function createAlerts({ state, changed, config, priceOf, labelOf }) {
       const chg = (now / then - 1) * 100;
       if (Math.abs(chg) >= r.pct) {
         const dir = chg > 0 ? 'up' : 'down';
-        fire(`move${i}`, r.asset, dir, `${labelOf(r.asset)} ${chg > 0 ? '+' : ''}${chg.toFixed(2)}% in ${r.window} · now ${fmt(now)}`);
+        fire(`move${i}`, r.asset, dir, `${labelOf(r.asset)} ${chg > 0 ? '+' : ''}${chg.toFixed(2)}% ${vi() ? 'trong' : 'in'} ${r.window} · ${vi() ? 'hiện' : 'now'} ${fmt(now)}`);
       }
     });
     (cfg.levels || []).forEach((r, i) => {
       const h = history.get(r.asset);
       if (!h || h.length < 2) return;
       const prev = h[h.length - 2][1], now = h[h.length - 1][1];
-      if (r.above != null && prev < r.above && now >= r.above) fire(`level${i}`, r.asset, 'up', `${labelOf(r.asset)} crossed above ${fmt(r.above)} · now ${fmt(now)}`);
-      if (r.below != null && prev > r.below && now <= r.below) fire(`level${i}`, r.asset, 'down', `${labelOf(r.asset)} crossed below ${fmt(r.below)} · now ${fmt(now)}`);
+      if (r.above != null && prev < r.above && now >= r.above) fire(`level${i}`, r.asset, 'up', vi() ? `${labelOf(r.asset)} vượt lên trên ${fmt(r.above)} · hiện ${fmt(now)}` : `${labelOf(r.asset)} crossed above ${fmt(r.above)} · now ${fmt(now)}`);
+      if (r.below != null && prev > r.below && now <= r.below) fire(`level${i}`, r.asset, 'down', vi() ? `${labelOf(r.asset)} giảm xuống dưới ${fmt(r.below)} · hiện ${fmt(now)}` : `${labelOf(r.asset)} crossed below ${fmt(r.below)} · now ${fmt(now)}`);
     });
   }
 
