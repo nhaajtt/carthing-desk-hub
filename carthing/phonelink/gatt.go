@@ -35,8 +35,8 @@ const (
 	keyPlayPause = 0
 	keyVolumeUp  = 3
 	keyVolDown   = 4
-	keySiri     = 6
-	keyHoldMax  = 10 * time.Second // a key the page forgot to release lets go by itself
+	keySiri      = 6
+	keyHoldMax   = 10 * time.Second // a key the page forgot to release lets go by itself
 )
 
 var (
