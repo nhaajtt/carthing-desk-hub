@@ -10,7 +10,8 @@ const keep = (m, k, v, max) => { m.set(k, v); if (m.size > max) m.delete(m.keys(
 
 async function youtube(title, channel) {
   const q = new URLSearchParams({ search_query: `${title} ${channel}`.trim(), hl: 'en' });
-  const r = await fetch(`https://www.youtube.com/results?${q}`, { headers: { 'User-Agent': UA, 'Accept-Language': 'en' }, signal: AbortSignal.timeout(8000) });
+  // the results page is over 1 MB: give it time
+  const r = await fetch(`https://www.youtube.com/results?${q}`, { headers: { 'User-Agent': UA, 'Accept-Language': 'en' }, signal: AbortSignal.timeout(15000) });
   if (!r.ok) throw new Error(`youtube ${r.status}`);
   const id = (await r.text()).match(/"videoId":"([\w-]{11})"/);
   return id ? `https://i.ytimg.com/vi/${id[1]}/mqdefault.jpg` : '';
