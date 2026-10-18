@@ -42,7 +42,7 @@
 ```
 hub/server/
   index.mjs          config, state, every data source, HTTP + SSE, auth checks
-  alerts.mjs         price alert engine (1-min samples, 26 h history, cooldowns)
+  alerts.mjs         price alert engine (1-min samples, 26 h history, cooldowns), one-shot levels set on the Car Thing (state/levels.json)
   assistant.mjs      Mei: command channel to the Car Thing, audio processing, Gemini
   news.mjs           feeds, Google News link decoding, article reading, summaries
   calendar.mjs       iCal parsing, time zones, RRULE / EXDATE / RECURRENCE-ID expansion
@@ -55,6 +55,8 @@ hub/server/
   lyrics.mjs         timed lyrics from LRCLIB, parsed from LRC; Vietnamese lines from Gemini Flash-Lite
   desk.mjs           minutes at the desk per day (state/desk.json), stand-up nudge
   reminders.mjs      reminders Mei sets (state/reminders.json): banner and screen on when due
+  words.mjs          vocabulary cards: new words from Gemini Flash-Lite, Leitner reviews (state/words.json)
+  net.mjs            internet latency and outages every 30 s, 24 h of 10-minute averages (state/net.json)
   docker-status.mjs  the read-only sidecar
 ```
 
@@ -82,6 +84,14 @@ hub/public/
   theme.css    "Mei's night market" look, motion, portrait layout
 ```
 
+* **Page changes, measured.** `tools/trace.mjs per` traces one page change at a time and splits the main thread's time into style, layout, paint and script; `per N` lists every task over 8 ms. What it found in this round:
+  * `.page.on { pointer-events: auto }`: pointer-events is inherited, so switching it restyled and laid out every element of both pages on each change. The current page now sits on top with `z-index` instead.
+  * `.page:not(.on) *` (pause animations off screen) matched every element; it now names only the elements that loop.
+  * `setHTML` merges new markup into what is there (text nodes and attributes that changed), instead of replacing a block whenever one number in it moved.
+  * Meter fills are scaled, not resized. The iPhone list is a plain block, not a flex column.
+  * On the Mali-G31 (one core), filled rounded squares and dashed lines were the expensive part of drawing a page as it slid in: letter badges are coloured text, dividers are solid hairlines.
+  * Tried and dropped: CPU rasterization (worse), multi-process Chromium (no change), sliding a page in with its old content and refreshing it after the slide (worse: the refresh lands at the end of the slide).
+* **Keys act on release.** The knob press, Back and the round button run on keyup, so that holding them for 0.6 s can do something else (play / pause, home, screen off). The test tools send keyup as well.
 * **Pages stay laid out.** Every page is `display: flex`; the ones not on screen get `content-visibility: hidden`, which skips them but keeps their layout, so showing a page again is cheap. A few seconds after start-up each page is laid out once (`warmUp()`). `render()` draws only the current page; the others are drawn when they slide in.
 * **The slide.** The old and new page move side by side with the Web Animations API (`translate3d`, 260 ms), fully opaque: nothing ever shows through, which is what looked like ghosting with the old cross-fade. The new page is drawn first and gets two frames off screen before both move; the gold tab pill starts with them. A new knob turn finishes the running slide at once. During a slide, updates from the hub are held and drawn when it ends, and the new page is drawn without price flashes or rolling digits.
 * **No work on hidden pages.** Animations on pages that are not current are paused (Mei's SVG legs and tail run on the main thread, and any main-thread animation makes the compositor wait during a slide).
@@ -144,6 +154,8 @@ carthing/phonelink/
 | `GET /api/media/cover?app=&t=&a=&al=` | Car Thing only; fetches from `i.ytimg.com` or `*.mzstatic.com` only |
 | `GET /api/media/lyrics?t=&a=&al=&d=` | Car Thing only; asks `lrclib.net` |
 | `GET /api/media/lyrics/vi?…` | Car Thing only; the same lyrics translated by Gemini Flash-Lite, one request per song |
+| `POST /api/alerts/level {asset, kind, value}` | Car Thing only; `kind` is above, below or clear |
+| `POST /api/words/grade {id, known}`, `POST /api/words/more` | Car Thing only |
 | `POST /api/desk {near}` | Car Thing only; presence reports and a 2-minute heartbeat |
 | `POST /api/phone/summary {notes, calls, battery}` | Car Thing only; counts for the morning briefing, kept 2 h in memory |
 | `POST /api/display/away` | Car Thing only; `true` makes `/api/brightness` answer 0 until `false` |

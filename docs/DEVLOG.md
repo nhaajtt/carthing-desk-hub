@@ -33,8 +33,9 @@
 24. [iPhone qua Bluetooth, không cần app](#24-iphone-qua-bluetooth-không-cần-app)
 25. [Điện thoại "đẳng cấp" hơn](#25-điện-thoại-đẳng-cấp-hơn)
 26. [Ngồi bàn, tìm điện thoại, nhắc việc](#26-ngồi-bàn-tìm-điện-thoại-nhắc-việc)
-27. [Bảng tổng hợp lỗi](#27-bảng-tổng-hợp-lỗi)
-28. [Những điều rút ra](#28-những-điều-rút-ra)
+27. [Trang mới, rồi làm mượt lại](#27-trang-mới-rồi-làm-mượt-lại)
+28. [Bảng tổng hợp lỗi](#28-bảng-tổng-hợp-lỗi)
+29. [Những điều rút ra](#29-những-điều-rút-ra)
 
 ---
 
@@ -703,7 +704,32 @@ iOS chỉ gửi danh sách thông báo đang có **một lần**, khi chương t
 | Sức khoẻ Car Thing | `carthing-stats.sh` trên server 2 đọc CPU, RAM, nhiệt độ, bộ nhớ, thời gian chạy và các chương trình phụ qua SSH mỗi 2 phút (chỉ đọc, đúng chiều tin cậy sẵn có, không mở cổng mới). Trang Máy chủ → Hiện tại có thêm thẻ Car Thing dưới hai server. |
 | Dọn server 2 | Xoá image `golang:1.24-bookworm` (1,27 GB); `build-phonelink.sh` giờ dùng bản Alpine nhỏ hơn và tự tải khi cần build. |
 
-## 27. Bảng tổng hợp lỗi
+## 27. Trang mới, rồi làm mượt lại
+
+Thêm: trang **Từ vựng** (thẻ lật, ôn theo hộp Leitner, 5 từ mới mỗi ngày từ Gemini Flash-Lite), **đặt ngưỡng giá ngay trên Car Thing** (xem chi tiết một mục ở Thị trường → bấm núm → vặn núm chọn mức → bấm lưu; báo một lần rồi tự xoá), **sức khoẻ Internet** (hub mở kết nối TCP tới 1.1.1.1 và 8.8.8.8 mỗi 30 giây vì container không có ICMP; biểu đồ 24 giờ; banner khi mất mạng, có lại, hoặc chậm), **đồng hồ khi rảnh** (10 phút không chạm), **phím giữ** (giữ núm: phát/dừng nhạc; giữ Back: về Tin tức; giữ nút tròn: tắt màn hình). Theo yêu cầu, **bỏ tự tắt màn hình buổi tối**: `NIGHT_DIM` giờ mặc định tắt, người dùng tự tắt bằng nút tròn.
+
+Để phím giữ hoạt động, núm, Back và nút tròn giờ chạy khi **nhả** phím. Các công cụ test (`trace.mjs`, `steps.mjs`…) phải gửi thêm keyup, nếu không thì bấm núm không còn tác dụng trong test.
+
+### Mượt lại
+
+Sau ba trang mới, vòng đo (`trace.mjs`) rớt **8–10,7%** khung chuyển động, so với 6–8% của giao diện cũ đo cùng lúc (và 4,5–5% ở mục 23, khi iPhone chưa ghép và `nocturned` rảnh hơn). Lần này mình viết thêm `trace.mjs per` để đo **từng lần chuyển trang**: số khung rớt và thời gian luồng chính dành cho style, layout, paint, script.
+
+| Tìm thấy | Sửa | Kết quả |
+|---|---|---|
+| `.page.on { pointer-events: auto }`: thuộc tính **kế thừa**, đổi nó là mọi phần tử của hai trang phải tính lại style rồi layout | Trang hiện tại nằm trên bằng `z-index` | Layout khi vào Markets: 342 → 60 đối tượng |
+| `.page:not(.on) *` (dừng animation ở trang ẩn) khớp với **mọi** phần tử | Chỉ nêu tên các phần tử có animation lặp | Ít phần tử phải tính lại |
+| `setHTML` thay cả khối khi một con số đổi | Ghép markup mới vào cái đang có: chỉ đổi nút chữ và thuộc tính khác | Layout khi vào Thời tiết: 43 → 5 ms |
+| Thanh đo đổi `width` | `transform: scaleX` | Máy chủ: layout 33 → 13 ms |
+| Danh sách iPhone là flex: một dòng đổi, cả danh sách layout lại | Khối thường | iPhone: layout 33 → 10 ms |
+| **Ô vuông bo góc có nền** (chữ cái của app) và **đường nét đứt**: đắt khi GPU Mali-G31 một lõi vẽ trang đang trượt vào | Chữ cái tô màu, không nền; đường kẻ liền | iPhone: 6–13 → 0–2 khung rớt |
+
+Kết quả cả vòng: **5,9–8%** (trung bình khoảng 7%), ngang với giao diện cũ dù thêm ba trang. Chromium lúc đứng yên dùng 3% một lõi.
+
+Những thứ đã thử mà không giúp: rasterize bằng CPU thay vì GPU (11–13%, tệ hơn); Chromium nhiều tiến trình (không đổi, tốn thêm RAM); cho trang trượt vào với nội dung cũ rồi cập nhật sau (tệ hơn: lần cập nhật rơi vào cuối cú trượt).
+
+Phần còn lại: `nocturned` dùng khoảng 38% một lõi (nghe từ khoá như trước, và kết nối iAP2 với iPhone), và GPU một lõi.
+
+## 28. Bảng tổng hợp lỗi
 
 | # | Triệu chứng | Nguyên nhân gốc | Cách sửa |
 |---|---|---|---|
@@ -740,8 +766,12 @@ iOS chỉ gửi danh sách thông báo đang có **một lần**, khi chương t
 | 28 | Không có ảnh bìa cho nhạc / video từ iPhone | Bluetooth chỉ gửi chữ; `nocturned` chỉ chuyển ảnh cho app của nó | Hub tìm ảnh: Spotify, YouTube, iTunes |
 | 29 | Trang iPhone trống dù iPhone có thông báo | iOS gửi danh sách có sẵn một lần, cho người đăng ký đầu tiên (`nocturned`) | Giữ và phát lại giá trị đến sớm; nối lại một lần khi khởi động |
 | 30 | Ảnh bìa là bản remix | Kết quả iTunes đầu tiên không phải album đang phát | Ưu tiên đúng album, rồi đúng tên bài |
+| 31 | "Tìm iPhone" báo không có app nào phát được | Khi không app nào giữ phiên phát, iPhone bỏ qua lệnh "phát" của AMS | Bấm phím phát/dừng của remote như tai nghe: iOS mở lại app nhạc gần nhất |
+| 32 | CI đỏ vì định dạng Go | Thêm hằng số làm lệch cột căn | Script build chạy `go vet` và cảnh báo `gofmt` |
+| 33 | Rớt khung tăng lên 8–10% sau khi thêm trang | `pointer-events` kế thừa trên trang, quy tắc `*`, `setHTML` thay cả khối, `width` của thanh đo, flex | `z-index`, quy tắc hẹp, ghép markup, `scaleX`, khối thường |
+| 34 | Trang iPhone rớt 6–13 khung khi trượt vào | Ô bo góc có nền và nét đứt đắt trên GPU Mali một lõi | Chữ cái tô màu, đường liền |
 
-## 28. Những điều rút ra
+## 29. Những điều rút ra
 
 1. **Đo trên thiết bị thật, không đoán.** Font, FPS, mức âm thanh của micro, giờ hệ thống: lần nào thiết bị thật cũng khác với giả định.
 2. **"Không tin mặc định" là công cụ thiết kế, không chỉ là bảo mật.** Nó quyết định Car Thing không giữ key, hub không cầm `docker.sock`, agent chỉ đẩy dữ liệu đi, và firewall nằm trên đúng máy.
@@ -751,3 +781,4 @@ iOS chỉ gửi danh sách thông báo đang có **một lần**, khi chương t
 6. **Hiệu năng trên phần cứng yếu nằm ở việc tránh vẽ lại, không phải ở việc viết code nhanh.** `will-change` và việc chỉ cập nhật phần tử thay đổi mạnh hơn mọi tối ưu JavaScript khác.
 7. **Hai chương trình dùng chung một radio thì phải nhường nhau.** Đọc log của chương trình kia trước: lỗi `In Progress` chỉ hiện ra khi cả hai cùng ghi.
 8. **Nền tảng đổi luật mà không báo.** iOS 18 ngừng liệt kê phụ kiện chỉ xin thông báo, và Spotify đổi nội dung trả về. Đường vòng (remote media, đọc lỏng tay hơn) rẻ hơn chờ họ đổi lại.
+9. **Đo từng lần chuyển trang, không chỉ cả vòng.** Con số tổng dao động 2–3 điểm giữa các lần đo; tách theo trang và tắt thử từng phần CSS mới chỉ ra đúng thủ phạm (một thuộc tính kế thừa, một nền bo góc).

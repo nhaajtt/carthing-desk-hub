@@ -84,8 +84,31 @@ function setVal(el, key, value, html) {
 }
 
 // write markup only when it changed: rebuilding a block forces the browser to lay it out and paint it again
+// New markup is merged into what is there: only the text nodes and attributes that changed are written,
+// so a new number restyles and lays out one line instead of the whole rebuilt block (a page that slid in
+// with fresh numbers used to restyle and lay out every element of it, 30-60 ms on this chip).
 function setHTML(el, html) {
-  if (el._html !== html) { el._html = html; el.innerHTML = html; }
+  if (el._html === html) return;
+  const first = el._html === undefined;
+  el._html = html;
+  if (first || !el.firstChild) { el.innerHTML = html; return; }
+  tpl.innerHTML = html;
+  morph(el, tpl.content);
+}
+function morph(cur, next) {
+  const a = cur.childNodes, b = [...next.childNodes];
+  if (a.length !== b.length) { cur.replaceChildren(...b); return; }
+  for (let i = 0; i < b.length; i++) {
+    const x = a[i], y = b[i];
+    if (x.nodeType !== y.nodeType || x.nodeName !== y.nodeName) { cur.replaceChild(y, x); continue; }
+    if (x.nodeType === 3) { if (x.nodeValue !== y.nodeValue) x.nodeValue = y.nodeValue; continue; }
+    if (x.nodeType !== 1 || x.isEqualNode(y)) continue;
+    for (const { name, value } of y.attributes) if (x.getAttribute(name) !== value) x.setAttribute(name, value);
+    for (const { name } of [...x.attributes]) if (!y.hasAttribute(name)) x.removeAttribute(name);
+    // SVG keeps its own namespace and inner structure: replace it whole when it differs
+    if (x.namespaceURI !== 'http://www.w3.org/1999/xhtml') { cur.replaceChild(y, x); continue; }
+    morph(x, y);
+  }
 }
 
 function rowEl(container, key, cols) {
@@ -579,7 +602,7 @@ function meter(k, ratio, text, highIsGood = false) {
   const p = Math.max(0, Math.min(1, ratio || 0)) * 100;
   const risk = highIsGood ? 100 - p : p;
   const cls = risk > 90 ? 'bad' : risk > 75 ? 'warn' : '';
-  return `<div class="meter"><span class="k">${tr(k)}</span><div class="track"><div class="fill ${cls}" style="width:${p}%"></div></div><span class="v">${text}</span></div>`;
+  return `<div class="meter"><span class="k">${tr(k)}</span><div class="track"><div class="fill ${cls}" style="transform:scaleX(${(p / 100).toFixed(3)})"></div></div><span class="v">${text}</span></div>`;
 }
 // sensors report °C; shown in the unit chosen on the Weather page
 const degF = (c) => (c == null ? '—' : (wantF() ? `${num(c * 9 / 5 + 32, 0)}°F` : `${num(c, 0)}°C`));
@@ -620,7 +643,7 @@ function renderServers() {
   if ($('srvViews')._html !== views) { $('srvViews')._html = views; $('srvViews').innerHTML = views; }
   $('srvGrid').style.display = srvView === 0 ? '' : 'none';
   $('srvAlt').style.display = srvView === 0 ? 'none' : '';
-  $('srvAlt').className = 'srv-alt v' + srvView;
+  setClass($('srvAlt'), 'srv-alt v' + srvView);
   if (srvView === 0) return renderServersNow();
   const html = [null, srvHistory, srvSecurity, srvUpdates][srvView]();
   if ($('srvAlt')._html !== html) { $('srvAlt')._html = html; $('srvAlt').innerHTML = html; }
@@ -736,7 +759,7 @@ function srvUpdates() {
 function renderServersNow() {
   const s2 = S.servers.server2;
   if (s2) {
-    $('srv2').className = 'srv' + stale(s2.at, 30000);
+    setClass($('srv2'), 'srv' + stale(s2.at, 30000));
     setHTML($('srv2'), `
       <div class="head"><div><b>Server 2</b> <span>${s2.ip} · ${tr('laptop')}</span></div><span class="state up">${tr('Online')}</span></div>
       ${statsBlock(s2, s2.battery != null ? meter('Battery', s2.battery / 100, `${s2.battery}%`, true) : '')}
@@ -746,7 +769,7 @@ function renderServersNow() {
   const s1 = S.servers.server1;
   if (s1) {
     const st = s1.stats && now() - s1.stats.at < 60000 ? s1.stats : null;
-    $('srv1').className = 'srv' + stale(s1.at, 60000);
+    setClass($('srv1'), 'srv' + stale(s1.at, 60000));
     setHTML($('srv1'), `
       <div class="head"><div><b>Server 1</b> <span>${s1.ip} · BRIX</span></div><span class="state ${s1.online ? 'up' : 'down'}">${tr(s1.online ? 'Online' : 'Offline')}</span></div>
       ${st ? statsBlock(st) : `<div class="note">${tr('No stats from the server 1 agent yet.')}</div>`}

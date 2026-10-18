@@ -58,9 +58,11 @@ html, body {
 #pages { flex: 1; position: relative; }
 /* Every page stays laid out; the ones not on screen are skipped with content-visibility, which keeps their
    layout cached, so showing a page again costs almost nothing (display:none threw it away every time). */
-.page { position: absolute; inset: 0; padding: 10px 10px; display: flex; contain: layout paint; content-visibility: hidden; pointer-events: none; }
+.page { position: absolute; inset: 0; padding: 10px 10px; display: flex; contain: layout paint; content-visibility: hidden; }
 .page.on, .page.slide, .page.warm { content-visibility: visible; }
-.page.on { pointer-events: auto; }
+/* the current page is on top, so taps reach it. Not pointer-events: it is inherited, and switching it made
+   every element of both pages restyle (and lay out again) on each page change */
+.page.on { z-index: 1; }
 
 h3 {
   font-size: 11px;
@@ -163,7 +165,8 @@ h3 {
 .meter .k { color: var(--muted); }
 .meter .v { text-align: right; font-weight: 600; }
 .meter .track { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
-.meter .fill { height: 100%; background: var(--accent); border-radius: 4px; }
+/* the fill is scaled, not resized: a new value then needs no layout */
+.meter .fill { height: 100%; width: 100%; background: var(--accent); border-radius: 4px; transform-origin: 0 50%; }
 .meter .fill.warn { background: var(--gold); }
 .meter .fill.bad { background: var(--down); }
 .srv .kv { display: flex; justify-content: space-between; font-size: 14px; color: var(--muted); }
