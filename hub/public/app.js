@@ -777,13 +777,10 @@ setIcon($('mLike'), 'heart');
 const mmss = (ms) => { const s = Math.max(0, Math.floor((ms || 0) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 let shownArt = null;
 
-// Music shows Spotify, or the paired iPhone when the phone is the one playing (any app, read over Bluetooth)
+// Music shows the paired iPhone whenever it is connected and has something to show (any app, read over
+// Bluetooth), even if Spotify is playing on another device; otherwise Spotify as before
 const phoneMedia = () => (PH.connected && PH.media && PH.media.title ? PH.media : null);
-function musicSource() {
-  const m = phoneMedia();
-  const sp = S && S.spotify && S.spotify.player;
-  return m && (m.state === 1 || !sp) ? 'phone' : 'spotify';
-}
+const musicSource = () => (phoneMedia() ? 'phone' : 'spotify');
 
 function musicProgress() {
   if (musicSource() === 'phone') {
