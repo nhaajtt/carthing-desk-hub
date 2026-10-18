@@ -5,5 +5,5 @@ set -eu
 DIR=${DIR:-$HOME/carthing-hub/carthing/phonelink}
 docker run --rm --user "$(id -u):$(id -g)" -v "$DIR":/src -w /src \
   -e HOME=/tmp -e GOPATH=/tmp/go -e GOCACHE=/tmp/cache -e CGO_ENABLED=0 -e GOOS=linux -e GOARCH=arm64 \
-  golang:1.24-bookworm go build -trimpath -ldflags="-s -w" -o phonelink .
+  golang:1.24-alpine go build -trimpath -ldflags="-s -w" -o phonelink .
 ls -la "$DIR/phonelink"

@@ -153,7 +153,7 @@ GitHub: set `GITHUB_USER` in `hub/.env`. Public repositories need no token. For 
 
 ## 11. Optional: iPhone over Bluetooth
 
-Battery, notifications, incoming calls and what any app plays, from one iPhone, with nothing installed on the phone. Build the helper on the brain (official Go image, static arm64 binary) and let `check-carthing.sh` put it on the Car Thing:
+Battery, notifications, incoming calls and what any app plays, from one iPhone, with nothing installed on the phone. Build the helper on the brain (official Go image, Alpine variant, static arm64 binary) and let `check-carthing.sh` put it on the Car Thing:
 
 ```bash
 ~/carthing-tools/build-phonelink.sh     # writes ~/carthing-hub/carthing/phonelink/phonelink

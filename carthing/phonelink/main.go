@@ -187,6 +187,12 @@ func serve(addr, origin string) {
 		switch v["key"] {
 		case "siri":
 			return sendKey(keySiri, down)
+		case "play": // play / pause, like a headset button: with nothing playing, iOS resumes the last app
+			return sendKey(keyPlayPause, down)
+		case "volup":
+			return sendKey(keyVolumeUp, down)
+		case "voldown":
+			return sendKey(keyVolDown, down)
 		case "shutter":
 			return sendKey(keyVolumeUp, down)
 		}

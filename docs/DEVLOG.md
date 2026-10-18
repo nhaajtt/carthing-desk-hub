@@ -696,11 +696,11 @@ iOS chỉ gửi danh sách thông báo đang có **một lần**, khi chương t
 | Tính năng | Cách làm |
 |---|---|
 | Thời gian ở bàn | Car Thing báo hub mỗi khi iPhone đến gần / rời đi, và cứ 2 phút một lần; hub cộng từng phút vào ngày hôm nay (`state/desk.json`, 5 tuần). Rời bàn đủ 3 phút là tính một lần nghỉ; ngồi liền 60 phút thì banner nhắc đứng dậy. Trang Focus có giờ hôm nay và cột 7 ngày. |
-| Tìm iPhone | Phụ kiện không làm iPhone đổ chuông được, nhưng điều khiển được nhạc: tăng âm lượng hết cỡ qua AMS, phát, 30 giây sau (hoặc bấm lần nữa) dừng và hạ đúng bấy nhiêu nấc. Kèm khoảng cách ước lượng từ sóng (−59 dBm ở 1 m). |
+| Tìm iPhone | Phụ kiện không làm iPhone đổ chuông được, nhưng bấm được phím media như tai nghe: tăng âm lượng hết cỡ rồi phát (khi không app nào đang giữ phiên phát, lệnh "phát" của AMS bị iPhone bỏ qua, còn phím play của remote thì iOS mở lại app nhạc gần nhất), 30 giây sau (hoặc bấm lần nữa) dừng và hạ đúng bấy nhiêu nấc. Kèm khoảng cách ước lượng từ sóng (−59 dBm ở 1 m). |
 | Bản tin có điện thoại | Car Thing gửi hub **số đếm** (thông báo, cuộc gọi nhỡ trong 12 giờ, pin), không gửi nội dung; Mei nhắc trong bản tin 7 giờ sáng. |
 | Mei nhắc việc | Câu trả lời của Mei có thể kết thúc bằng dòng `R: <số phút> \| <việc>`; Gemini tự đổi giờ đồng hồ thành số phút từ "Local time" có sẵn trong dữ liệu. Hub lưu vào `state/reminders.json`, đến giờ thì banner và bật màn hình. |
 | Dịch lời bài hát | Khi màn hình ở tiếng Việt mà lời không có dấu tiếng Việt, hub gửi cả bài một lần cho Gemini Flash-Lite (khoảng 3 giây), trả về mảng đúng số dòng; lệch số dòng thì bỏ, không hiện bản dịch sai dòng. |
-| Dọn server 2 | Xoá image `golang:1.24-bookworm` (1,27 GB); `build-phonelink.sh` tự tải lại khi cần build. |
+| Dọn server 2 | Xoá image `golang:1.24-bookworm` (1,27 GB); `build-phonelink.sh` giờ dùng bản Alpine nhỏ hơn và tự tải khi cần build. |
 
 ## 27. Bảng tổng hợp lỗi
 

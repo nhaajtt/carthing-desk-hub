@@ -1273,27 +1273,35 @@ function ipBack() {
   return true;
 }
 
-// Find my iPhone: accessories cannot make the phone ring, but they can play its music. Volume up to the top,
-// play, and after 30 s (or a second press) pause and bring the volume back down.
+// Find my iPhone: accessories cannot make the phone ring, but they can press its media keys like a headset:
+// volume up to the top, then play (with nothing playing, iOS resumes the last app). After 30 s, or a second
+// press, pause again and bring the volume back down the same number of steps.
 let finding = null;
+function tapKey(key, at) {
+  setTimeout(() => phonePost('/key', { key, down: true }), at);
+  setTimeout(() => phonePost('/key', { key, down: false }), at + 70);
+}
 function findPhone() {
-  const m = PH.media;
   if (finding) return stopFinding();
-  if (!PH.connected || !m || !(m.cmds || []).includes(0)) return toast(tr('No app on the iPhone can play right now'));
-  const steps = Math.round((1 - (m.volume || 0)) * 16);
-  finding = { steps, timer: setTimeout(stopFinding, 30000) };
-  for (let i = 0; i < steps; i++) setTimeout(() => phonePost('/media', { cmd: 5 }), i * 120);
-  setTimeout(() => phonePost('/media', { cmd: 0 }), steps * 120 + 100);
+  if (!PH.connected) return toast(tr('The iPhone is not connected'));
+  const m = PH.media || {};
+  const steps = Math.round((1 - (m.volume != null ? m.volume : 0)) * 16);
+  const play = m.state !== 1; // already playing: just make it loud
+  for (let i = 0; i < steps; i++) tapKey('volup', i * 160);
+  if (play) tapKey('play', steps * 160 + 150);
+  finding = { steps, play, timer: setTimeout(stopFinding, 30000) };
+  // nothing came on: the iPhone has no app it can resume
+  setTimeout(() => { if (finding && play && !(PH.media && PH.media.state === 1)) toast(tr('No app on the iPhone can play right now')); }, steps * 160 + 4000);
   toast(tr('Playing on the iPhone for 30 s'));
   renderIphone();
 }
 function stopFinding() {
   if (!finding) return;
-  const { steps, timer } = finding;
+  const { steps, play, timer } = finding;
   clearTimeout(timer);
   finding = null;
-  phonePost('/media', { cmd: 1 });
-  for (let i = 0; i < steps; i++) setTimeout(() => phonePost('/media', { cmd: 6 }), 200 + i * 120);
+  if (play) tapKey('play', 0);
+  for (let i = 0; i < steps; i++) tapKey('voldown', 250 + i * 160);
   if (page === PHONE) renderIphone();
 }
 
