@@ -160,11 +160,13 @@ void main() {
   function stepFire(t, ignite) {
     // blowing pushes the flame over as well as feeding it
     const wind = Math.sin(t * 0.7) * 0.35 + Math.sin(t * 2.3) * 0.15 + blow * 1.2;
-    const half = Math.round(1 + 2.6 * fuel), decay = 0.17 / Math.max(fuel, 0.15);
-    const out = fuel < 0.05;
+    // while someone blows the fire roars (more air), then settles at its new size
+    const f = fuel < 0.05 ? 0 : fuel + blow * 0.9;
+    const half = Math.round(1 + 2.6 * f), decay = 0.17 / Math.max(f, 0.35);
+    const out = f === 0;
     for (let x = 0; x < FW; x++) {
       const inHead = !out && Math.abs(x - (FW >> 1)) <= half;
-      fireGrid[(FH - 1) * FW + x] = inHead ? ignite * Math.min(1, 0.6 + fuel * 0.4) * (0.85 + 0.15 * Math.random()) : 0;
+      fireGrid[(FH - 1) * FW + x] = inHead ? ignite * Math.min(1, 0.75 + f * 0.3) * (0.85 + 0.15 * Math.random()) : 0;
     }
     for (let y = 0; y < FH - 1; y++) for (let x = 0; x < FW; x++) {
       const r = Math.random();
@@ -250,7 +252,10 @@ void main() {
   // turns, so the wake word is not off for good) and for a few seconds after the last puff
   function listen(t) {
     if (blow > 0) {
-      fuel = Math.min(MAX_FUEL, fuel + blow * 0.9 / FPS);
+      // each puff catches at once (a fire that was out comes back as a real flame), and keeps growing the
+      // longer and harder it lasts
+      if (t - blowAt > 0.5) fuel = Math.max(fuel + 0.2, 0.5);
+      fuel = Math.min(MAX_FUEL, fuel + blow * 1.6 / FPS);
       blowAt = t;
     }
     const want = onCarThing && ((fuel < 0.05 && t - armedAt < 300) || t - blowAt < 6);

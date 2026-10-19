@@ -755,6 +755,7 @@ Màn hình đồng hồ đã qua mấy bản:
 * **thổi vào Car Thing để nhóm lại lửa**, thổi càng mạnh và càng lâu thì lửa càng to; luồng thổi cũng làm lửa và khói nghiêng đi.
   * phonelink (`blow.go`) đọc micro bằng `arecord`, mỗi 40 ms tính độ lớn (dB) so với tiếng ồn nền của phòng (tự học dần, khoảng -61 dB), rồi gửi **một con số 0..1** cho trang qua `/blow/events` trên `127.0.0.1`. Âm thanh không được ghi lại.
   * Phải to hơn nền 25 dB (và trên -34 dB) liên tục 240 ms mới tính là thổi, để một tiếng nói hay tiếng gõ không làm lửa bùng. Log ghi độ lớn mỗi lần thổi để chỉnh ngưỡng.
+  * Lần thử đầu với người dùng: phát hiện tiếng thổi tốt (đỉnh -7 đến -22 dB trong phòng -54 dB), nhưng (1) phần đuôi mỗi hơi thổi được tính vào mức nền, nền lên tới -38 dB nên các hơi sau gần như không được tính, và (2) mỗi hơi chỉ thêm khoảng 0,1 củi, lửa ở mức 0,23 gần như không thấy. Sửa: chỉ học nền khi phòng thật sự yên (dưới nền + 8 dB, trần -45 dB); mỗi hơi bén ngay (ít nhất 0,5, thêm 0,2) rồi tăng 1,6 mỗi giây theo độ mạnh; trong lúc thổi lửa bùng to hơn rồi lắng ở mức mới.
   * `nocturned` giữ micro cho từ khoá, nên phải tạm dừng nó, như lúc trang Mei ghi âm. Vì vậy micro chỉ mở khi lửa đã tắt (tối đa 5 phút sau khi mở đồng hồ hoặc vặn núm) và 6 giây sau lần thổi cuối. Trang phải nhắc lại mỗi 4 giây, nếu không 8 giây sau phonelink tự đóng micro và bật lại `nocturned`, kể cả khi phonelink bị tắt.
 
 **Ánh lửa.**

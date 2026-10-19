@@ -124,7 +124,10 @@ func blowRead(cmd *exec.Cmd, out io.Reader) {
 			loud++
 		} else {
 			loud = 0
-			floor = floor*0.97 + db*0.03
+			// only a quiet room teaches the floor: the tail of a puff would raise it and make the next one count less
+			if db < floor+8 {
+				floor = math.Min(-45, floor*0.97+db*0.03)
+			}
 		}
 		if loud < blowSustain {
 			level = 0
