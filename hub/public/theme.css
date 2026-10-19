@@ -681,14 +681,96 @@ body:not(.portrait) .bar-right { gap: 8px; }
 .portrait #srvGrid { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) auto; }
 .portrait .ct-meters { grid-template-columns: 1fr; }
 
-/* ---------- desk clock after 10 quiet minutes */
-.ambient { position: absolute; inset: 0; z-index: 4; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: var(--bg); }
-.ambient.on { display: flex; animation: fade 0.8s ease-out; }
-.am-time { font: 800 150px/1 var(--display); letter-spacing: -3px; font-variant-numeric: tabular-nums; }
-.am-date { font: 600 24px var(--display); color: var(--muted); }
-.am-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 22px; margin-top: 22px; font-size: 19px; }
+/* ---------- desk clock after 10 quiet minutes. Nothing here repaints while it runs: every loop moves or fades
+   a layer that was drawn once (transform and opacity only), so the compositor does all the work. */
+.ambient { position: absolute; inset: 0; z-index: 4; display: none; align-items: center; justify-content: center; overflow: hidden; background: var(--am-bg); color: #fff;
+  --am-bg: #0b0920; --c1: #5b3bff; --c2: #00b8c4; --c3: #b83cff; --glow: 150, 130, 255; }
+.ambient.on { display: flex; animation: fade 1.2s ease-out; }
+.ambient[data-tod="dawn"] { --am-bg: #1c1030; --c1: #ff5f8f; --c2: #ffaa4a; --c3: #8d6bff; --glow: 255, 170, 150; }
+.ambient[data-tod="day"] { --am-bg: #0c1838; --c1: #2f8cff; --c2: #2fe0c8; --c3: #ffcf5a; --glow: 140, 210, 255; }
+.ambient[data-tod="dusk"] { --am-bg: #1a0d2a; --c1: #ff6a3d; --c2: #e0379b; --c3: #5546ff; --glow: 255, 140, 120; }
+.ambient[data-wx="fog"] { --c1: #6f78a8; --c2: #8a90b8; --c3: #4d5580; }
+.ambient[data-wx="storm"] { --c1: #3b3f9e; --c2: #6b3ab8; --c3: #2a6c9e; }
+
+.am-sky { position: absolute; inset: 0; }
+.am-sky i, .am-orbit i, .am-orbit b { position: absolute; display: block; }
+/* aurora: three soft colour clouds drifting at different periods, so the mix never quite repeats */
+.am-blob { width: 85vmax; height: 85vmax; left: 50%; top: 50%; margin: -42.5vmax 0 0 -42.5vmax; border-radius: 50%; opacity: 0.55; will-change: transform; }
+.am-blob.b1 { background: radial-gradient(closest-side, var(--c1), transparent); animation: amB1 23s ease-in-out infinite alternate; }
+.am-blob.b2 { background: radial-gradient(closest-side, var(--c2), transparent); opacity: 0.4; animation: amB2 31s ease-in-out infinite alternate; }
+.am-blob.b3 { background: radial-gradient(closest-side, var(--c3), transparent); opacity: 0.45; animation: amB3 37s ease-in-out infinite alternate; }
+@keyframes amB1 { from { transform: translate3d(-38%, -30%, 0) scale(0.8); } to { transform: translate3d(30%, 18%, 0) scale(1.15); } }
+@keyframes amB2 { from { transform: translate3d(36%, -26%, 0) scale(1.1); } to { transform: translate3d(-28%, 32%, 0) scale(0.75); } }
+@keyframes amB3 { from { transform: translate3d(0, 40%, 0) scale(0.7) rotate(0); } to { transform: translate3d(-10%, -36%, 0) scale(1.05) rotate(40deg); } }
+
+/* stars: one dot whose box-shadows are the sky (drawn once), plus a few sparkles that twinkle */
+.am-stars { left: 0; top: 0; width: 2px; height: 2px; border-radius: 50%; }
+.ambient[data-tod="day"] .am-stars, .ambient[data-wx="rain"] .am-stars, .ambient[data-wx="storm"] .am-stars, .ambient[data-wx="fog"] .am-stars { opacity: 0.25; }
+#amTw i { width: var(--s); height: var(--s); margin: calc(var(--s) / -2) 0 0 calc(var(--s) / -2); opacity: 0; will-change: transform, opacity;
+  background: radial-gradient(circle, #fff 0 8%, rgba(var(--glow), 0.6) 14%, transparent 30%),
+    linear-gradient(90deg, transparent 0, rgba(255, 255, 255, 0.95) 50%, transparent 100%) center / 100% 6% no-repeat,
+    linear-gradient(0deg, transparent 0, rgba(255, 255, 255, 0.95) 50%, transparent 100%) center / 6% 100% no-repeat;
+  animation: amTw var(--d) ease-in-out var(--dl) infinite; }
+@keyframes amTw { 0%, 100% { opacity: 0; transform: scale(0.15) rotate(0); } 45% { opacity: 1; transform: scale(1) rotate(45deg); } 60% { opacity: 0.85; transform: scale(0.8) rotate(60deg); } }
+
+/* shooting stars: a short streak crossing now and then (each loop is mostly waiting, invisible) */
+.am-meteors i { width: 190px; height: 2px; border-radius: 2px; opacity: 0; will-change: transform, opacity;
+  background: linear-gradient(90deg, transparent, rgba(var(--glow), 0.5) 60%, #fff); }
+.am-meteors .m1 { left: 62%; top: 4%; animation: amMet 13s cubic-bezier(.3, .1, .6, 1) 4s infinite; }
+.am-meteors .m2 { left: 30%; top: -2%; animation: amMet 21s cubic-bezier(.3, .1, .6, 1) 11s infinite; }
+@keyframes amMet { 0% { opacity: 0; transform: rotate(155deg) translate3d(0, 0, 0) scaleX(0.3); } 1.5% { opacity: 1; }
+  7% { opacity: 0; transform: rotate(155deg) translate3d(-420px, 0, 0) scaleX(1); } 100% { opacity: 0; transform: rotate(155deg) translate3d(-420px, 0, 0); } }
+.ambient[data-wx="rain"] .am-meteors, .ambient[data-wx="storm"] .am-meteors, .ambient[data-wx="snow"] .am-meteors, .ambient[data-wx="fog"] .am-meteors { display: none; }
+
+/* rain or snow: one tall layer of streaks (box-shadows, drawn once) sliding down in a seamless loop */
+.am-fall { position: absolute; inset: -20%; display: none; transform: rotate(12deg); }
+.ambient[data-wx="rain"] .am-fall, .ambient[data-wx="storm"] .am-fall, .ambient[data-wx="snow"] .am-fall { display: block; }
+#amFall { left: 0; top: 0; width: 1.5px; height: 26px; border-radius: 1px; color: rgba(190, 215, 255, 0.35); background: currentColor; will-change: transform; animation: amFall 0.75s linear infinite; }
+.ambient[data-wx="snow"] .am-fall { transform: rotate(4deg); }
+.ambient[data-wx="snow"] #amFall { width: 5px; height: 5px; border-radius: 50%; color: rgba(255, 255, 255, 0.7); animation-duration: 14s; }
+@keyframes amFall { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(0, 140vh, 0); } }
+.am-flash { inset: 0; background: #dfe6ff; opacity: 0; }
+.am-sky .am-flash { display: none; }
+.ambient[data-wx="storm"] .am-sky .am-flash { display: block; animation: amFlash 17s linear 6s infinite; }
+@keyframes amFlash { 0%, 60%, 61.4%, 62.6%, 100% { opacity: 0; } 61% { opacity: 0.45; } 62% { opacity: 0.3; } }
+
+/* the clock: digits, a breathing glow behind them, a comet that circles once a minute (top = :00) and a light
+   that sweeps across every few seconds. The sweep is a narrow window moving right while its copy of the
+   digits moves left by the same amount, so the copy stays put and only the bright band travels. */
+.am-body { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; animation: amDrift 240s ease-in-out infinite alternate; }
+@keyframes amDrift { from { transform: translate3d(-10px, -6px, 0); } to { transform: translate3d(10px, 6px, 0); } }
+.am-clock { position: relative; }
+.am-halo { position: absolute; left: -30%; right: -30%; top: -60%; bottom: -60%; display: block; border-radius: 50%; background: radial-gradient(closest-side, rgba(var(--glow), 0.35), transparent); will-change: transform, opacity; animation: amHalo 7s ease-in-out infinite alternate; }
+@keyframes amHalo { from { opacity: 0.55; transform: scale(0.85); } to { opacity: 1; transform: scale(1.08); } }
+.am-time, .am-shine-in { font: 800 150px/1 var(--display); letter-spacing: -3px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.am-time { position: relative; text-shadow: 0 0 28px rgba(var(--glow), 0.45); }
+.am-time span { display: inline-block; background: linear-gradient(180deg, #fff 35%, rgb(var(--glow)) 130%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.am-time .ap, .am-shine-in .ap { font-size: 34px; letter-spacing: 0; margin-left: 10px; vertical-align: 82px; }
+.am-time .co { animation: amCo 2s steps(1) infinite; will-change: opacity; }
+@keyframes amCo { 50% { opacity: 0.35; } }
+.am-time .roll { animation: amRoll 0.9s var(--spring) both; }
+@keyframes amRoll { from { opacity: 0; transform: translate3d(0, -45%, 0) scale(1.25) rotate(-8deg); } }
+.am-shine { position: absolute; left: 0; top: 0; bottom: 0; width: 25%; overflow: hidden; pointer-events: none; opacity: 0.8;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 50%, transparent); mask-image: linear-gradient(90deg, transparent, #000 50%, transparent);
+  will-change: transform; animation: amSweep 9s ease-in-out 2s infinite; }
+.am-shine-in { width: 400%; color: #fff; text-shadow: 0 0 16px #fff, 0 0 40px rgb(var(--glow)); will-change: transform; animation: amSweepIn 9s ease-in-out 2s infinite; }
+@keyframes amSweep { 0% { transform: translate3d(-100%, 0, 0); } 28%, 100% { transform: translate3d(400%, 0, 0); } }
+@keyframes amSweepIn { 0% { transform: translate3d(25%, 0, 0); } 28%, 100% { transform: translate3d(-100%, 0, 0); } }
+/* the comet: x and y swing on sine-like curves a quarter turn apart, which traces an ellipse */
+.am-orbit { position: absolute; inset: -18% -12%; pointer-events: none; }
+.am-orbit .ox { inset: 0; will-change: transform; animation: amOx 30s cubic-bezier(.37, 0, .63, 1) var(--ox, 0s) infinite alternate; }
+.am-orbit .oy { inset: 0; will-change: transform; animation: amOy 30s cubic-bezier(.37, 0, .63, 1) var(--oy, 0s) infinite alternate; }
+.am-orbit b { left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: radial-gradient(circle, #fff 0 9%, rgba(var(--glow), 0.7) 18%, transparent 62%); }
+.am-orbit .t1 b { transform: scale(0.7); opacity: 0.55; }
+.am-orbit .t2 b { transform: scale(0.5); opacity: 0.3; }
+@keyframes amOx { from { transform: translate3d(-50%, 0, 0); } to { transform: translate3d(50%, 0, 0); } }
+@keyframes amOy { from { transform: translate3d(0, -50%, 0); } to { transform: translate3d(0, 50%, 0); } }
+
+.am-date { position: relative; font: 600 24px var(--display); color: rgba(255, 255, 255, 0.72); margin-top: 4px; }
+.am-row { position: relative; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 22px; margin-top: 18px; font-size: 19px; color: rgba(255, 255, 255, 0.9); }
 .am-row:empty { display: none; }
-.portrait .am-time { font-size: 104px; }
+.portrait .am-time, .portrait .am-shine-in { font-size: 104px; }
+.portrait .am-time .ap, .portrait .am-shine-in .ap { font-size: 26px; vertical-align: 56px; }
 .portrait .am-row { flex-direction: column; align-items: center; }
 
 /* ---------- price alert editor (Markets zoom), internet line, words page */

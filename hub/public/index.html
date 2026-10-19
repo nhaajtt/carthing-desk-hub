@@ -208,7 +208,16 @@
   <!-- back at the desk: what the iPhone got while you were away -->
   <div class="digest" id="digest"><div class="dg-card" id="dgCard"></div></div>
   <!-- desk clock after 10 quiet minutes -->
-  <div class="ambient" id="ambient"><div class="am-time" id="amTime"></div><div class="am-date" id="amDate"></div><div class="am-row" id="amRow"></div></div>
+  <div class="ambient" id="ambient">
+    <div class="am-sky"><i class="am-blob b1"></i><i class="am-blob b2"></i><i class="am-blob b3"></i><i class="am-stars" id="amStars"></i><div id="amTw"></div>
+      <div class="am-meteors"><i class="m1"></i><i class="m2"></i></div><div class="am-fall"><i id="amFall"></i></div><i class="am-flash"></i></div>
+    <div class="am-body">
+      <div class="am-clock"><i class="am-halo"></i>
+        <div class="am-orbit" id="amOrbit"><i class="ox"><i class="oy"><b></b></i></i><i class="ox t1"><i class="oy"><b></b></i></i><i class="ox t2"><i class="oy"><b></b></i></i></div>
+        <div class="am-time" id="amTime"></div><div class="am-shine" aria-hidden="true"><div class="am-shine-in" id="amShine"></div></div></div>
+      <div class="am-date" id="amDate"></div><div class="am-row" id="amRow"></div>
+    </div>
+  </div>
   <div class="alert-banner" id="alertBanner"></div>
   <div class="toast" id="toast"></div>
 </div>

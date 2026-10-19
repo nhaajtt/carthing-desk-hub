@@ -729,6 +729,20 @@ Những thứ đã thử mà không giúp: rasterize bằng CPU thay vì GPU (11
 
 Phần còn lại: `nocturned` dùng khoảng 38% một lõi (nghe từ khoá như trước, và kết nối iAP2 với iPhone), và GPU một lõi.
 
+
+### Đồng hồ khi rảnh, bản lấp lánh
+
+Màn hình đồng hồ giờ có cực quang trôi (ba đám màu đổi theo giờ: đêm, bình minh, ngày, hoàng hôn), bầu trời sao, 16 ngôi sao lấp lánh, sao băng, mưa hoặc tuyết và chớp khi có bão (theo thời tiết hiện tại), quầng sáng "thở" sau con số, một vệt sáng quét qua con số, một sao chổi chạy một vòng mỗi phút (đỉnh là giây 00) và chữ số cuộn vào khi đổi phút.
+
+Màn hình này không ai thao tác, nhưng nó chạy hàng giờ và là thứ duy nhất trên màn hình, nên giật là thấy ngay và chạy nặng thì Car Thing nóng. Vì vậy mọi thứ đều được vẽ **một lần**, sau đó chỉ dịch chuyển hoặc đổi độ mờ (`transform`, `opacity`), để GPU tự làm mà luồng chính không phải vẽ lại:
+
+* Cực quang là `radial-gradient` (không dùng `filter: blur`, rất đắt trên Mali).
+* Sao, mưa, tuyết là `box-shadow` của một chấm: cả bầu trời là một lớp. Mưa có hai bản cách nhau một màn hình, nên lớp trượt xuống lặp lại không lộ đường nối.
+* Vệt sáng: một khung hẹp trượt sang phải, bên trong là bản sao con số trượt sang trái đúng bằng chừng đó, nên bản sao đứng yên và chỉ dải sáng di chuyển.
+* Sao chổi: trục x và trục y dao động theo đường gần hình sin, lệch nhau một phần tư vòng, nên vẽ ra hình elip. Lúc hiện, `animation-delay` được đặt theo giây hiện tại.
+
+Đo trên Car Thing: 59 khung/giây, khoảng 3% khung rớt (cả khi có mưa), nhiệt độ 46 → 47,5 °C sau vài phút. Vòng chuyển trang không đổi (5,7%).
+
 ## 28. Bảng tổng hợp lỗi
 
 | # | Triệu chứng | Nguyên nhân gốc | Cách sửa |
