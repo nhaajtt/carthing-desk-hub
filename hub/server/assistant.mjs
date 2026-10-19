@@ -1,6 +1,10 @@
 // Voice assistant: the Car Thing records, the hub asks Gemini, the answer is shown on screen.
 // The API key stays on the hub; the Car Thing only ever talks to the hub.
+// Short commands ("next song", "hẹn giờ 10 phút") are recognised on server 2 first (commands.mjs, whisper.cpp)
+// and carried out without Gemini.
+import { transcribe, match } from './commands.mjs';
 const MAX_SECONDS = 15;
+const COMMAND_SECONDS = 3.5; // speech longer than this is a question for Mei, not a command
 
 const SYSTEM = `You are Mei, a friendly little yellow cat who lives on the user's desk display. Your replies are shown as text in a speech bubble on a small 800x480 screen (no speaker).
 Be warm and a little playful (an occasional "meow" or 🐾 is fine), but put the useful answer first.
@@ -38,7 +42,7 @@ function readWav(buf) {
   return { ...fmt, data };
 }
 
-function toSpeechWav(buf) {
+export function toSpeechWav(buf) {
   const { channels, rate, bits, data } = readWav(buf);
   const bytes = bits / 8, frame = bytes * channels;
   const frames = Math.floor(data.length / frame);
@@ -75,13 +79,26 @@ function toSpeechWav(buf) {
   const n = out.length - skip;
   const pcm = Buffer.alloc(n * 2);
   for (let i = 0; i < n; i++) pcm.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(out[skip + i] * gain))), i * 2);
+  // where the speech is: the first and last window clearly over the noise. A short span may be a command
+  // (commands.mjs); that part alone, with 0.3 s either side, is what whisper hears.
+  const over = Math.max(SPEECH_MIN_RMS, noise * SPEECH_OVER_NOISE) * 0.5;
+  const first = rms.findIndex((r) => r >= over), last = rms.length - 1 - [...rms].reverse().findIndex((r) => r >= over);
+  const span = first < 0 ? 0 : ((last - first + 1) * win) / 16000;
+  const pad = 4800;
+  const cut = first < 0 ? pcm : pcm.subarray(Math.max(0, first * win - pad) * 2, Math.min(n, (last + 1) * win + pad) * 2);
+  return { wav: wavOf(pcm), speechWav: wavOf(cut), span, peak: Math.round(peak), noise: Math.round(noise), loud: Math.round(loud), speech, gain, seconds: n / 16000 };
+}
+
+function wavOf(pcm) {
   const hdr = Buffer.alloc(44);
   hdr.write('RIFF', 0); hdr.writeUInt32LE(36 + pcm.length, 4); hdr.write('WAVE', 8);
   hdr.write('fmt ', 12); hdr.writeUInt32LE(16, 16); hdr.writeUInt16LE(1, 20); hdr.writeUInt16LE(1, 22);
   hdr.writeUInt32LE(16000, 24); hdr.writeUInt32LE(32000, 28); hdr.writeUInt16LE(2, 32); hdr.writeUInt16LE(16, 34);
   hdr.write('data', 36); hdr.writeUInt32LE(pcm.length, 40);
-  return { wav: Buffer.concat([hdr, pcm]), peak: Math.round(peak), noise: Math.round(noise), loud: Math.round(loud), speech, gain, seconds: n / 16000 };
+  return Buffer.concat([hdr, pcm]);
 }
+
+const BOOT_ID = Date.now().toString(36);
 
 export function createAssistant({ state, changed, snapshot, describe, onReminder }) {
   const KEY = process.env.GEMINI_API_KEY || '';
@@ -91,6 +108,9 @@ export function createAssistant({ state, changed, snapshot, describe, onReminder
   const FALLBACK = process.env.GEMINI_SUMMARY_MODEL || 'gemini-flash-lite-latest';
   const SEARCH = process.env.GEMINI_SEARCH === '1';
   state.voice = { configured: !!KEY, phase: 'idle', transcript: '', answer: '', error: '', at: 0, maxSeconds: MAX_SECONDS };
+
+  // whisper's first clip is slow (the model is read from disk): give it a second of silence after a start
+  setTimeout(() => transcribe(wavOf(Buffer.alloc(32000))).catch(() => {}), 20000);
 
   let seq = 0;
   let active = null;          // id of the recording in progress
@@ -106,7 +126,8 @@ export function createAssistant({ state, changed, snapshot, describe, onReminder
   function set(patch) {
     Object.assign(state.voice, { kind: '' }, patch, { at: Date.now() });
     clearTimeout(idleTimer);
-    const linger = state.voice.kind === 'briefing' && state.voice.phase === 'answer' ? 15 * 60000 : { answer: 45000, error: 10000 }[state.voice.phase];
+    const linger = state.voice.kind === 'briefing' && state.voice.phase === 'answer' ? 15 * 60000
+      : state.voice.kind === 'command' && state.voice.phase === 'answer' ? 6000 : { answer: 45000, error: 10000 }[state.voice.phase];
     if (linger) idleTimer = setTimeout(() => set({ phase: 'idle' }), linger);
     changed();
   }
@@ -126,13 +147,12 @@ export function createAssistant({ state, changed, snapshot, describe, onReminder
 
   // 'starting' until the Car Thing reports the microphone is really open, then 'listening'
   function start(ctx) {
-    if (!KEY) return set({ phase: 'error', error: 'GEMINI_API_KEY is not set on the hub.' });
     if (['starting', 'listening', 'thinking'].includes(state.voice.phase)) return;
     context = ctx || null;
     active = ++seq;
     queue.length = 0;
     send(`record ${active} ${MAX_SECONDS}`);
-    set({ phase: 'starting', transcript: '', answer: '', error: '', searches: [], sources: [], startedAt: null });
+    set({ phase: 'starting', transcript: '', answer: '', error: '', searches: [], sources: [], startedAt: null, action: null });
     clearTimeout(stopTimer);
     stopTimer = setTimeout(() => { if (state.voice.phase === 'starting') set({ phase: 'error', error: 'The microphone did not open. Press the knob to try again.' }); }, 8000);
   }
@@ -159,10 +179,21 @@ export function createAssistant({ state, changed, snapshot, describe, onReminder
     set({ phase: 'thinking' });
     try {
       const clip = toSpeechWav(wav);
-      console.log(`[voice] ${clip.seconds.toFixed(1)}s, peak ${clip.peak}, noise ${clip.noise}, loud ${clip.loud}, gain x${clip.gain.toFixed(1)}, speech ${clip.speech}`);
+      console.log(`[voice] ${clip.seconds.toFixed(1)}s (speech ${clip.span.toFixed(1)}s), peak ${clip.peak}, noise ${clip.noise}, loud ${clip.loud}, gain x${clip.gain.toFixed(1)}, speech ${clip.speech}`);
       if (!clip.speech) {
         return set({ phase: 'error', transcript: '', error: "Meow? I didn't hear anything. Hold the Car Thing closer and speak up, then press the knob again." });
       }
+      // a short command is done here and now; anything else (or no whisper) goes to Gemini. Only short speech
+      // is tried: whisper takes a few seconds on server 2, which a question for Mei should not wait for.
+      let heard = '';
+      if (clip.span <= COMMAND_SECONDS) {
+        const t0 = Date.now();
+        try { heard = await transcribe(clip.speechWav); } catch (e) { console.log('[voice] whisper:', e.message); }
+        console.log(`[voice] whisper ${Date.now() - t0} ms`);
+      }
+      const cmd = heard && match(heard);
+      if (cmd) return spoken(heard, cmd);
+      if (!KEY) return set({ phase: 'error', error: 'GEMINI_API_KEY is not set on the hub.' });
       const { transcript, answer, searches, sources, reminder } = await ask(clip.wav);
       if (reminder && onReminder) onReminder(reminder.minutes, reminder.text);
       remember(transcript, answer);
@@ -170,6 +201,28 @@ export function createAssistant({ state, changed, snapshot, describe, onReminder
     } catch (e) {
       set({ phase: 'error', error: String(e.message).slice(0, 200) });
     }
+  }
+
+  // what the screen says back, in the language the command was spoken in
+  const SAY = {
+    next: ['Next song.', 'Bài tiếp theo.'], prev: ['Previous song.', 'Bài trước.'], pause: ['Paused.', 'Đã dừng nhạc.'],
+    play: ['Playing.', 'Đang phát.'], volup: ['Louder.', 'To hơn.'], voldown: ['Quieter.', 'Nhỏ hơn.'],
+    clock: ['Here is the clock.', 'Đồng hồ đây.'], screenoff: ['Screen off. Touch it to wake it.', 'Đã tắt màn hình, chạm để bật lại.'],
+    focus: ['Focus timer started.', 'Bắt đầu tập trung.'],
+  };
+  let actionSeq = 0;
+  function spoken(heard, cmd) {
+    const vi = /[ăâđêôơưàáạảãèéẹẻẽìíịỉĩòóọỏõùúụủũỳýỵỷỹ]/i.test(heard) ? 1 : 0;
+    console.log(`[voice] command: ${cmd.act}${cmd.minutes ? ` ${cmd.minutes} min` : ''}`);
+    let answer = (SAY[cmd.act] || ['', ''])[vi];
+    if (cmd.act === 'timer') {
+      if (onReminder) onReminder(cmd.minutes, vi ? 'Hết giờ hẹn' : 'Timer is up');
+      answer = vi ? `Đã hẹn giờ ${cmd.minutes} phút.` : `Timer set for ${cmd.minutes} min.`;
+    }
+    remember(heard, answer);
+    // the page carries out everything but the timer (the iPhone's music is only reachable from the Car Thing)
+    set({ phase: 'answer', kind: 'command', transcript: heard, answer, searches: [], sources: [],
+      action: cmd.act === 'timer' ? null : { ...cmd, id: `${BOOT_ID}.${++actionSeq}` } });
   }
 
   function remember(q, a) {

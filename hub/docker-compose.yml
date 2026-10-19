@@ -27,6 +27,7 @@ services:
     mem_limit: 256m
     pids_limit: 64
     depends_on: [docker-status]
+    networks: [default, speech]
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
       interval: 30s
@@ -51,3 +52,29 @@ services:
       - no-new-privileges:true
     mem_limit: 64m
     pids_limit: 16
+
+  # Speech to text for short spoken commands (server/commands.mjs). On the internal "speech" network only:
+  # no published port and no route out, so it can talk to the hub and nothing else.
+  whisper:
+    build: ./whisper
+    image: carthing-whisper:1.7.6
+    container_name: carthing-whisper
+    restart: unless-stopped
+    # -ac 256: a 5-second window instead of 30, plenty for a command and about 4 times faster
+    command: ["--host", "0.0.0.0", "--port", "8080", "-m", "/models/ggml-small-q5_1.bin", "-t", "4", "-l", "auto", "-nt", "-ac", "256"]
+    volumes:
+      - ./whisper-models:/models:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 768m
+    cpus: 4
+    pids_limit: 32
+    networks: [speech]
+
+networks:
+  speech:
+    internal: true

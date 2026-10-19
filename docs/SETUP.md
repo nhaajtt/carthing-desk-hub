@@ -186,6 +186,23 @@ The copy is refreshed by `check-carthing.sh` when it runs to fix things (by hand
 
 The car copy keeps its own rotation, language and torch settings (a page on another address has its own storage): set them once in the car.
 
+What the car shows without internet (covers and lyrics of the songs the iPhone played, the forecast, the calendar, Mei's reminders) is packed by the hub in `~/carthing-hub/state/carpack` and copied to `/var/lib/hub/pack` on the Car Thing by `sync-carpack.sh`. Run it from cron so the pack is fresh when you leave:
+
+```cron
+*/5 * * * * $HOME/carthing-tools/sync-carpack.sh >/dev/null 2>&1
+```
+
+## 13. Optional: spoken commands without Gemini
+
+Short commands to Mei ("next song", "bài tiếp", "hẹn giờ 10 phút"…) are recognised on server 2 by whisper.cpp in its own container, on an internal Docker network with no way out. Download the model (whisper "small", quantised, about 190 MB, checked against its SHA-256) and start the container:
+
+```bash
+~/carthing-tools/get-whisper-model.sh
+cd ~/carthing-hub && docker compose up -d --build whisper && docker compose up -d hub
+```
+
+Without it, everything still goes to Gemini as before.
+
 ## Development helpers
 
 `tools/` holds the scripts used while building: `cdp.mjs` (screenshot / eval over DevTools), `steps.mjs` (a list of key presses, evals and screenshots, printing every exception), `errors.mjs` / `errors2.mjs` (reload and print exceptions), `shoot*.mjs` (the README screenshots; `demo-calendar.js` supplies sample events), `record.mjs` (frames for the README GIF). Open the tunnel first:

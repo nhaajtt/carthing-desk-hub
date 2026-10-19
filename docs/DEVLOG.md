@@ -836,7 +836,32 @@ Vậy trên xe hoàn toàn không có mạng. Mọi thứ phải tới từ iPho
 
 **Giới hạn.** Bản xe giữ cài đặt riêng (xoay, ngôn ngữ, củi của đuốc): trang ở địa chỉ khác có bộ nhớ riêng.
 
-## 29. Bảng tổng hợp lỗi
+## 29. Gói dữ liệu cho xe, ban đêm, gõ bàn, lệnh nói
+
+**Gói cho xe.** Trên xe không có mạng, nên chép sẵn lúc còn ở bàn.
+
+* Hub ghi lại mỗi bài iPhone phát mà nó tìm được ảnh bìa hoặc lời: ảnh vào `c/`, lời (kèm dòng tiếng Việt) vào `l/`, tối đa 300 bài, bài cũ nhất bị bỏ.
+* `pack.json` có cả 4 ngày dự báo theo giờ, lịch 8 ngày tới, lời nhắc của Mei. Bản xe tự chọn giờ hiện tại trong dự báo, nên dữ liệu chép từ sáng vẫn đúng giờ lúc chiều.
+* `sync-carpack.sh` chỉ gửi tệp mới hoặc đổi cỡ, `pack.json` gửi sau cùng. Không để trong `/var/lib/hub/www`, vì `check-carthing.sh` thay cả thư mục đó.
+* Bản xe có thêm trang Thời tiết và Lịch. Ô AQI ẩn đi, vì chất lượng không khí vài giờ trước không có ích.
+
+**Ban đêm trên xe.** phonelink đọc cảm biến ánh sáng TMD2772. Trong phòng có đèn buổi tối nó chỉ đọc khoảng 2 lux, vì cảm biến nằm sau kính tối, nên ngưỡng thấp: dưới 3 lux trong 10 s là tối, trên 12 lux là sáng lại. Chỉ đổi biến màu CSS, không thêm filter, để không tốn thêm GPU mỗi khung.
+
+**Giờ lái.** Car Thing bật theo xe, nên một chuyến bắt đầu khi bản xe không mở trong 10 phút. Sau 2 giờ có banner gợi ý nghỉ, rồi mỗi 30 phút.
+
+**Pomodoro với ngọn đuốc.** Khi hẹn giờ tập trung đang chạy, lửa nhỏ dần theo thời gian còn lại và tắt (chỉ còn khói) trong giờ nghỉ. Núm vẫn chỉnh cỡ lửa gốc; hết hẹn giờ thì lửa về cỡ đó.
+
+**Gõ bàn.** Dùng chung vòng đo độ ồn 40 ms với việc thổi lửa. Tiếng gõ là một cửa sổ to hơn tiếng phòng 18 dB, bắt đầu từ yên lặng, dài tối đa 120 ms; tiếng dài hơn (nói, nhạc, thổi) huỷ cả nhóm. Giữ micro liên tục nghĩa là `nocturned` dừng suốt lúc bật, nên:
+
+* `brightness-sync.sh` không khởi động lại `nocturned` khi nó đang dừng, chỉ ghi cấu hình; `nocturned` đọc khi chạy lại.
+* Trang Ask cần micro: `voice-agent.sh` tạo `/run/hub-mic-busy`, phonelink nhả micro, ghi âm xong thì xoá tệp và phonelink mở lại. Tệp cũ hơn 1 phút bị bỏ qua, phòng khi trình ghi chết giữa chừng.
+* Chưa thử bằng tiếng gõ thật (không ai gõ được từ xa). Ngưỡng có thể cần chỉnh theo dòng log `tap:`.
+
+**Lệnh nói trên server 2.** whisper.cpp (model small, lượng tử hoá q5_1) chạy trong container riêng, chỉ trên mạng Docker `internal`. Clip được chuyển thành chữ trước; nếu là lệnh ngắn (tối đa 7 từ, khớp một mẫu tiếng Anh hoặc tiếng Việt) thì hub làm ngay, không gọi Gemini. Nhạc trên iPhone chỉ điều khiển được từ Car Thing, nên hub gửi lệnh trong `voice.action` và trang thực hiện; hẹn giờ thì hub tự đặt lời nhắc.
+
+**Mạng qua Bluetooth (chưa xong).** iPhone có dịch vụ NAP (Personal Hotspot qua Bluetooth) và `bluetoothd` trên Car Thing có sẵn plugin network, chỉ thiếu BNEP trong nhân. Nhân không bật `MODVERSIONS`, `MODULE_SIG`, `RANDSTRUCT`, CFI hay LTO, nên một `bnep.ko` dựng từ mã Linux 7.0.2 gốc với cấu hình của máy (`/proc/config.gz`) và GCC 15.2 có vermagic khớp. Module đã dựng xong trên server 2 nhưng chưa nạp thử. Trước khi dùng mạng này cần giới hạn sshd vào `uncm0`: nhân không có netfilter, và sshd đang nghe trên mọi giao diện.
+
+## 30. Bảng tổng hợp lỗi
 
 | # | Triệu chứng | Nguyên nhân gốc | Cách sửa |
 |---|---|---|---|
@@ -879,7 +904,7 @@ Vậy trên xe hoàn toàn không có mạng. Mọi thứ phải tới từ iPho
 | 34 | Trang iPhone rớt 6–13 khung khi trượt vào | Ô bo góc có nền và nét đứt đắt trên GPU Mali một lõi | Chữ cái tô màu, đường liền |
 | 35 | Trang iPhone trống hàng giờ, nhạc từ iPhone cũng mất, dù vẫn "đã kết nối" | Ngay sau khi iPhone nối lại, đăng ký nhận thông báo bị từ chối một lần (ATT 0x0e); phonelink không thử lại cho tới lần nối sau | Thử lại sau 5, 10, 20, 40 giây, rồi mỗi phút; lần thử hỏng thì huỷ phần đã đăng ký, để giá trị đến trong lúc chờ vào lại hàng đợi phát lại |
 
-## 30. Những điều rút ra
+## 31. Những điều rút ra
 
 1. **Đo trên thiết bị thật, không đoán.** Font, FPS, mức âm thanh của micro, giờ hệ thống: lần nào thiết bị thật cũng khác với giả định.
 2. **"Không tin mặc định" là công cụ thiết kế, không chỉ là bảo mật.** Nó quyết định Car Thing không giữ key, hub không cầm `docker.sock`, agent chỉ đẩy dữ liệu đi, và firewall nằm trên đúng máy.
