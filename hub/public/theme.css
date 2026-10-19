@@ -728,3 +728,10 @@ body:not(.portrait) .tab { padding: 5px 6px; font-size: 13px; }
 .ip-row.find .ip-ic { color: var(--sky); }
 .ip-ic svg { width: 20px; height: 20px; }
 .ip-row { contain: layout paint; }
+
+/* ---------- car mode (the Car Thing's own copy of the page, no hub): Music and iPhone only, no hub tiles */
+.car-tag { display: none; font: 600 13px var(--display); color: var(--gold); padding: 2px 9px; border-radius: 999px; box-shadow: inset 0 0 0 1.5px rgba(255, 194, 61, 0.55); }
+body.car .car-tag { display: inline-block; }
+body.car #conn { display: none; }
+body.car .tab:not(:nth-child(5)):not(:nth-child(8)) { display: none; }
+body.car .ov-tile[data-i="0"], body.car .ov-tile[data-i="1"], body.car .ov-tile[data-i="2"], body.car #ovSlider { display: none; }

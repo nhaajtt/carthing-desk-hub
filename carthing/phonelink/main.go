@@ -3,7 +3,7 @@
 // playing, in any app) and the battery level.
 //
 // Everything stays on the Car Thing. The screen reads it from http://127.0.0.1:5055 (loopback only, and only
-// for the hub's page); nothing is logged or saved except the paired phone's address.
+// for the hub's page and its car copy); nothing is logged or saved except the paired phone's address.
 package main
 
 import (
@@ -14,6 +14,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -119,7 +120,7 @@ func nowMs() int64 { return time.Now().UnixMilli() }
 
 // ---------------------------------------------------------------- HTTP for the screen
 
-func serve(addr, origin string) {
+func serve(addr string, origins []string) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/events", func(w http.ResponseWriter, r *http.Request) {
 		fl, ok := w.(http.Flusher)
@@ -213,10 +214,11 @@ func serve(addr, origin string) {
 		return fmt.Errorf("bad action")
 	})
 
-	// Only the hub's page may talk to us. Browsers always send Origin on these (cross-origin) requests,
+	// Only the hub's page (or its copy on the Car Thing, for the car) may talk to us. Browsers always send Origin on these (cross-origin) requests,
 	// so any other page, and anything that is not a browser, is turned away.
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Origin") != origin {
+		origin := r.Header.Get("Origin")
+		if !slices.Contains(origins, origin) {
 			http.Error(w, "forbidden", 403)
 			return
 		}
@@ -249,7 +251,8 @@ func takePidfile(path string) {
 
 func main() {
 	addr := flag.String("listen", "127.0.0.1:5055", "address for the screen")
-	origin := flag.String("origin", "http://10.42.1.6:8787", "the hub page allowed to read and control")
+	origin := flag.String("origin", "http://10.42.1.6:8787,http://127.0.0.1:5056", "the pages allowed to read and control (comma-separated): the hub, and the copy served below for the car")
+	www := flag.String("www", "127.0.0.1:5056=/var/lib/hub/www", "address=folder for the copy of the page used in the car (empty: off)")
 	flag.StringVar(&savePath, "state", "/var/lib/hub/phonelink.json", "where the paired phone's address is kept")
 	pidfile := flag.String("pidfile", "/run/hub-phone.pid", "")
 	flag.IntVar(&nearDBm, "near", -62, "signal strength (dBm) above which the phone counts as at the desk")
@@ -269,5 +272,8 @@ func main() {
 			time.Sleep(10 * time.Second)
 		}
 	}()
-	serve(*addr, *origin)
+	if *www != "" {
+		go serveWWW(*www)
+	}
+	serve(*addr, strings.Split(*origin, ","))
 }

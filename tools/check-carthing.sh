@@ -6,11 +6,17 @@
 #   check-carthing.sh --check    only report
 #   check-carthing.sh --json F   only report, as JSON in file F (used from cron; the hub shows it)
 #
-# Source files come from ~/carthing-hub/carthing (the repository's carthing/ folder).
+# Source files come from ~/carthing-hub/carthing (the repository's carthing/ folder). The page the hub serves
+# (~/carthing-hub/public) is also copied to /var/lib/hub/www: phonelink shows that copy in the car.
 set -u
 CT=${CT:-root@10.42.1.2}
 KEY=${KEY:-$HOME/.ssh/carthing_ed25519}
 SRC=${SRC:-$HOME/carthing-hub/carthing}
+WWW_SRC=${WWW_SRC:-$HOME/carthing-hub/public}
+WWW=/var/lib/hub/www
+# one checksum over the page's files, run the same way on both sides
+WWW_FIND="find . -type f \\( -name '*.html' -o -name '*.js' -o -name '*.css' -o -name '*.woff2' \\)"
+WWW_SUM="$WWW_FIND | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-64"
 MODE=fix; JSON=""
 case "${1:-}" in
   --check) MODE=check ;;
@@ -109,6 +115,10 @@ grep -q '^key ok$' <<<"$remote" || problems+=("hub key missing from authorized_k
 grep -q 'passwordauthentication=no' <<<"$remote" || { problems+=("SSH accepts passwords again"); sshd_change=1; }
 grep -q '^timesyncd enabled active$' <<<"$remote" || { problems+=("time sync from the hub is off"); timesync_change=1; }
 while read -r _ p st; do [ "$st" = down ] && problems+=("helper not running: $p"); done < <(grep '^helper ' <<<"$remote")
+www_change=0
+if [ -d "$WWW_SRC" ] && [ "$("${SSH[@]}" "cd $WWW 2>/dev/null && $WWW_SUM")" != "$(cd "$WWW_SRC" && sh -c "$WWW_SUM")" ]; then
+  problems+=("car copy of the page is out of date: $WWW"); www_change=1
+fi
 
 if [ ${#problems[@]} -eq 0 ]; then
   say "Everything is in place."
@@ -122,6 +132,13 @@ write_json true "$version" "${problems[@]}"
 
 # ---------------------------------------------------------------- 3. fix
 say "Fixing..."
+if [ $www_change = 1 ]; then
+  (cd "$WWW_SRC" && sh -c "$WWW_FIND" | tar cf - -T -) \
+    | "${SSH[@]}" "rm -rf $WWW.new && mkdir -p $WWW.new && tar xf - -C $WWW.new && rm -rf $WWW && mv $WWW.new $WWW" \
+    || { say "Copying the page failed."; exit 1; }
+  # the copy is read fresh on every load, so if nothing else was wrong there is nothing to restart
+  if [ ${#problems[@]} -eq 1 ]; then say "Done."; exec "$0" --check; fi
+fi
 cmds=""
 [ $etc_change = 1 ] || ! grep -q '^key ok$' <<<"$remote" && cmds+="mount -o remount,rw / && "
 cmds+="mkdir -p /var/lib/hub /etc/systemd/timesyncd.conf.d /etc/ssh/sshd_config.d /etc/systemd/system.conf.d /root/.ssh"

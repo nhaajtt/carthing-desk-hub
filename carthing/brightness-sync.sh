@@ -1,5 +1,7 @@
 #!/bin/bash
 # Applies the screen brightness chosen on the desk hub (server 2). 0 means "night": backlight off.
+# Without the hub for a minute (in the car), it hands the screen back to Nocturne's automatic brightness,
+# which follows the light sensor.
 # Started from /var/lib/hub/kiosk-env, so it lives and dies with the kiosk service.
 
 PIDFILE=/run/hub-brightness.pid
@@ -14,6 +16,7 @@ MAX=$(cat "$BL/max_brightness")
 NOCTURNE_CFG=/var/lib/brightness.json
 applied=""   # level the screen should be at now (0 = off for the night)
 saved=""     # level stored in nocturned's config
+missed=0     # polls in a row without the hub
 
 # Daytime levels are saved where nocturned keeps them, and nocturned is restarted so it loads them.
 # Night (0) and waking up again only touch the backlight, so the screen reacts within one poll.
@@ -39,6 +42,14 @@ fetch_pct() {
 
 while :; do
   pct=$(fetch_pct 2>/dev/null)
+  if [ -z "$pct" ]; then
+    if [ $((missed += 1)) -eq 30 ] && [ -f "$NOCTURNE_CFG.orig" ] && ! cmp -s "$NOCTURNE_CFG.orig" "$NOCTURNE_CFG"; then
+      cp "$NOCTURNE_CFG.orig" "$NOCTURNE_CFG" && systemctl restart nocturned
+      applied="" saved=""
+    fi
+  else
+    missed=0
+  fi
   if [[ "$pct" =~ ^[0-9]+$ ]] && { [ "$pct" -eq 0 ] || { [ "$pct" -ge 5 ] && [ "$pct" -le 100 ]; }; } && [ "$pct" != "$applied" ]; then
     apply "$pct" && applied=$pct
   fi

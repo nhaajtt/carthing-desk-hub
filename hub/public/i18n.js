@@ -106,7 +106,7 @@ const VI = {
   'Turn the knob to choose · press the knob to select · Back to close': 'Vặn núm để di chuyển · bấm núm để chọn · Back để đóng',
   'Restarting the Car Thing…': 'Đang khởi động lại Car Thing…', 'Shutting down — unplug and replug to start again': 'Đang tắt máy, rút ra cắm lại để bật',
   'Only the Car Thing can do this': 'Chỉ Car Thing làm được việc này', 'Brightness can only be changed on the Car Thing': 'Chỉ chỉnh độ sáng được trên Car Thing',
-  'Language can only be changed on the Car Thing': 'Chỉ đổi ngôn ngữ được trên Car Thing',
+  'Language can only be changed on the Car Thing': 'Chỉ đổi ngôn ngữ được trên Car Thing', 'Car mode': 'Chế độ xe', Connected: 'Đã kết nối', 'Press play, or start music on the iPhone.': 'Bấm phát, hoặc mở nhạc trên iPhone.', 'The iPhone is not connected.': 'iPhone chưa kết nối.',
 
   // iPhone over Bluetooth
   'Pair iPhone': 'Ghép iPhone', 'Pair your iPhone': 'Ghép iPhone của bạn', 'Type this code on your iPhone': 'Nhập mã này trên iPhone',

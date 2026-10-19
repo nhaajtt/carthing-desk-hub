@@ -304,6 +304,10 @@ func startSessions(dev dbus.ObjectPath, m managed) {
 			chars[strings.ToLower(u)] = p
 		}
 	}
+	if cur, info := chars[ctsCurrent], chars[ctsLocalInfo]; !ctsDone && cur != "" && info != "" {
+		ctsDone = true
+		go syncTime(cur, info)
+	}
 	// each one starts once per connection; one that is missing now (notifications not shared yet) starts
 	// later, when its service shows up. One that fails (the phone sometimes refuses a subscription right
 	// after it reconnects) is tried again, sooner at first, then once a minute
@@ -338,6 +342,7 @@ func stopSessions() {
 	stopANCS()
 	stopAMS()
 	retryN = 0
+	ctsDone = false
 }
 
 // GATT helpers

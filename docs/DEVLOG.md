@@ -788,7 +788,55 @@ Màn hình đồng hồ đã qua mấy bản:
 
 Bản nắng chiều, để tham khảo: rèm là một lớp lớn gần gấp đôi màn hình, vừa trượt vừa xoay 1°, nên rớt 6–7% khung. Bỏ phần xoay thì còn 1,2–2,4%: xoay một lớp lớn như vậy buộc GPU lấy mẫu lại cả màn hình mỗi khung.
 
-## 28. Bảng tổng hợp lỗi
+## 28. Mang Car Thing lên xe
+
+Trên xe không có server 2. Kiểm tra trên máy:
+
+* Car Thing **không có Wi-Fi**.
+* Nhân không có BNEP, nên **không dùng mạng qua Bluetooth** (Personal Hotspot) được.
+* Mạng duy nhất là dây USB tới server 2.
+
+Vậy trên xe hoàn toàn không có mạng. Mọi thứ phải tới từ iPhone qua Bluetooth LE, qua phonelink.
+
+**Bản sao của trang trên Car Thing.**
+
+* phonelink phục vụ `/var/lib/hub/www` trên `127.0.0.1:5056`: chỉ GET, chỉ html/js/css/woff2, không liệt kê thư mục.
+* `check-carthing.sh` đồng bộ thư mục đó với `~/carthing-hub/public`: so một checksum chung, rồi chép cả cây bằng tar qua ssh.
+* phonelink nhận thêm `Origin` `http://127.0.0.1:5056`.
+
+**Trang chế độ xe.** Trang tự biết mình là bản trên xe nhờ cổng 5056.
+
+* Chỉ có Music và iPhone; núm chuyển qua lại giữa hai trang.
+* Có thẻ "Chế độ xe" trên thanh trên.
+* Menu bỏ Độ sáng, Khởi động lại, Tắt máy, vì cả ba đều cần hub.
+* `S` là một object nhỏ (múi giờ, ngôn ngữ) để `render()`, đồng hồ đuốc và các trang khác chạy như thường.
+* Không gọi hub: không ảnh bìa, lời bài hát, báo "ở bàn", tắt màn hình khi đi vắng.
+* Music khi iPhone chưa phát gì: nút phát gửi phím play của remote, iOS mở lại app nhạc gần nhất.
+
+**Tự chuyển.**
+
+* `kiosk-env` thử `/health` 3 lần lúc khởi động; không được thì mở bản trên xe. Cắm sạc trên xe, không có đầu bên kia của USB, nên thất bại ngay.
+* Trang hub mất tin nhắn 60 s thì chuyển sang bản xe (đo được 61 s).
+* Bản xe thử `/health` mỗi 15 s, có là quay về.
+* `kiosk-watch.sh` khởi động lại kiosk nếu Chromium kẹt ở trang lỗi trên địa chỉ hub suốt một phút.
+
+**Giờ từ iPhone.** Không có NTP, nên phonelink đọc **Current Time Service** của iPhone mỗi lần kết nối. iOS có sẵn dịch vụ này, không cần app.
+
+* Giờ địa phương trừ múi giờ (theo 15 phút) và giờ mùa hè, thành UTC.
+* Lệch quá 5 s thì đặt lại đồng hồ hệ thống.
+* Thử: tắt NTP, chỉnh giờ lệch 10 phút, cho iPhone kết nối lại. Log ghi `time: set from the iPhone (-600s)`, giờ đúng lại.
+
+**Độ sáng.** Một phút không có hub, `brightness-sync.sh` trả lại cấu hình gốc của Nocturne (`"auto": true`) và khởi động lại `nocturned`, nên cảm biến ánh sáng lo độ sáng trên xe. Về bàn, hub đặt lại mức của nó.
+
+**Cách thử khi không thể rút dây.** Dây USB là đường duy nhất vào Car Thing, nên không thể rút để thử. Thay vào đó, qua DevTools:
+
+* chặn `10.42.1.6` cho riêng trang (`Network.setBlockedURLs`);
+* đóng luồng SSE đang mở, vì chặn chỉ áp dụng cho kết nối mới;
+* tạm dừng `kiosk-watch`, vì nó thấy hub vẫn sống và khởi động lại kiosk.
+
+**Giới hạn.** Bản xe giữ cài đặt riêng (xoay, ngôn ngữ, củi của đuốc): trang ở địa chỉ khác có bộ nhớ riêng.
+
+## 29. Bảng tổng hợp lỗi
 
 | # | Triệu chứng | Nguyên nhân gốc | Cách sửa |
 |---|---|---|---|
@@ -831,7 +879,7 @@ Bản nắng chiều, để tham khảo: rèm là một lớp lớn gần gấp 
 | 34 | Trang iPhone rớt 6–13 khung khi trượt vào | Ô bo góc có nền và nét đứt đắt trên GPU Mali một lõi | Chữ cái tô màu, đường liền |
 | 35 | Trang iPhone trống hàng giờ, nhạc từ iPhone cũng mất, dù vẫn "đã kết nối" | Ngay sau khi iPhone nối lại, đăng ký nhận thông báo bị từ chối một lần (ATT 0x0e); phonelink không thử lại cho tới lần nối sau | Thử lại sau 5, 10, 20, 40 giây, rồi mỗi phút; lần thử hỏng thì huỷ phần đã đăng ký, để giá trị đến trong lúc chờ vào lại hàng đợi phát lại |
 
-## 29. Những điều rút ra
+## 30. Những điều rút ra
 
 1. **Đo trên thiết bị thật, không đoán.** Font, FPS, mức âm thanh của micro, giờ hệ thống: lần nào thiết bị thật cũng khác với giả định.
 2. **"Không tin mặc định" là công cụ thiết kế, không chỉ là bảo mật.** Nó quyết định Car Thing không giữ key, hub không cầm `docker.sock`, agent chỉ đẩy dữ liệu đi, và firewall nằm trên đúng máy.

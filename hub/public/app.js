@@ -9,10 +9,22 @@ let editing = false;
 let S = null;
 const last = {};
 
+// Car mode: in the car there is no server 2, so the Car Thing shows its own copy of this page (phonelink serves
+// it on 127.0.0.1:5056) with what the iPhone brings over Bluetooth: Music, the iPhone page, calls and the desk
+// clock. Each copy moves to the other by itself when the hub comes or goes.
+const HUB_URL = 'http://10.42.1.6:8787/', CAR_URL = 'http://127.0.0.1:5056/';
+const CAR = location.port === '5056';
+const CAR_PAGES = [MUSIC, PHONE];
+const stored = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+if (CAR) {
+  S = { car: true, tz: stored('tz') || undefined, display: { lang: stored('lang') === 'vi' ? 'vi' : 'en', brightness: 80 } };
+  document.body.classList.add('car');
+}
+
 // The Car Thing has no internet and no NTP, so its own clock drifts. Use the hub's clock.
 let clockOffset = 0;
 const now = () => Date.now() + clockOffset;
-const tz = () => (S && S.tz) || 'America/Los_Angeles';
+const tz = () => (S && S.tz) || stored('tz') || 'America/Los_Angeles';
 
 // ---------------------------------------------------------------- formatting
 
@@ -919,7 +931,7 @@ function renderPhoneMusic(m) {
   // the Bluetooth link carries no picture: borrow Spotify's when it is the same song, else the hub looks one up
   // (a YouTube video's thumbnail, or the album cover from Apple's search)
   const sp = S && S.spotify && S.spotify.player;
-  const art = sp && sp.art && sp.title === m.title
+  const art = CAR ? '' : sp && sp.art && sp.title === m.title
     ? `/api/spotify/art?u=${encodeURIComponent(sp.art)}`
     : `/api/media/cover?${new URLSearchParams({ app: m.app || '', t: m.title, a: m.artist || '', al: m.album || '' })}`;
   if (art !== shownArt) { shownArt = art; $('mArt').style.backgroundImage = art ? `url("${art}")` : 'none'; tintFrom(art); }
@@ -1001,7 +1013,7 @@ function loadLyrics() {
   lyr = { key, lines: null, synced: false };
   lyIdx = -2;
   lyricsEmpty();
-  if (!t || !onCarThing) return;
+  if (!t || !onCarThing || CAR) return;
   fetch(`/api/media/lyrics?${new URLSearchParams({ t: t.title, a: t.artist || '', al: t.album || '', d: Math.round(t.dur || 0) })}`)
     .then((r) => (r.ok ? r.json() : null))
     .then((l) => {
@@ -1129,6 +1141,16 @@ function renderMusic() {
   if (musicSource() === 'phone') return renderPhoneMusic(phoneMedia());
   const sp = S.spotify || {};
   const p = sp.player;
+  if (CAR) { // no Spotify without the hub: only the iPhone plays here
+    if (shownArt) { shownArt = null; $('mArt').style.backgroundImage = 'none'; tintFrom(null); }
+    $('mTitle').textContent = tr('Nothing playing');
+    $('mArtist').textContent = tr(PH.connected ? 'Press play, or start music on the iPhone.' : 'The iPhone is not connected.');
+    $('mAlbum').textContent = '';
+    $('mDev').textContent = '';
+    setIcon($('mPlay'), 'play');
+    setHTML($('mQueue'), '');
+    return;
+  }
   if (!sp.configured || !sp.linked) {
     $('mTitle').textContent = tr('Spotify not linked');
     $('mArtist').textContent = tr('Linking is done once from a browser on the LAN.');
@@ -1173,6 +1195,8 @@ function spotifyAction(act, body) {
 
 // AMS remote commands: 2 play/pause, 3 next, 4 previous, 5 volume up, 6 volume down, 7 repeat, 8 shuffle
 function musicAction(act) {
+  // in the car with nothing on the iPhone yet, play is the remote's play key: iOS resumes the last music app
+  if (CAR && !phoneMedia()) return act === 'toggle' && PH.connected ? tapKey('play', 0) : undefined;
   if (musicSource() !== 'phone') return spotifyAction(act);
   phonePost('/media', { cmd: { prev: 4, toggle: 2, next: 3, like: 8 }[act] });
 }
@@ -1276,7 +1300,7 @@ function renderPhone() {
 
 let awaySince = null, digestTimer = null, phoneSeen = false, deskSent = null;
 function reportDesk() {
-  if (onCarThing) fetch('/api/desk', { method: 'POST', body: JSON.stringify({ near: !!(PH.connected && PH.near) }) }).catch(() => {});
+  if (onCarThing && !CAR) fetch('/api/desk', { method: 'POST', body: JSON.stringify({ near: !!(PH.connected && PH.near) }) }).catch(() => {});
 }
 setInterval(reportDesk, 120000);
 // for the morning briefing: how many notifications and missed calls in the last 12 hours, and the battery.
@@ -1285,7 +1309,7 @@ let summaryTimer = null;
 function sendSummary() {
   clearTimeout(summaryTimer);
   summaryTimer = setTimeout(() => {
-    if (!onCarThing || !PH.connected) return;
+    if (!onCarThing || CAR || !PH.connected) return;
     const recent = (PH.notes || []).filter((n) => noteMs(n) > Date.now() - 12 * 3600000);
     const calls = recent.filter((n) => n.cat === 2).length;
     fetch('/api/phone/summary', { method: 'POST', body: JSON.stringify({ notes: recent.length - calls, calls, battery: PH.battery }) }).catch(() => {});
@@ -1296,7 +1320,7 @@ function phoneChanged(prev) {
   const wasNear = prev.connected && prev.near, isNear = PH.connected && PH.near;
   // left the desk: the screen goes off and a running focus timer pauses. Not on the first message after a
   // (re)load, which says nothing about where the phone was before.
-  if (phoneSeen && wasNear && !isNear) {
+  if (phoneSeen && wasNear && !isNear && !CAR) {
     awaySince = awaySince || Date.now();
     fetch('/api/display/away', { method: 'POST', body: '{"away":true}' }).catch(() => {});
     if (pomo.running) pomoToggle();
@@ -1395,7 +1419,7 @@ function renderIphone() {
   }
   const bars = PH.rssi == null ? 0 : Math.max(1, Math.min(4, Math.round((PH.rssi + 95) / 12)));
   setHTML(head, `<div class="ip-name">${esc(PH.name || 'iPhone')}</div><div class="ip-stat">`
-    + (PH.connected ? `<span class="ip-bars b${bars}"><i></i><i></i><i></i><i></i></span>${tr(PH.near ? 'At the desk' : 'Away')}` : tr('Not connected'))
+    + (PH.connected ? `<span class="ip-bars b${bars}"><i></i><i></i><i></i><i></i></span>${tr(CAR ? 'Connected' : PH.near ? 'At the desk' : 'Away')}` : tr('Not connected'))
     + (PH.connected && PH.battery != null ? `<span>🔋 ${PH.battery}%</span>` : '') + (privacy ? '<span>🙈</span>' : '') + '</div>');
   const items = ipItems();
   if (ipSel >= items.length) ipSel = items.length - 1;
@@ -1618,6 +1642,7 @@ function askToggle() {
 let setMode = null; // null (closed) | 'menu' | 'bright' | 'confirm'
 let setIdx = 0;     // 0 brightness, 1 restart, 2 shut down, 3 rotate, 4 language, 5 iPhone, 6 desk clock
 const TILES = 7;
+const TILE_SET = CAR ? [3, 4, 5, 6] : [...Array(TILES).keys()];
 let setTimer = null;
 
 function renderSettings() {
@@ -1655,7 +1680,7 @@ function deviceAction(act) {
 }
 
 function settingsKnob(step) {
-  if (setMode === 'menu') { setIdx = (setIdx + step + TILES) % TILES; setModeTo('menu'); }
+  if (setMode === 'menu') { const i = TILE_SET.indexOf(setIdx); setIdx = TILE_SET[(i + step + TILE_SET.length) % TILE_SET.length]; setModeTo('menu'); }
   else if (setMode === 'bright') { brightAdjust(step); setModeTo('bright'); }
   else if (setMode === 'confirm') setModeTo('menu');
 }
@@ -1672,7 +1697,7 @@ function settingsBack() {
 
 function settingsButton() {
   if (setMode) return setModeTo(null);
-  setIdx = 0;
+  setIdx = TILE_SET[0];
   setModeTo('menu');
 }
 
@@ -1806,6 +1831,7 @@ applyOrient();
 
 function switchLang() {
   const next = lang === 'vi' ? 'en' : 'vi';
+  if (CAR) { S.display.lang = next; applyLang(); return setModeTo('menu'); }
   fetch('/api/display/lang', { method: 'POST', body: JSON.stringify({ lang: next }) })
     .then((r) => { if (!r.ok) toast(tr('Language can only be changed on the Car Thing')); })
     .catch(() => toast(tr('Could not reach the hub')));
@@ -1874,13 +1900,20 @@ function toast(msg) {
   toast.h = setTimeout(() => t.classList.remove('on'), 2500);
 }
 
+// the next page that is shown: all of them at the desk, Music and iPhone in the car
+function stepPage(step) {
+  if (!CAR) return setPage(page + step);
+  const i = CAR_PAGES.indexOf(page);
+  setPage(CAR_PAGES[((i < 0 ? 0 : i) + step + CAR_PAGES.length) % CAR_PAGES.length]);
+}
+
 function knob(step) {
   if (PH.call || PH.pairing) return;
   if (setMode) return settingsKnob(step);
   if (alertEdit) return alertKnob(step);
   if (page === NEWS && (newsSel >= 0 || newsDetail)) return newsKnob(step);
   if (page === PHONE && ipSel >= 0) return ipKnob(step);
-  if (!editing) return setPage(page + step);
+  if (!editing) return stepPage(step);
   setEditing(true); // keep edit mode alive while turning
   if (page === MUSIC) volumeAdjust(step);
   else if (page === FOCUS) pomoAdjust(step);
@@ -1982,10 +2015,12 @@ const LONG = {
     if (setMode) setModeTo(null);
     if (editing) setEditing(false);
     if (zoom) { zoom = 0; renderZoom(); }
-    if (page !== NEWS) setPage(NEWS);
+    const home = CAR ? MUSIC : NEWS;
+    if (page !== home) setPage(home);
   },
   menu() {
     if (setMode) setModeTo(null);
+    if (CAR) return; // the screen is switched off through the hub
     fetch('/api/display/away', { method: 'POST', body: '{"away":true}' }).catch(() => {});
   },
 };
@@ -2027,7 +2062,7 @@ addEventListener('touchend', (e) => {
   if (nightGate() || hideDigest() | leaveImmersive()) { tx = null; return; }
   const dx = appX(e.changedTouches[0]) - tx;
   tx = null;
-  if (Math.abs(dx) > 60) setPage(page + (dx < 0 ? 1 : -1));
+  if (Math.abs(dx) > 60) stepPage(dx < 0 ? 1 : -1);
   else if (page === FOCUS) pomoToggle();
   else if (page === ASK) askToggle();
 });
@@ -2127,6 +2162,7 @@ function connect() {
     const msg = JSON.parse(ev.data);
     heard(msg);
     S = msg.state;
+    if (S.tz && S.tz !== stored('tz')) try { localStorage.setItem('tz', S.tz); } catch {} // for the car
     if (slide) pendingRender = true; else render();
     if (!warmUp.started) { warmUp.started = true; setTimeout(warmUp, 1500); }
   };
@@ -2134,7 +2170,14 @@ function connect() {
   es.onerror = () => $('conn').classList.remove('ok');
 }
 function checkLink() {
+  // in the car: go back to the hub's page as soon as it answers again
+  if (CAR) {
+    if (new Date().getSeconds() % 15 === 0) fetch(HUB_URL + 'health', { mode: 'no-cors', cache: 'no-store' }).then(() => location.replace(HUB_URL), () => {});
+    return;
+  }
   const quiet = Date.now() - lastMsg;
+  // at the desk, a minute without the hub: it is probably the car, switch to the Car Thing's own copy
+  if (onCarThing && quiet > 60000) return location.replace(CAR_URL);
   const lost = quiet > 25000;
   if (lost !== $('offline').classList.contains('on')) $('offline').classList.toggle('on', lost);
   if (!lost) return;
@@ -2145,9 +2188,9 @@ function checkLink() {
 
 renderSettings();
 $('tabs').innerHTML = pages.map((p) => `<span class="tab">${tr(p.dataset.name)}</span>`).join('');
-setPage(0);
+setPage(CAR ? MUSIC : 0);
 tickClock();
 setInterval(tickClock, 1000);
 setInterval(render, 15000);
-connect();
+if (!CAR) connect();
 phoneConnect();

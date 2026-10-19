@@ -112,6 +112,9 @@ carthing/phonelink/
   ancs.go    notifications and calls (Apple Notification Center Service)
   ams.go     now playing, queue, shuffle / repeat, remote commands (Apple Media Service)
   rssi.go    signal strength of the link, and "at the desk" from it
+  blow.go    microphone level for the desk clock's torch (only while asked)
+  cts.go     the iPhone's clock (Current Time Service) sets the Car Thing's when it is off
+  www.go     serves the car copy of the page on 127.0.0.1:5056
 ```
 
 * **Being found.** Since iOS 18, Settings → Bluetooth no longer lists accessories that only ask for notifications, but it lists remotes. So the Car Thing also offers a HID-over-GATT service with consumer keys only (play, next, volume…): no keyboard, so the iPhone keeps its on-screen keyboard. It never sends a key; its report map can only be read over a code-paired link.
@@ -124,6 +127,7 @@ carthing/phonelink/
 * **Keys.** The remote's report carries seven consumer keys; phonelink only ever sets Siri (voice command) and volume up (the Camera app's shutter) while a button is held, and play / pause and volume up / down for Find my iPhone, all on `POST /key`; a key lets go by itself after 10 s.
 * **To the screen.** `GET /events` streams the whole state (paired, connected, name, battery, pairing, media, call, last 12 notifications) as SSE within 100 ms of a change. `POST /pair`, `/pair/cancel`, `/forget`, `/media`, `/call`, `/note/clear` and `/key` take small JSON bodies sent as plain text (a "simple" request, so no CORS preflight). Everything is in memory and cleared when the phone disconnects.
 * **Find my iPhone.** An accessory cannot make the phone ring, so the iPhone page plays its music instead, with the remote's media keys like a headset: volume up to the top, then play (with nothing playing, iOS resumes the last app; AMS alone cannot start playback when no app holds it). After 30 s, or a second press, pause and the same number of steps back down.
+* **Car mode.** There is no Wi-Fi and no Bluetooth networking on the Car Thing, so in the car it has no network at all. phonelink serves a copy of the page (`/var/lib/hub/www`, refreshed by `check-carthing.sh`) on `127.0.0.1:5056`; that page knows it is the car copy from its port and shows Music and the iPhone page only, from phonelink alone. Switching: `kiosk-env` picks the hub if `/health` answers within a few seconds at start, else the car copy; the hub page moves to the car copy after a minute without hub messages, and the car copy checks `/health` every 15 s and goes back; `kiosk-watch.sh` restarts the kiosk if Chromium is stuck on its error page on the hub's address for a minute. `brightness-sync.sh` gives the screen back to Nocturne's automatic brightness (light sensor) after a minute without the hub. The time comes from the iPhone's Current Time Service when the clock is more than 5 s off.
 * **Covers.** The phone sends no pictures. The page borrows Spotify's art when the iPhone plays the same song Spotify reports, and otherwise asks the hub, which searches YouTube's public results page (for the YouTube app) or Apple's iTunes Search API (everything else) and proxies the image.
 
 ## Network
@@ -135,7 +139,8 @@ carthing/phonelink/
 | LAN → Server 2 | LAN | SSH, the hub's LAN preview (`10.10.10.20:8787`, read-only), admin UIs |
 | Hub → Internet | outbound HTTPS | data sources above |
 | iPhone ↔ Car Thing | Bluetooth LE, bonded with a 6-digit code (LE Secure Connections) | Notifications, media and battery from the phone; answer / decline and media commands to it. Only the paired phone; pairing is refused outside the 2-minute window. |
-| Kiosk page → phonelink | Car Thing loopback, `127.0.0.1:5055` | Only requests whose `Origin` is the hub page. |
+| Kiosk page → phonelink | Car Thing loopback, `127.0.0.1:5055` | Only requests whose `Origin` is the hub page or its car copy (`http://127.0.0.1:5056`). |
+| Kiosk → car copy of the page | Car Thing loopback, `127.0.0.1:5056` | Static files only (GET; html, js, css, woff2). |
 | Server 2 → Car Thing | USB, SSH with the hub key | `check-carthing.sh` (hourly, read-only checks; fixes only when run by hand), `carthing-stats.sh` (every 2 min, read-only) |
 
 `net.ipv4.ip_nonlocal_bind=1` lets Docker publish `10.42.1.6:8787` before the Car Thing is plugged in.

@@ -174,6 +174,18 @@ Pair: quick menu → **iPhone** → on the iPhone, Settings → Bluetooth → **
 
 If Siri does not open from button 1 after an update of phonelink, forget the device on the iPhone and pair again: iOS keeps the remote's key list from the first pairing.
 
+## 12. Optional: car mode
+
+Nothing to set up beyond the iPhone link (section 11). Power the Car Thing from a USB-C car charger: it starts with the ignition and loses power when the car is turned off. With no server 2 on the cable, `kiosk-env` opens the copy of the page that phonelink serves on `127.0.0.1:5056` (kept in `/var/lib/hub/www`), and the page goes back to the hub as soon as it answers again.
+
+The copy is refreshed by `check-carthing.sh` when it runs to fix things (by hand, not from the hourly cron), so run it after changing the hub's page:
+
+```bash
+~/carthing-tools/check-carthing.sh      # also copies ~/carthing-hub/public to /var/lib/hub/www
+```
+
+The car copy keeps its own rotation, language and torch settings (a page on another address has its own storage): set them once in the car.
+
 ## Development helpers
 
 `tools/` holds the scripts used while building: `cdp.mjs` (screenshot / eval over DevTools), `steps.mjs` (a list of key presses, evals and screenshots, printing every exception), `errors.mjs` / `errors2.mjs` (reload and print exceptions), `shoot*.mjs` (the README screenshots; `demo-calendar.js` supplies sample events), `record.mjs` (frames for the README GIF). Open the tunnel first:
