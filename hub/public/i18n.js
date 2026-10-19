@@ -107,6 +107,10 @@ const VI = {
   'Restarting the Car Thing…': 'Đang khởi động lại Car Thing…', 'Shutting down — unplug and replug to start again': 'Đang tắt máy, rút ra cắm lại để bật',
   'Only the Car Thing can do this': 'Chỉ Car Thing làm được việc này', 'Brightness can only be changed on the Car Thing': 'Chỉ chỉnh độ sáng được trên Car Thing',
   'Language can only be changed on the Car Thing': 'Chỉ đổi ngôn ngữ được trên Car Thing', 'Car mode': 'Chế độ xe', Connected: 'Đã kết nối', 'Press play, or start music on the iPhone.': 'Bấm phát, hoặc mở nhạc trên iPhone.', 'The iPhone is not connected.': 'iPhone chưa kết nối.',
+  'No forecast in the car: it is packed while the Car Thing is at the desk.': 'Trên xe chưa có dự báo: dữ liệu được chép sẵn khi Car Thing ở bàn.',
+  'You have been driving for {t}. Time for a break?': 'Bạn đã lái {t}. Nghỉ một chút nhé?', '{n} min': '{n} phút',
+  'Taps on': 'Gõ: bật', 'Taps off': 'Gõ: tắt', 'Tap control is off': 'Đã tắt điều khiển bằng tiếng gõ', 'Two taps: play / pause': 'Gõ 2 cái: phát / dừng',
+  'Two taps: play or pause · three taps: screen off or on': 'Gõ 2 cái: phát hoặc dừng nhạc · gõ 3 cái: tắt hoặc mở màn hình',
 
   // iPhone over Bluetooth
   'Pair iPhone': 'Ghép iPhone', 'Pair your iPhone': 'Ghép iPhone của bạn', 'Type this code on your iPhone': 'Nhập mã này trên iPhone',

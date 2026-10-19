@@ -173,6 +173,7 @@ body.sliding #sky .rain { animation-play-state: paused; }
 /* ---------- quick menu */
 .ov-tile { background: rgba(44, 36, 96, 0.85); border-radius: 30px 30px 30px 10px; font-family: var(--display); }
 .ov-tile.sel { border-color: var(--gold); box-shadow: 0 0 30px rgba(255, 194, 61, 0.35); }
+.ov-tile.lit svg { color: var(--gold); }
 
 .ov-slider { background: rgba(44, 36, 96, 0.85); }
 .ov-slider.active { border-color: var(--gold); }
@@ -536,9 +537,9 @@ body.night-dark *, body.night-dark *::before, body.night-dark *::after { animati
 
 /* ---------- weather: °C / °F hint, quick menu with seven tiles (one row landscape, three rows portrait) */
 .wx-unit { margin-top: 6px; font-size: 12px; color: var(--dim); }
-.ov-tiles { gap: 10px; }
-.ov-tile { width: 100px; height: 100px; gap: 8px; font-size: 14px; }
-.ov-tile svg { width: 44px; height: 44px; }
+.ov-tiles { gap: 8px; }
+.ov-tile { width: 88px; height: 92px; gap: 8px; font-size: 13px; text-align: center; }
+.ov-tile svg { width: 40px; height: 40px; }
 .portrait .ov-tile { width: 128px; height: 128px; }
 .portrait .ov-tiles { grid-template-columns: repeat(3, 128px); }
 .srv .head .state { white-space: nowrap; flex: none; }
@@ -729,9 +730,21 @@ body:not(.portrait) .tab { padding: 5px 6px; font-size: 13px; }
 .ip-ic svg { width: 20px; height: 20px; }
 .ip-row { contain: layout paint; }
 
-/* ---------- car mode (the Car Thing's own copy of the page, no hub): Music and iPhone only, no hub tiles */
+/* ---------- car mode (the Car Thing's own copy of the page, no hub): Weather and Calendar from the pack, Music
+   and iPhone over Bluetooth, no hub tiles */
 .car-tag { display: none; font: 600 13px var(--display); color: var(--gold); padding: 2px 9px; border-radius: 999px; box-shadow: inset 0 0 0 1.5px rgba(255, 194, 61, 0.55); }
 body.car .car-tag { display: inline-block; }
 body.car #conn { display: none; }
-body.car .tab:not(:nth-child(5)):not(:nth-child(8)) { display: none; }
-body.car .ov-tile[data-i="0"], body.car .ov-tile[data-i="1"], body.car .ov-tile[data-i="2"], body.car #ovSlider { display: none; }
+body.car .tab:not(:nth-child(3)):not(:nth-child(4)):not(:nth-child(5)):not(:nth-child(8)) { display: none; }
+/* night driving (the light sensor says the cabin is dark): warm, dim colours that do not dazzle; only variables
+   change, so nothing extra is drawn per frame */
+body.car.night, body.car.night[data-sky] {
+  --bg: #0c0604; --panel: rgba(70, 26, 12, 0.5); --line: rgba(255, 140, 90, 0.08);
+  --text: #f0b08a; --muted: #a8684c; --dim: #6e3c2a; --gold: #ff8a4c; --accent: #ff8a4c; --sky: #e0805a;
+  --up: #c89a50; --down: #ff6a50;
+  --b1: #3a120a; --b2: #24100a; --b3: #301008;
+}
+body.car.night #mArt { opacity: 0.75; }
+/* no air quality in the car: it is not packed (it changes too fast to be worth showing hours later) */
+body.car .wx-now .aqi { display: none; }
+body.car .ov-tile[data-i="0"], body.car .ov-tile[data-i="1"], body.car .ov-tile[data-i="2"], body.car .ov-tile[data-i="7"], body.car #ovSlider { display: none; }

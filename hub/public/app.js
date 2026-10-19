@@ -11,10 +11,11 @@ const last = {};
 
 // Car mode: in the car there is no server 2, so the Car Thing shows its own copy of this page (phonelink serves
 // it on 127.0.0.1:5056) with what the iPhone brings over Bluetooth: Music, the iPhone page, calls and the desk
-// clock. Each copy moves to the other by itself when the hub comes or goes.
+// clock, plus Weather and Calendar from what the hub packed before the drive. Each copy moves to the other by
+// itself when the hub comes or goes.
 const HUB_URL = 'http://10.42.1.6:8787/', CAR_URL = 'http://127.0.0.1:5056/';
 const CAR = location.port === '5056';
-const CAR_PAGES = [MUSIC, PHONE];
+const CAR_PAGES = [WEATHER, CALENDAR, MUSIC, PHONE];
 const stored = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 if (CAR) {
   S = { car: true, tz: stored('tz') || undefined, display: { lang: stored('lang') === 'vi' ? 'vi' : 'en', brightness: 80 } };
@@ -342,6 +343,85 @@ function showBanner(cls, text, ms) {
   bannerTimer = setTimeout(() => b.classList.remove('on'), ms);
 }
 
+// ---------------------------------------------------------------- what the hub packed for the car
+
+// At the desk the hub keeps a pack for the car (server/carpack.mjs): covers and lyrics of the songs the iPhone
+// played, four days of weather, the calendar and Mei's reminders. sync-carpack.sh copies it to the Car Thing and
+// phonelink serves it to this copy under /pack/. It is as fresh as the last time the Car Thing was at the desk.
+let pack = null;
+function loadPack() {
+  fetch('pack/pack.json', { cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((p) => {
+      if (!p) return;
+      pack = p;
+      Object.assign(S, { city: p.city, units: p.units, calendar: p.calendar, reminders: p.reminders || [] });
+      if (!S.tz && p.tz) S.tz = p.tz;
+      render();
+    })
+    .catch(() => {});
+}
+// the hour the car is in, from the packed forecast; nothing once the forecast has run out
+function carWeather() {
+  const w = pack && pack.weather;
+  if (!w || !w.hourly) return;
+  const t = now();
+  const i = w.hourly.findIndex((h) => h.at > t) - 1;
+  const today = dayKey(t);
+  const daily = (w.daily || []).filter((d) => d.t >= today);
+  if (i < 0 || !daily.length) { S.weather = null; return; }
+  const h = w.hourly[i];
+  S.weather = {
+    current: { temperature_2m: h.temp, apparent_temperature: h.app, relative_humidity_2m: h.hum, weather_code: h.code, wind_speed_10m: h.wind, is_day: h.day },
+    hourly: w.hourly.slice(i, i + 12).map(({ t: ht, temp, pop, code }) => ({ t: ht, temp, pop, code })),
+    daily,
+    at: w.at,
+  };
+}
+// the same song from any app: compared without case and extra spaces (as carpack.mjs does)
+const trackKey = (title, artist) => `${String(title || '').trim().toLowerCase().replace(/\s+/g, ' ')}\n${String(artist || '').trim().toLowerCase().replace(/\s+/g, ' ')}`;
+// [file name, has a cover, has lyrics], or nothing
+const packTrack = (t) => (pack && pack.tracks && t && pack.tracks[trackKey(t.title, t.artist)]) || null;
+
+// Mei's reminders still go off in the car: the hub is not there to send them, so this copy watches the packed list
+function carReminders() {
+  const t = now();
+  let fired = [];
+  try { fired = JSON.parse(stored('remFired') || '[]'); } catch {}
+  for (const r of S.reminders || []) {
+    if (r.at > t || t - r.at > 15 * 60000 || fired.includes(r.at)) continue;
+    fired = fired.concat(r.at).slice(-20);
+    try { localStorage.setItem('remFired', JSON.stringify(fired)); } catch {}
+    showBanner('remind', `⏰ ${r.text}`, 60000);
+  }
+}
+
+// How long this drive has lasted: the Car Thing starts with the car, so a drive starts when this copy has not
+// been open for 10 minutes. After 2 hours, and every 30 minutes after that, a reminder to take a break.
+const DRIVE_GAP = 10 * 60000, DRIVE_BREAK = 120, DRIVE_AGAIN = 30;
+let driveStart = 0, driveNag = 0;
+function driveTick() {
+  const t = Date.now();
+  const seen = Number(stored('driveSeen')) || 0;
+  if (!driveStart) {
+    const kept = Number(stored('driveStart')) || 0;
+    driveStart = kept && t - seen < DRIVE_GAP && kept <= t ? kept : t;
+    driveNag = driveStart === kept ? Number(stored('driveNag')) || 0 : 0;
+  }
+  if (t - seen > 20000) try { localStorage.setItem('driveSeen', t); localStorage.setItem('driveStart', driveStart); } catch {}
+  const min = Math.floor((t - driveStart) / 60000);
+  const due = min < DRIVE_BREAK ? 0 : 1 + Math.floor((min - DRIVE_BREAK) / DRIVE_AGAIN);
+  if (due > driveNag) {
+    driveNag = due;
+    try { localStorage.setItem('driveNag', due); } catch {}
+    showBanner('remind', `☕ ${tr('You have been driving for {t}. Time for a break?', { t: driveText() })}`, 60000);
+  }
+}
+function driveText() {
+  const min = Math.floor((Date.now() - driveStart) / 60000);
+  return min < 60 ? tr('{n} min', { n: min }) : tr('{h} h {m} min', { h: Math.floor(min / 60), m: min % 60 });
+}
+
 // ---------------------------------------------------------------- weather
 
 const WMO = {
@@ -390,7 +470,10 @@ function toggleUnit() {
 
 function renderWeather() {
   const w = S.weather;
-  if (!w) return;
+  if (!w) {
+    if (CAR) setHTML($('wxNow'), `<div class="note">${tr('No forecast in the car: it is packed while the Car Thing is at the desk.')}</div>`);
+    return;
+  }
   const cur = w.current;
   const [descEn, icon] = wmo(cur.weather_code);
   const desc = tr(descEn);
@@ -403,7 +486,7 @@ function renderWeather() {
   setHTML($('wxNow'), `
     <div class="icon">${cur.is_day ? icon : icon.replace('☀️', '🌙').replace('🌤️', '🌙')}</div>
     <div><div class="temp">${Math.round(deg(cur.temperature_2m))}°</div></div>
-    <div><div class="desc">${desc} · ${S.city}</div>
+    <div><div class="desc">${desc} · ${S.city}${CAR ? ` · ${ago(w.at)}` : ''}</div>
       <div class="sub">${tr('Feels like {v}', { v: Math.round(deg(cur.apparent_temperature)) + '°' })} · ${tr('Humidity {v}%', { v: cur.relative_humidity_2m })}<br>
       ${tr('Wind {v}', { v: windText(cur.wind_speed_10m) })} · UV ${a.uv_index != null ? num(a.uv_index, 0) : '—'}<br>
       ${tr('Today {v}', { v: `${Math.round(deg(w.daily[0].min))}° – ${Math.round(deg(w.daily[0].max))}${degSym()}` })}</div>
@@ -931,7 +1014,8 @@ function renderPhoneMusic(m) {
   // the Bluetooth link carries no picture: borrow Spotify's when it is the same song, else the hub looks one up
   // (a YouTube video's thumbnail, or the album cover from Apple's search)
   const sp = S && S.spotify && S.spotify.player;
-  const art = CAR ? '' : sp && sp.art && sp.title === m.title
+  const pt = CAR && packTrack(m);
+  const art = CAR ? (pt && pt[1] ? `pack/c/${pt[0]}.jpg` : '') : sp && sp.art && sp.title === m.title
     ? `/api/spotify/art?u=${encodeURIComponent(sp.art)}`
     : `/api/media/cover?${new URLSearchParams({ app: m.app || '', t: m.title, a: m.artist || '', al: m.album || '' })}`;
   if (art !== shownArt) { shownArt = art; $('mArt').style.backgroundImage = art ? `url("${art}")` : 'none'; tintFrom(art); }
@@ -1013,15 +1097,19 @@ function loadLyrics() {
   lyr = { key, lines: null, synced: false };
   lyIdx = -2;
   lyricsEmpty();
-  if (!t || !onCarThing || CAR) return;
-  fetch(`/api/media/lyrics?${new URLSearchParams({ t: t.title, a: t.artist || '', al: t.album || '', d: Math.round(t.dur || 0) })}`)
+  if (!t || !onCarThing) return;
+  // in the car: only what was packed at the desk (the Vietnamese lines come in the same file)
+  const pt = CAR && packTrack(t);
+  if (CAR && !(pt && pt[2])) return;
+  fetch(CAR ? `pack/l/${pt[0]}.json` : `/api/media/lyrics?${new URLSearchParams({ t: t.title, a: t.artist || '', al: t.album || '', d: Math.round(t.dur || 0) })}`)
     .then((r) => (r.ok ? r.json() : null))
     .then((l) => {
       if (lyr.key !== key || !l || !l.lines.length) return;
       lyr = { key, lines: l.lines, synced: l.synced };
+      if (CAR && lang === 'vi' && Array.isArray(l.vi) && !looksVietnamese(l.lines)) lyr.vi = l.vi;
       drawLyrics();
       // a song in another language gets a Vietnamese line under each line, when the screen is in Vietnamese
-      if (lang === 'vi' && !looksVietnamese(l.lines)) {
+      if (!CAR && lang === 'vi' && !looksVietnamese(l.lines)) {
         fetch(`/api/media/lyrics/vi?${new URLSearchParams({ t: t.title, a: t.artist || '', al: t.album || '', d: Math.round(t.dur || 0) })}`)
           .then((r) => (r.ok ? r.json() : null))
           .then((vi) => { if (lyr.key === key && Array.isArray(vi)) { lyr.vi = vi; drawLyrics(); } })
@@ -1077,7 +1165,11 @@ function ambientCheck() {
     amb.classList.toggle('on', want);
     if (want) window.deskTorch.start(); else window.deskTorch.stop();
   }
-  if (want) renderAmbient();
+  if (want) {
+    // a running focus timer burns the torch down; it is out during the break
+    window.deskTorch.timer(pomo.running ? (pomo.mode === 'focus' ? pomo.left / modeLen() : 0) : null);
+    renderAmbient();
+  }
 }
 let amTimeKey = '', amForced = false;
 const ambientOn = () => $('ambient').classList.contains('on');
@@ -1112,6 +1204,8 @@ function renderAmbient() {
   const next = calEvents().filter((e) => !e.allDay && e.start > now()).sort((a, b) => a.start - b.start)[0];
   if (next) bits.push(`<span>📅 ${esc(next.title)} · ${untilText(next.start)}</span>`);
   if (PH.connected && PH.battery != null) bits.push(`<span>📱 ${PH.battery}%</span>`);
+  if (CAR && driveStart) bits.push(`<span>🚗 ${driveText()}</span>`);
+  if (pomo.running) bits.push(`<span>⏳ ${tr(pomo.mode === 'focus' ? 'Focus' : 'Break')} · ${tr('{n} min', { n: Math.ceil(pomo.left / 60) })}</span>`);
   const row = bits.join('');
   if ($('amRow')._html !== row) { setHTML($('amRow'), row); window.deskTorch.info(); }
 }
@@ -1258,6 +1352,9 @@ function phoneConnect() {
 }
 
 function renderPhone() {
+  // in the car, a dark cabin (phonelink reads the light sensor) turns the page to its night colours
+  if (CAR) document.body.classList.toggle('night', !!PH.dark);
+  tapHeard();
   const chip = $('phone');
   chip.classList.toggle('on', !!PH.paired);
   chip.classList.toggle('away', !!PH.paired && !PH.connected);
@@ -1504,6 +1601,41 @@ function stopFinding() {
   if (page === PHONE) renderIphone();
 }
 
+// Tap control (quick menu, desk only): two knocks on the desk or claps play or pause the music, three turn the
+// screen off or on. phonelink listens only while this is on (the page repeats the request every few seconds,
+// so it ends by itself if the page goes away) and sends only the number of taps, never the sound.
+let taps = stored('taps') === '1', tapsSent = 0, tapSeen = null;
+function tapsToggle() {
+  taps = !taps;
+  try { localStorage.setItem('taps', taps ? '1' : '0'); } catch {}
+  tapsSent = 0;
+  if (!taps) phonePost('/taps', { on: false });
+  else tapsKeep();
+  toast(tr(taps ? 'Two taps: play or pause · three taps: screen off or on' : 'Tap control is off'));
+  renderSettings();
+}
+function tapsKeep() {
+  if (!taps || CAR || !onCarThing || Date.now() - tapsSent < 4000) return;
+  tapsSent = Date.now();
+  fetch(PHONELINK + '/taps', { method: 'POST', body: '{"on":true}' }).catch(() => {});
+}
+function tapHeard() {
+  const t = PH.tap;
+  if (!t || t.at === tapSeen) return;
+  const fresh = tapSeen !== null && Date.now() - t.at < 5000;
+  tapSeen = t.at;
+  if (!fresh || !taps || CAR) return;
+  lastInput = Date.now();
+  if (t.n === 2) {
+    musicAction('toggle');
+    toast(tr('Two taps: play / pause'));
+  } else if (t.n === 3) {
+    const off = screenOff();
+    fetch('/api/display/away', { method: 'POST', body: JSON.stringify({ away: !off }) }).catch(() => {});
+    if (off && S.display.night && S.display.night.dark) wakeScreen();
+  }
+}
+
 // Reply: Apple lets accessories only accept or dismiss a notification, so the reply goes through Siri on the
 // phone. Button 4 opens Siri and shows whom to answer; Siri takes the message and sends it.
 function replyBySiri() {
@@ -1607,6 +1739,29 @@ function renderAsk() {
 }
 
 // the page the user came from before opening Mei (Mei answers about it)
+// a spoken command the hub recognised (server/commands.mjs): carried out here, once
+let actSeen = null;
+function voiceAction() {
+  const v = S.voice, a = v && v.action;
+  if (!a || a.id === actSeen) return;
+  const old = actSeen === null && now() - v.at > 15000; // already done before this page loaded
+  actSeen = a.id;
+  if (old || CAR) return;
+  const p = musicPos();
+  if (a.act === 'next' || a.act === 'prev') musicAction(a.act);
+  else if (a.act === 'pause') { if (p && p.playing) musicAction('toggle'); }
+  else if (a.act === 'play') { if (!p || !p.playing) musicAction('toggle'); }
+  else if (a.act === 'volup' || a.act === 'voldown') volumeAdjust(a.act === 'volup' ? 3 : -3);
+  else if (a.act === 'clock') setTimeout(showAmbient, 2500); // after the answer has been seen
+  else if (a.act === 'screenoff') setTimeout(() => fetch('/api/display/away', { method: 'POST', body: '{"away":true}' }).catch(() => {}), 2500);
+  else if (a.act === 'focus') {
+    if (pomo.running) return;
+    if (a.minutes >= 5 && a.minutes <= 90) { pomo.focusMin = a.minutes; pomo.mode = 'focus'; pomo.left = a.minutes * 60; }
+    pomoToggle();
+    setTimeout(() => setPage(FOCUS), 2500);
+  }
+}
+
 let ctxPage = NEWS;
 function briefingNow() {
   fetch('/api/voice/briefing', { method: 'POST' })
@@ -1640,13 +1795,15 @@ function askToggle() {
 // ---------------------------------------------------------------- quick menu (round settings button, top right)
 
 let setMode = null; // null (closed) | 'menu' | 'bright' | 'confirm'
-let setIdx = 0;     // 0 brightness, 1 restart, 2 shut down, 3 rotate, 4 language, 5 iPhone, 6 desk clock
-const TILES = 7;
+let setIdx = 0;     // 0 brightness, 1 restart, 2 shut down, 3 rotate, 4 language, 5 iPhone, 6 desk clock, 7 taps
+const TILES = 8;
 const TILE_SET = CAR ? [3, 4, 5, 6] : [...Array(TILES).keys()];
 let setTimer = null;
 
 function renderSettings() {
   $('overlay').classList.toggle('on', setMode != null);
+  setText($('tapLabel'), tr(taps ? 'Taps on' : 'Taps off'));
+  document.querySelector('.ov-tile[data-i="7"]').classList.toggle('lit', taps);
   document.querySelectorAll('.ov-tile').forEach((el, i) => {
     el.classList.toggle('sel', i === setIdx);
     el.classList.toggle('confirm', setMode === 'confirm' && i === setIdx);
@@ -1686,7 +1843,7 @@ function settingsKnob(step) {
 }
 
 function settingsPress() {
-  if (setMode === 'menu') { if (setIdx === 3) return rotate(); if (setIdx === 4) return switchLang(); if (setIdx === 5) return phoneMenu(); if (setIdx === 6) return showAmbient(); return setModeTo(setIdx === 0 ? 'bright' : 'confirm'); }
+  if (setMode === 'menu') { if (setIdx === 3) return rotate(); if (setIdx === 4) return switchLang(); if (setIdx === 5) return phoneMenu(); if (setIdx === 6) return showAmbient(); if (setIdx === 7) return tapsToggle(); return setModeTo(setIdx === 0 ? 'bright' : 'confirm'); }
   if (setMode === 'bright') return setModeTo('menu');
   if (setMode === 'confirm') confirmed();
 }
@@ -2079,6 +2236,8 @@ function tickClock() {
   if (page === PHONE && new Date().getSeconds() % 30 === 0) renderIphone(); // "5m ago" labels
   if (S && page === ASK) renderAsk();
   if (S && page === CALENDAR && new Date().getSeconds() === 0) renderCalendar();
+  if (CAR) { driveTick(); carReminders(); }
+  tapsKeep();
   checkLink();
 }
 
@@ -2131,11 +2290,12 @@ function wordsMore() {
 const RENDER = { [WORDS]: renderWords, [FOCUS]: renderDesk, [NEWS]: renderNews, [MARKETS]: renderMarkets, [ASK]: renderAsk, [WEATHER]: renderWeather, [CALENDAR]: renderCalendar, [MUSIC]: renderMusic, [SERVERS]: renderServers, [PHONE]: renderIphone };
 function render() {
   if (!S) return;
+  if (CAR) carWeather();
   applyLang();
   try { RENDER[page] && RENDER[page](); } catch (e) { console.error(e); }
   if (zoom && page === MARKETS) try { renderZoom(); } catch (e) { console.error(e); }
   try { renderAlerts(); } catch (e) { console.error(e); }
-  try { watchBriefing(); calReminders(); } catch (e) { console.error(e); }
+  try { watchBriefing(); calReminders(); voiceAction(); } catch (e) { console.error(e); }
   if (setMode) renderBrightness();
   const off = screenOff();
   document.body.classList.toggle('night-dark', off);
@@ -2192,5 +2352,5 @@ setPage(CAR ? MUSIC : 0);
 tickClock();
 setInterval(tickClock, 1000);
 setInterval(render, 15000);
-if (!CAR) connect();
+if (!CAR) connect(); else loadPack();
 phoneConnect();

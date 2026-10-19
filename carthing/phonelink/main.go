@@ -74,6 +74,9 @@ type State struct {
 	Media     *Media   `json:"media,omitempty"`
 	Call      *Note    `json:"call,omitempty"`
 	Notes     []Note   `json:"notes"`
+	Dark      bool     `json:"dark"` // the light sensor says the room or the car is dark (light.go)
+	Lux       int      `json:"lux"`
+	Tap       *Tap     `json:"tap,omitempty"` // the last group of taps heard (clap.go)
 }
 
 var (
@@ -204,6 +207,10 @@ func serve(addr string, origins []string) {
 		return blowListen(on)
 	})
 	mux.HandleFunc("/blow/events", blowEvents)
+	post("/taps", func(v map[string]any) error {
+		on, _ := v["on"].(bool)
+		return clapListen(on)
+	})
 	post("/call", func(v map[string]any) error {
 		switch v["action"] {
 		case "answer":
@@ -253,6 +260,7 @@ func main() {
 	addr := flag.String("listen", "127.0.0.1:5055", "address for the screen")
 	origin := flag.String("origin", "http://10.42.1.6:8787,http://127.0.0.1:5056", "the pages allowed to read and control (comma-separated): the hub, and the copy served below for the car")
 	www := flag.String("www", "127.0.0.1:5056=/var/lib/hub/www", "address=folder for the copy of the page used in the car (empty: off)")
+	pack := flag.String("pack", "/var/lib/hub/pack", "folder with what the hub packed for the car (covers, lyrics, weather), served under /pack/")
 	flag.StringVar(&savePath, "state", "/var/lib/hub/phonelink.json", "where the paired phone's address is kept")
 	pidfile := flag.String("pidfile", "/run/hub-phone.pid", "")
 	flag.IntVar(&nearDBm, "near", -62, "signal strength (dBm) above which the phone counts as at the desk")
@@ -264,6 +272,8 @@ func main() {
 	blowOnExit()
 	go broadcast()
 	go watchSignal()
+	go watchLight()
+	go micKeeper()
 	go func() {
 		for {
 			if err := runBluetooth(); err != nil {
@@ -273,7 +283,7 @@ func main() {
 		}
 	}()
 	if *www != "" {
-		go serveWWW(*www)
+		go serveWWW(*www, *pack)
 	}
 	serve(*addr, strings.Split(*origin, ","))
 }

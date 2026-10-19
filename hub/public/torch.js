@@ -50,7 +50,10 @@ void main() {
   let fx = 0, fy = 0, burnAt = -10, burnFrom = 0, burnSpan = 1, text = { hm: '', ap: '' };
   let fuel = 1;
   try { const f = localStorage.getItem('torchFuel'); if (f != null) fuel = Math.min(MAX_FUEL, Math.max(0, Number(f) || 0)); } catch {}
-  const saveFuel = () => { try { localStorage.setItem('torchFuel', String(Math.round(fuel * 100) / 100)); } catch {} };
+  // the focus timer: while it runs the fire burns down with the time left and is out during the break; the
+  // knob's own size (baseFuel) comes back when the timer stops
+  let timerFrac = null, baseFuel = fuel;
+  const saveFuel = () => { try { localStorage.setItem('torchFuel', String(Math.round((timerFrac == null ? fuel : baseFuel) * 100) / 100)); } catch {} };
   const frac = (v) => v - Math.floor(v);
 
   function setup() {
@@ -258,7 +261,7 @@ void main() {
       fuel = Math.min(MAX_FUEL, fuel + blow * 1.6 / FPS);
       blowAt = t;
     }
-    const want = onCarThing && ((fuel < 0.05 && t - armedAt < 300) || t - blowAt < 6);
+    const want = onCarThing && timerFrac == null && ((fuel < 0.05 && t - armedAt < 300) || t - blowAt < 6);
     if (want && (!listening || t - listenSent > 4)) { blowPost(true); listenSent = t; }
     else if (!want && listening) { blowPost(false); saveFuel(); }
     listening = want;
@@ -342,10 +345,22 @@ void main() {
     info() { if (W) markInfo(); },
     // the knob: feed the fire or let it die down
     fuel(step) {
-      fuel = Math.min(MAX_FUEL, Math.max(0, Math.round((fuel + step * STEP) / STEP) * STEP));
-      if (fuel < 0.05) fuel = 0;
+      const f = Math.min(MAX_FUEL, Math.max(0, Math.round(((timerFrac == null ? fuel : baseFuel) + step * STEP) / STEP) * STEP));
+      if (timerFrac == null) fuel = f < 0.05 ? 0 : f;
+      else { baseFuel = f; this.timer(timerFrac); }
       armedAt = performance.now() / 1000;
       saveFuel();
+    },
+    // the focus timer, every second: the share of the focus time left (0 during the break), or null when it is off
+    timer(frac) {
+      if (frac == null) {
+        if (timerFrac != null) fuel = baseFuel;
+        timerFrac = null;
+        return;
+      }
+      if (timerFrac == null) baseFuel = fuel;
+      timerFrac = frac;
+      fuel = frac > 0 ? Math.min(MAX_FUEL, 0.3 + Math.max(baseFuel, 1) * frac) : 0;
     },
   };
 })();

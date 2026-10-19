@@ -24,8 +24,11 @@ apply() {
   local raw=$(( $1 * MAX / 100 ))
   if [ "$1" -gt 0 ] && [ "$1" != "$saved" ]; then
     printf '{"auto":false,"brightness":%d}' "$raw" > "$NOCTURNE_CFG.tmp" && mv "$NOCTURNE_CFG.tmp" "$NOCTURNE_CFG"
-    systemctl restart nocturned
-    sleep 2
+    # while phonelink holds the microphones nocturned is paused; it reads the new level when it comes back
+    if systemctl is-active --quiet nocturned; then
+      systemctl restart nocturned
+      sleep 2
+    fi
     saved=$1
   fi
   echo "$raw" > "$BL/brightness"

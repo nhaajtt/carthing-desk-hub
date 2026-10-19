@@ -46,6 +46,9 @@ while :; do
   esac
   id=$2; max=${3:-15}
   rm -f "$WAV"
+  # phonelink may hold the microphones (tap control, blowing on the torch): this file makes it let go
+  touch /run/hub-mic-busy
+  sleep 0.2
   systemctl stop nocturned
   arecord -q -D "$MIC" -f S32_LE -c 4 -r 16000 -d "$max" "$WAV" &
   rec=$!
@@ -59,6 +62,7 @@ while :; do
   done
   kill -INT "$rec" 2>/dev/null
   wait "$rec" 2>/dev/null
+  rm -f /run/hub-mic-busy
   systemctl start --no-block nocturned
   upload "$id"
 done

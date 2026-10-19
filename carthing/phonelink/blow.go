@@ -5,6 +5,9 @@ package main
 // is blowing (0..1), over a loopback event stream. Nothing is recorded or kept: each 40 ms of sound becomes
 // a level and is dropped. nocturned keeps the microphones open for its wake word, so it is paused meanwhile
 // and started again afterwards, the same as when the Ask page records.
+//
+// The same levels also find taps (clap.go): short, sharp sounds such as a knock on the desk or a clap. That
+// keeps the microphones open for as long as the page has tap control switched on.
 
 import (
 	"bufio"
@@ -33,6 +36,7 @@ var (
 	blowMu       sync.Mutex
 	blowCmd      *exec.Cmd
 	blowUntil    time.Time
+	clapUntil    time.Time
 	blowNocturne bool // we paused nocturned and owe it a restart
 	blowSubs     = map[chan float64]bool{}
 )
@@ -42,12 +46,37 @@ func blowListen(on bool) error {
 	blowMu.Lock()
 	defer blowMu.Unlock()
 	if !on {
-		blowStopLocked()
+		blowUntil = time.Time{}
+		if !micWanted() {
+			blowStopLocked()
+		}
 		return nil
 	}
 	blowUntil = time.Now().Add(blowHold)
+	return micStartLocked()
+}
+
+// the microphones are wanted while blowing or tap control asked for them recently; under blowMu
+func micWanted() bool {
+	now := time.Now()
+	return now.Before(blowUntil) || now.Before(clapUntil)
+}
+
+// micBusyFile is made by voice-agent.sh while the Ask page records: then the microphones are its own. A file
+// older than a minute is left over from a recorder that died (recordings last 15 s at most) and is ignored.
+const micBusyFile = "/run/hub-mic-busy"
+
+func micBusy() bool {
+	fi, err := os.Stat(micBusyFile)
+	return err == nil && time.Since(fi.ModTime()) < time.Minute
+}
+
+func micStartLocked() error {
 	if blowCmd != nil {
 		return nil
+	}
+	if micBusy() {
+		return nil // micKeeper (clap.go) starts again once the recording is over
 	}
 	if exec.Command("systemctl", "is-active", "--quiet", "nocturned").Run() == nil {
 		exec.Command("systemctl", "stop", "nocturned").Run()
@@ -140,12 +169,21 @@ func blowRead(cmd *exec.Cmd, out io.Reader) {
 		}
 		level = math.Min(1, math.Max(0, level))
 		blowMu.Lock()
-		if math.Abs(level-last) > 0.02 {
+		tapWindow(db, floor)
+		if time.Now().Before(blowUntil) && math.Abs(level-last) > 0.02 {
 			blowSend(level)
 			last = level
 		}
-		expired := blowCmd == cmd && time.Now().After(blowUntil)
+		if !time.Now().Before(blowUntil) && last > 0 {
+			blowSend(0)
+			last = 0
+		}
+		busy := micBusy()
+		expired := blowCmd == cmd && (!micWanted() || busy)
 		if expired {
+			if busy {
+				blowNocturne = false // the voice agent has paused nocturned itself and starts it again
+			}
 			blowStopLocked()
 		}
 		blowMu.Unlock()

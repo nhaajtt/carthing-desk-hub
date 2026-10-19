@@ -2,6 +2,7 @@ package main
 
 // In the car there is no server 2, so the Car Thing shows its own copy of the page, kept in sync with the hub's
 // by check-carthing.sh. This serves that folder on loopback: GET only, a few file types, no listings.
+// /pack/ is what the hub packed for the car (sync-carpack.sh): covers, lyrics, the forecast and the calendar.
 
 import (
 	"log"
@@ -20,7 +21,12 @@ var wwwTypes = map[string]string{
 	".woff2": "font/woff2",
 }
 
-func serveWWW(spec string) {
+var packTypes = map[string]string{
+	".json": "application/json",
+	".jpg":  "image/jpeg",
+}
+
+func serveWWW(spec, pack string) {
 	addr, dir, ok := strings.Cut(spec, "=")
 	if !ok {
 		log.Printf("www: want address=folder, got %q", spec)
@@ -35,12 +41,16 @@ func serveWWW(spec string) {
 		if p == "/" {
 			p = "/index.html"
 		}
-		typ, known := wwwTypes[path.Ext(p)]
+		root, types := dir, wwwTypes
+		if rest, ok := strings.CutPrefix(p, "/pack/"); ok && pack != "" {
+			root, types, p = pack, packTypes, "/"+rest
+		}
+		typ, known := types[path.Ext(p)]
 		if !known {
 			http.NotFound(w, r)
 			return
 		}
-		f, err := os.Open(filepath.Join(dir, filepath.FromSlash(p)))
+		f, err := os.Open(filepath.Join(root, filepath.FromSlash(p)))
 		if err != nil {
 			http.NotFound(w, r)
 			return

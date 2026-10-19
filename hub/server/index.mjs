@@ -19,6 +19,7 @@ import { createDesk } from './desk.mjs';
 import { createNet } from './net.mjs';
 import { createWords } from './words.mjs';
 import { createReminders } from './reminders.mjs';
+import { createCarPack } from './carpack.mjs';
 
 const PORT = Number(process.env.PORT || 8787);
 const LAT = Number(process.env.LAT || 37.3382);
@@ -247,12 +248,17 @@ every(5 * 60000 + 5000, 'vietcombank', async () => {
   state.fx = { rates, at: Date.now() };
 });
 
+// ---------------------------------------------------------------- what the Car Thing takes into the car
+
+const carpack = createCarPack({ state, stateDir: STATE_DIR });
+setInterval(() => carpack.save(), 60000);
+
 // ---------------------------------------------------------------- weather + air quality (Open-Meteo, free)
 
 every(10 * 60000, 'open-meteo', async () => {
   const units = IMPERIAL ? '&temperature_unit=fahrenheit&wind_speed_unit=mph' : '';
   const q = `latitude=${LAT}&longitude=${LON}&timezone=${encodeURIComponent(WX_TZ)}${units}`;
-  const w = await getJSON(`https://api.open-meteo.com/v1/forecast?${q}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day&hourly=temperature_2m,precipitation_probability,weather_code&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code,sunrise,sunset&forecast_days=4`);
+  const w = await getJSON(`https://api.open-meteo.com/v1/forecast?${q}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day&hourly=temperature_2m,precipitation_probability,weather_code,apparent_temperature,relative_humidity_2m,wind_speed_10m,is_day&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code,sunrise,sunset&forecast_days=4`);
   // hourly times are local wall-clock strings; convert with the offset Open-Meteo reports
   const toMs = (t) => Date.parse(t + ':00Z') - w.utc_offset_seconds * 1000;
   const nowIdx = Math.max(0, w.hourly.time.findIndex((t) => toMs(t) > Date.now()) - 1);
@@ -267,6 +273,16 @@ every(10 * 60000, 'open-meteo', async () => {
     sunrise: w.daily.sunrise[0], sunset: w.daily.sunset[0],
     at: Date.now(),
   };
+  // the car copy gets every hour of the four days, so it can show the hour it is in without the hub
+  const h = w.hourly;
+  carpack.forecast({
+    hourly: h.time.map((t, i) => ({
+      at: toMs(t), t, temp: h.temperature_2m[i], app: h.apparent_temperature[i], hum: h.relative_humidity_2m[i],
+      wind: h.wind_speed_10m[i], pop: h.precipitation_probability[i], code: h.weather_code[i], day: h.is_day[i],
+    })),
+    daily: state.weather.daily,
+    at: state.weather.at,
+  });
 });
 
 every(15 * 60000, 'open-meteo-aqi', async () => {
@@ -768,7 +784,7 @@ const server = http.createServer((req, res) => {
     if (!fromCarThing(req)) { res.writeHead(403); return res.end(); }
     const q = url.searchParams;
     translateLyrics(q.get('t'), q.get('a'), q.get('al'), q.get('d'))
-      .then((l) => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(l)); })
+      .then((l) => { carpack.vi(q.get('t'), q.get('a'), l); res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(l)); })
       .catch(() => { res.writeHead(502); res.end('null'); });
     return;
   }
@@ -778,7 +794,7 @@ const server = http.createServer((req, res) => {
     if (!fromCarThing(req)) { res.writeHead(403); return res.end(); }
     const q = url.searchParams;
     lyrics(q.get('t'), q.get('a'), q.get('al'), q.get('d'))
-      .then((l) => { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'max-age=86400' }); res.end(JSON.stringify(l)); })
+      .then((l) => { carpack.lyrics(q.get('t'), q.get('a'), l); res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'max-age=86400' }); res.end(JSON.stringify(l)); })
       .catch(() => { res.writeHead(502); res.end('null'); });
     return;
   }
@@ -788,7 +804,7 @@ const server = http.createServer((req, res) => {
     if (!fromCarThing(req)) { res.writeHead(403); return res.end(); }
     const q = url.searchParams;
     cover(q.get('app') || '', q.get('t') || '', q.get('a') || '', q.get('al') || '')
-      .then((a) => { res.writeHead(200, { 'Content-Type': a.type, 'Cache-Control': 'max-age=86400' }); res.end(a.buf); })
+      .then((a) => { carpack.cover(q.get('t'), q.get('a'), a); res.writeHead(200, { 'Content-Type': a.type, 'Cache-Control': 'max-age=86400' }); res.end(a.buf); })
       .catch(() => { res.writeHead(404); res.end(); });
     return;
   }
