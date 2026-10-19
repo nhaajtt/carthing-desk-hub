@@ -80,7 +80,7 @@ hub/public/
   i18n.js      English / Vietnamese strings, tr() and the locale for dates
   app.js       rendering, controls, quick menu, orientation, News browse/summary, Markets zoom, Calendar
   stage.js     Mei & Nhat: actors, scene toolkit, 7 scenes
-  torch.js     desk clock: a torch on a stone wall drawn as dots (fire automaton in JS, WebGL draws the dots)
+  torch.js     desk clock: a torch on a stone wall drawn as ASCII (fire automaton in JS, WebGL draws the characters)
   style.css    layout
   theme.css    "Mei's night market" look, motion, portrait layout
 ```

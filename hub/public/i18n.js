@@ -98,7 +98,7 @@ const VI = {
   'Answers show on the Car Thing only.': 'Câu trả lời chỉ hiện trên Car Thing.',
 
   // quick menu
-  Brightness: 'Độ sáng', Restart: 'Khởi động lại', 'Shut down': 'Tắt máy', Language: 'Ngôn ngữ',
+  Brightness: 'Độ sáng', Restart: 'Khởi động lại', 'Shut down': 'Tắt máy', Clock: 'Đồng hồ', Language: 'Ngôn ngữ',
   Landscape: 'Ngang', 'Portrait ↻': 'Dọc ↻', 'Upside down': 'Lộn ngược', 'Portrait ↺': 'Dọc ↺',
   'Turn the knob to change brightness · press the knob or Back when done': 'Vặn núm để chỉnh độ sáng · bấm núm hoặc Back khi xong',
   'Press the knob again to restart · Back to cancel': 'Bấm núm lần nữa để khởi động lại · Back để huỷ',

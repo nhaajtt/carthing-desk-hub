@@ -63,6 +63,7 @@ func startAMS(chars map[string]dbus.ObjectPath) bool {
 		setMedia(ent, attr, val)
 	}); err != nil {
 		log.Printf("ams update: %v", err)
+		unnotify(rc)
 		return false
 	}
 	// player: name, playback info, volume. track: artist, album, title, duration

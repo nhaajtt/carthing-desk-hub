@@ -534,10 +534,11 @@ body[data-orient="flip"] #app { transform: rotate(180deg); }
 body.night-dark *, body.night-dark *::before, body.night-dark *::after { animation-play-state: paused !important; }
 .portrait .nc-up .upd { display: none; }
 
-/* ---------- weather: °C / °F hint, quick menu with six tiles (one row landscape, two rows portrait) */
+/* ---------- weather: °C / °F hint, quick menu with seven tiles (one row landscape, three rows portrait) */
 .wx-unit { margin-top: 6px; font-size: 12px; color: var(--dim); }
-.ov-tiles { gap: 14px; }
-.ov-tile { width: 116px; height: 116px; }
+.ov-tiles { gap: 10px; }
+.ov-tile { width: 100px; height: 100px; gap: 8px; font-size: 14px; }
+.ov-tile svg { width: 44px; height: 44px; }
 .portrait .ov-tile { width: 128px; height: 128px; }
 .portrait .ov-tiles { grid-template-columns: repeat(3, 128px); }
 .srv .head .state { white-space: nowrap; flex: none; }

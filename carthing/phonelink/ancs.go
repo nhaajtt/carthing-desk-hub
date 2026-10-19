@@ -69,6 +69,7 @@ func startANCS(chars map[string]dbus.ObjectPath) bool {
 	}
 	if err := notify(src, a.source); err != nil {
 		log.Printf("ancs source: %v", err)
+		unnotify(dat)
 		return false
 	}
 	ancs = a

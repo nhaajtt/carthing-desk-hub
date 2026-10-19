@@ -305,10 +305,28 @@ func startSessions(dev dbus.ObjectPath, m managed) {
 		}
 	}
 	// each one starts once per connection; one that is missing now (notifications not shared yet) starts
-	// later, when its service shows up
-	startANCS(chars)
-	startAMS(chars)
+	// later, when its service shows up. One that fails (the phone sometimes refuses a subscription right
+	// after it reconnects) is tried again, sooner at first, then once a minute
+	if startANCS(chars) && startAMS(chars) {
+		retryN = 0
+		return
+	}
+	if retryT == nil {
+		wait := min(5*time.Second<<retryN, time.Minute)
+		retryN = min(retryN+1, 4)
+		retryT = time.AfterFunc(wait, func() {
+			setupMu.Lock()
+			retryT = nil
+			setupMu.Unlock()
+			syncPhone()
+		})
+	}
 }
+
+var (
+	retryT *time.Timer // under setupMu
+	retryN uint
+)
 
 func stopSessions() {
 	setupMu.Lock()
@@ -319,6 +337,7 @@ func stopSessions() {
 	mu.Unlock()
 	stopANCS()
 	stopAMS()
+	retryN = 0
 }
 
 // GATT helpers
@@ -336,7 +355,19 @@ func notify(p dbus.ObjectPath, f func([]byte)) error {
 	for _, b := range replay {
 		f(b)
 	}
-	return conn.Object(bluez, p).Call(ifChar+".StartNotify", 0).Err
+	err := conn.Object(bluez, p).Call(ifChar+".StartNotify", 0).Err
+	if err != nil {
+		unnotify(p)
+	}
+	return err
+}
+
+// unnotify undoes notify, so the next attempt starts clean (values arriving meanwhile go to early again)
+func unnotify(p dbus.ObjectPath) {
+	mu.Lock()
+	delete(onValue, p)
+	mu.Unlock()
+	conn.Object(bluez, p).Call(ifChar+".StopNotify", 0)
 }
 
 func write(p dbus.ObjectPath, b []byte) error {

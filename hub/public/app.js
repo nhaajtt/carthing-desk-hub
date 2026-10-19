@@ -1058,7 +1058,8 @@ function ambientCheck() {
   const p = musicPos();
   const busy = setMode || PH.call || PH.pairing || screenOff() || $('digest').classList.contains('on')
     || (page === MUSIC && p && p.playing) || (S && S.voice && ['starting', 'listening', 'thinking', 'answer'].includes(S.voice.phase));
-  const want = !!S && !busy && Date.now() - lastInput > AMBIENT_MS;
+  const want = !!S && (amForced ? !(PH.call || PH.pairing || screenOff()) : !busy && Date.now() - lastInput > AMBIENT_MS);
+  if (amForced && !want) amForced = false; // a call or the screen going off ends it
   if (want !== amb.classList.contains('on')) {
     amTimeKey = '';
     amb.classList.toggle('on', want);
@@ -1066,9 +1067,17 @@ function ambientCheck() {
   }
   if (want) renderAmbient();
 }
-let amTimeKey = '';
+let amTimeKey = '', amForced = false;
+const ambientOn = () => $('ambient').classList.contains('on');
+// the quick menu's Clock tile: straight to the desk clock; any touch or key leaves it as usual
+function showAmbient() {
+  setModeTo(null);
+  amForced = true;
+  ambientCheck();
+}
 function leaveAmbient() {
   const amb = $('ambient');
+  amForced = false;
   if (!amb.classList.contains('on')) return false;
   amb.classList.remove('on');
   window.deskTorch.stop();
@@ -1607,8 +1616,8 @@ function askToggle() {
 // ---------------------------------------------------------------- quick menu (round settings button, top right)
 
 let setMode = null; // null (closed) | 'menu' | 'bright' | 'confirm'
-let setIdx = 0;     // 0 brightness, 1 restart, 2 shut down, 3 rotate, 4 language, 5 iPhone
-const TILES = 6;
+let setIdx = 0;     // 0 brightness, 1 restart, 2 shut down, 3 rotate, 4 language, 5 iPhone, 6 desk clock
+const TILES = 7;
 let setTimer = null;
 
 function renderSettings() {
@@ -1652,7 +1661,7 @@ function settingsKnob(step) {
 }
 
 function settingsPress() {
-  if (setMode === 'menu') { if (setIdx === 3) return rotate(); if (setIdx === 4) return switchLang(); if (setIdx === 5) return phoneMenu(); return setModeTo(setIdx === 0 ? 'bright' : 'confirm'); }
+  if (setMode === 'menu') { if (setIdx === 3) return rotate(); if (setIdx === 4) return switchLang(); if (setIdx === 5) return phoneMenu(); if (setIdx === 6) return showAmbient(); return setModeTo(setIdx === 0 ? 'bright' : 'confirm'); }
   if (setMode === 'bright') return setModeTo('menu');
   if (setMode === 'confirm') confirmed();
 }
@@ -1685,6 +1694,7 @@ $('overlay').addEventListener('click', (e) => {
     if (i === 3) return rotate();
     if (i === 4) return switchLang();
     if (i === 5) return phoneMenu();
+    if (i === 6) return showAmbient();
     return setModeTo(i === 0 ? 'bright' : 'confirm');
   }
   if (!e.target.closest('.ov-panel')) setModeTo(null);
@@ -1928,9 +1938,11 @@ addEventListener('click', (e) => { if (screenOff()) { e.stopPropagation(); e.pre
 
 addEventListener('keydown', (e) => {
   if (nightGate()) return;
+  const k = e.key;
+  // on the desk clock the knob feeds the torch; anything else leaves it
+  if (ambientOn() && /^Arrow/.test(k)) return window.deskTorch.fuel(k === 'ArrowRight' || k === 'ArrowDown' ? 1 : -1);
   // the first key only closes the "while you were away" card, or leaves immersive Music
   if (hideDigest() | leaveImmersive()) return;
-  const k = e.key;
   const isBack = k === 'Escape' || k === 'Backspace' || k === 'BrowserBack' || k === 'GoBack';
   // a ringing call or an open pairing window owns the buttons until it is over
   if (PH.call) {
@@ -2000,7 +2012,7 @@ addEventListener('wheel', (e) => {
   if (t - wheelAt > 400) wheelAcc = 0;
   wheelAt = t;
   wheelAcc += d;
-  if (Math.abs(wheelAcc) >= 1) { const dir = wheelAcc > 0 ? 1 : -1; wheelAcc = 0; if (!nightGate() && !(hideDigest() | leaveImmersive())) knob(dir); }
+  if (Math.abs(wheelAcc) >= 1) { const dir = wheelAcc > 0 ? 1 : -1; wheelAcc = 0; if (ambientOn()) window.deskTorch.fuel(dir); else if (!nightGate() && !(hideDigest() | leaveImmersive())) knob(dir); }
 }, { passive: true });
 
 // touch: swipe left/right to change page; tap to talk to Mei or start/pause the focus timer.

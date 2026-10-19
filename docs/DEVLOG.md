@@ -729,39 +729,58 @@ Những thứ đã thử mà không giúp: rasterize bằng CPU thay vì GPU (11
 
 Phần còn lại: `nocturned` dùng khoảng 38% một lõi (nghe từ khoá như trước, và kết nối iAP2 với iPhone), và GPU một lõi.
 
-### Đồng hồ khi rảnh: ngọn đuốc vẽ bằng chấm
+### Đồng hồ khi rảnh: ngọn đuốc vẽ bằng ASCII
 
-Màn hình đồng hồ đã qua ba bản. Bản đầu theo phong cách vũ trụ (cực quang, sao, sao chổi), bản thứ hai là nắng chiều qua rèm. Người dùng muốn kiểu **ảnh ASCII**, cụ thể là kiểu "DOTS" của các công cụ đổi ảnh thành chữ: mỗi ô terminal là một chấm, chấm to nhỏ theo độ sáng. Cảnh là **một ngọn đuốc cháy trong bóng tối**.
+Màn hình đồng hồ đã qua mấy bản:
 
-* **Lưới:** ô 6×10 px như ô chữ terminal, khoảng 6.400 ô. Có 5 cỡ chấm (`.` `·` `•` `●` hoặc trống).
-* **Lửa:** thuật toán lửa cổ điển (lửa của Doom bản PSX). Hàng dưới cùng là nguồn nhiệt ở đầu đuốc. Mỗi khung, mỗi ô lấy nhiệt của ô bên dưới, trừ một lượng ngẫu nhiên, lệch sang trái/phải theo "gió".
-* **Ánh lửa:**
-  * Độ sáng của cả bức tường đi theo lượng lửa ở phần trên ngọn lửa, nên lửa bùng thì tường sáng lên, đúng kiểu đuốc chập chờn.
-  * Tường là gạch đá (hàng gạch so le, mạch vữa tối), sáng giảm theo khoảng cách tới ngọn lửa.
-  * Tàn lửa bay lên rồi tắt.
-* **Con số:** vẽ một lần mỗi phút lên canvas ẩn bằng font Bricolage, rồi lấy mẫu ở tâm từng ô thành một mặt nạ ô.
-  * Hai dấu chấm là than hồng, cháy âm ỉ.
-  * Khi đổi phút, lửa lan từ phía đuốc dọc theo con số: số cũ cháy rụi, số mới hiện ra đỏ rực rồi nguội dần.
-  * Khi vào màn hình, đuốc bén lửa trong 1,6 giây rồi con số mới cháy hiện ra.
-* **Ngày và thông tin:** chữ HTML kiểu terminal (`> …` và con trỏ nhấp nháy). Phần tường sau chữ được làm tối.
+* Phong cách vũ trụ (cực quang, sao, sao chổi).
+* Nắng chiều qua rèm.
+* Lưới chấm: người dùng gửi một ảnh ASCII làm mẫu.
+* Bản hiện tại: **ASCII thật**, với cảnh **một ngọn đuốc cháy trong bóng tối**. Bản lưới chấm bị chê "chỉ toàn chấm nhỏ, chưa phải ASCII", nên giờ mỗi ô là một ký tự.
 
-Kiểu này không thể "vẽ một lần rồi để GPU dịch chuyển" như hai bản trước, vì chấm nào cũng đổi liên tục. Cách làm:
+**Lưới và ký tự.** Ô 8×14 px như ô chữ terminal: 100×35 ô khi màn hình ngang. Mỗi loại ô có một dãy ký tự xếp từ thưa đến đặc:
 
-* JS tính một giá trị cho mỗi ô, **30 lần mỗi giây** (không phải 60; với chấm thì 30 khung vẫn tự nhiên). Kết quả nằm trong một mảng `Uint8Array` RGBA: độ sáng, loại ô (tường, lửa, số, gỗ), nhiệt.
-* Mảng được đẩy lên GPU thành một texture nhỏ (`texSubImage2D`). Một shader WebGL vẽ cả màn hình trong một lượt, mỗi pixel tự biết mình thuộc ô nào và cách tâm chấm bao xa.
-* Không có WebGL thì vẽ chấm vuông bằng canvas 2D.
+| Loại ô | Dãy ký tự |
+|---|---|
+| Tường | ` .,:;-=+*#` |
+| Lửa | ` .,^*o%&#@` |
+| Con số | ` :+*%##@@@` |
+| Cán đuốc | ` .:|||##HH` |
 
-Đo trên Car Thing:
+**Lửa.** Dùng thuật toán lửa cổ điển (lửa của Doom bản PSX):
+* hàng dưới cùng là nguồn nhiệt ở đầu đuốc;
+* mỗi khung, mỗi ô lấy nhiệt của ô bên dưới, trừ một lượng ngẫu nhiên, lệch trái hoặc phải theo "gió";
+* **vặn núm là thêm hoặc bớt củi** (từ 0,3 đến 1,8, có lưu lại). Lửa cao hơn và rộng hơn, ánh sáng đi xa hơn, tàn lửa bay nhiều hơn. Bấm núm, nút Back hoặc chạm thì thoát như cũ.
+
+**Ánh lửa.**
+* Độ sáng cả bức tường đi theo lượng lửa ở nửa dưới ngọn lửa, nên lửa bùng thì tường sáng lên.
+* Tường là gạch đá: hàng gạch so le, mạch vữa tối, sáng giảm theo khoảng cách tới ngọn lửa.
+* Tàn lửa bay lên rồi tắt.
+
+**Con số.** Vẽ một lần mỗi phút lên canvas ẩn bằng font Bricolage, rồi lấy mẫu ở tâm từng ô thành mặt nạ.
+* Hai dấu chấm là than hồng.
+* Khi đổi phút, lửa lan từ phía đuốc dọc theo con số: số cũ cháy rụi, số mới hiện ra đỏ rực rồi nguội dần.
+
+**Ngày và thông tin.** Chữ HTML kiểu terminal (`> …` và con trỏ nhấp nháy). Phần tường sau chữ được làm tối.
+
+**Mở ngay.** Menu cài đặt (nút tròn) có thêm ô **Đồng hồ** để vào thẳng màn hình này, không phải chờ 10 phút.
+
+**Cách vẽ.** Kiểu này không thể "vẽ một lần rồi để GPU dịch chuyển" như các bản trước, vì ký tự nào cũng đổi liên tục.
+* JS tính một giá trị cho mỗi ô, **30 lần mỗi giây**. Kết quả là một mảng `Uint8Array` RGBA: độ sáng, loại ô, nhiệt.
+* Mảng được đẩy lên GPU thành một texture nhỏ.
+* Một shader WebGL vẽ cả màn hình trong một lượt. Mỗi pixel tự biết mình thuộc ô nào, chọn ký tự theo độ sáng, rồi đọc hình ký tự từ một **bảng ký tự** vẽ sẵn một lần (font DejaVu Sans Mono đậm).
+* Không có WebGL thì vẽ bằng `fillText` của canvas 2D.
+
+**Đo trên Car Thing.**
 
 | Đo | Kết quả |
 |---|---|
-| Tốc độ | 30–33 khung/giây, khoảng 2% khung rớt |
-| JS | trung bình 1,2 ms mỗi khung, khoảng 7,5% một lõi |
-| CPU cả máy | 26% (gồm cả `nocturned`) |
+| Tốc độ | khoảng 30 khung/giây, rớt 2–4% |
+| JS | khoảng 6–7,5% một lõi |
 | Nhiệt độ | khoảng 50 °C |
-| Vòng chuyển trang | không đổi (7,1%) |
+| Vòng chuyển trang | không đổi |
 
-Bản nắng chiều, để tham khảo: rèm là một lớp lớn gần gấp đôi màn hình vừa trượt vừa xoay 1°, rớt 6–7% khung. Bỏ phần xoay thì còn 1,2–2,4%: xoay một lớp lớn như vậy buộc GPU lấy mẫu lại cả màn hình mỗi khung.
+Bản nắng chiều, để tham khảo: rèm là một lớp lớn gần gấp đôi màn hình, vừa trượt vừa xoay 1°, nên rớt 6–7% khung. Bỏ phần xoay thì còn 1,2–2,4%: xoay một lớp lớn như vậy buộc GPU lấy mẫu lại cả màn hình mỗi khung.
 
 ## 28. Bảng tổng hợp lỗi
 
@@ -804,6 +823,7 @@ Bản nắng chiều, để tham khảo: rèm là một lớp lớn gần gấp 
 | 32 | CI đỏ vì định dạng Go | Thêm hằng số làm lệch cột căn | Script build chạy `go vet` và cảnh báo `gofmt` |
 | 33 | Rớt khung tăng lên 8–10% sau khi thêm trang | `pointer-events` kế thừa trên trang, quy tắc `*`, `setHTML` thay cả khối, `width` của thanh đo, flex | `z-index`, quy tắc hẹp, ghép markup, `scaleX`, khối thường |
 | 34 | Trang iPhone rớt 6–13 khung khi trượt vào | Ô bo góc có nền và nét đứt đắt trên GPU Mali một lõi | Chữ cái tô màu, đường liền |
+| 35 | Trang iPhone trống hàng giờ, nhạc từ iPhone cũng mất, dù vẫn "đã kết nối" | Ngay sau khi iPhone nối lại, đăng ký nhận thông báo bị từ chối một lần (ATT 0x0e); phonelink không thử lại cho tới lần nối sau | Thử lại sau 5, 10, 20, 40 giây, rồi mỗi phút; lần thử hỏng thì huỷ phần đã đăng ký, để giá trị đến trong lúc chờ vào lại hàng đợi phát lại |
 
 ## 29. Những điều rút ra
 
