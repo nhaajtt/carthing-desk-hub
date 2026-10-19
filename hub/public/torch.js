@@ -3,15 +3,18 @@
 // a terminal-like grid shows one character, chosen by how bright that spot is (" .,:;-=+*#" on the wall,
 // " .,^*o%&#@" in the fire). The flame is the classic "fire" cellular automaton, its light flickers with how
 // much fire there is, sparks rise, and the digits catch fire when the minute changes. Turning the knob feeds
-// the fire or lets it die down. JS works out one value per cell 30 times a second; the GPU draws every
-// character in one pass from a small texture and a glyph atlas.
+// the fire or lets it die down; all the way down it goes out and only smokes, and blowing into the Car Thing
+// brings it back (phonelink measures how hard, see blow.go), the harder and longer the bigger. JS works out
+// one value per cell 30 times a second; the GPU draws every character in one pass from a small texture and a
+// glyph atlas.
 (() => {
   const CW = 8, CH = 14;           // cell size in px, a terminal cell
-  const FW = 15, FH = 26;          // fire grid, in cells
+  const FW = 23, FH = 40;          // fire grid, in cells
+  const MAX_FUEL = 3, STEP = 0.15;  // the knob: 20 steps from out to a blaze
   const FPS = 30;
   // kinds of cell, stored in the texture's green channel; each has its own row of characters
-  const WALL = 0, FIRE = 1, DIGIT = 2, WOOD = 3;
-  const RAMPS = [' .,:;-=+*#', ' .,^*o%&#@', ' :+*%##@@@', ' .:|||##HH'];
+  const WALL = 0, FIRE = 1, DIGIT = 2, WOOD = 3, SMOKE = 4;
+  const RAMPS = [' .,:;-=+*#', ' .,^*o%&#@', ' :+*%##@@@', ' .:|||##HH', " .,'`~:;()"];
   const N = 10;
 
   const VS = 'attribute vec2 p; void main() { gl_Position = vec4(p, 0.0, 1.0); }';
@@ -36,15 +39,18 @@ void main() {
   if (kind == 1.0) col = fire(heat);
   else if (kind == 2.0) col = heat > 0.0 ? fire(heat) : mix(vec3(0.6, 0.47, 0.34), vec3(1.0, 0.93, 0.8), lum);
   else if (kind == 3.0) col = vec3(0.66, 0.4, 0.2) * (0.35 + 0.9 * lum);
+  else if (kind == 4.0) col = vec3(0.62, 0.58, 0.55) * (0.45 + 0.55 * lum);
   gl_FragColor = vec4(mix(vec3(0.055, 0.045, 0.04), col, a), 1.0);
 }`;
 
   let canvas, gl, prog, tex, ctx2d, raf = 0, last = 0, t0 = 0;
   let W = 0, H = 0, cols = 0, rows = 0;
-  let px, wallTone, lightDist, fireGrid, mask, oldMask, colon, cutout, sparks = [];
+  let px, wallTone, lightDist, fireGrid, mask, oldMask, colon, cutout, sparks = [], smoke = [];
+  let blow = 0, blowAt = -10, armedAt = 0, listening = false, listenSent = 0, blowES = null;
   let fx = 0, fy = 0, burnAt = -10, burnFrom = 0, burnSpan = 1, text = { hm: '', ap: '' };
   let fuel = 1;
-  try { fuel = Math.min(1.8, Math.max(0.3, Number(localStorage.getItem('torchFuel')) || 1)); } catch {}
+  try { const f = localStorage.getItem('torchFuel'); if (f != null) fuel = Math.min(MAX_FUEL, Math.max(0, Number(f) || 0)); } catch {}
+  const saveFuel = () => { try { localStorage.setItem('torchFuel', String(Math.round(fuel * 100) / 100)); } catch {} };
   const frac = (v) => v - Math.floor(v);
 
   function setup() {
@@ -78,7 +84,7 @@ void main() {
     fireGrid = new Float32Array(FW * FH);
     mask = new Uint8Array(cols * rows); oldMask = new Uint8Array(cols * rows); colon = new Uint8Array(cols * rows);
     cutout = new Uint8Array(cols * rows);
-    sparks = [];
+    sparks = []; smoke = [];
     if (text.hm) drawText(false);
     markInfo();
     if (gl) {
@@ -152,11 +158,13 @@ void main() {
   }
 
   function stepFire(t, ignite) {
-    const wind = Math.sin(t * 0.7) * 0.35 + Math.sin(t * 2.3) * 0.15;
-    const half = Math.round(1.5 + 2.5 * fuel), decay = 0.17 / fuel;
+    // blowing pushes the flame over as well as feeding it
+    const wind = Math.sin(t * 0.7) * 0.35 + Math.sin(t * 2.3) * 0.15 + blow * 1.2;
+    const half = Math.round(1 + 2.6 * fuel), decay = 0.17 / Math.max(fuel, 0.15);
+    const out = fuel < 0.05;
     for (let x = 0; x < FW; x++) {
-      const inHead = Math.abs(x - (FW >> 1)) <= half;
-      fireGrid[(FH - 1) * FW + x] = inHead ? ignite * (0.85 + 0.15 * Math.random()) : 0;
+      const inHead = !out && Math.abs(x - (FW >> 1)) <= half;
+      fireGrid[(FH - 1) * FW + x] = inHead ? ignite * Math.min(1, 0.6 + fuel * 0.4) * (0.85 + 0.15 * Math.random()) : 0;
     }
     for (let y = 0; y < FH - 1; y++) for (let x = 0; x < FW; x++) {
       const r = Math.random();
@@ -165,7 +173,10 @@ void main() {
       fireGrid[y * FW + dx] = Math.max(0, src - r * decay);
     }
     // sparks leave the top of the flame, more of them the bigger the fire
-    if (Math.random() < 0.18 * fuel * ignite) sparks.push({ x: (fx + (Math.random() - 0.5) * 4) * CW, y: (fy - 6 * fuel) * CH, vx: (Math.random() - 0.5) * 30 + wind * 40, vy: -(70 + Math.random() * 90 * fuel), life: 1, fade: 0.45 + Math.random() * 0.5 });
+    if (Math.random() < 0.18 * fuel * ignite) sparks.push({ x: (fx + (Math.random() - 0.5) * 4) * CW, y: (fy - 6 * Math.min(fuel, 2)) * CH, vx: (Math.random() - 0.5) * 30 + wind * 40, vy: -(70 + Math.random() * 90 * fuel), life: 1, fade: 0.45 + Math.random() * 0.5 });
+    // smoke: a thick plume from the cup once the fire is out, a thin one above a small flame
+    const rate = out ? 0.45 : fuel < 0.6 ? 0.2 : 0.05;
+    if (Math.random() < rate) smoke.push({ x: (fx + (Math.random() - 0.5) * 3) * CW, y: (out ? fy : fy - 4 * fuel - 2) * CH, vx: (Math.random() - 0.5) * 10, vy: -(22 + Math.random() * 22), life: 1, fade: 0.18 + Math.random() * 0.15, seed: Math.random() * 6 });
   }
 
   function frame(now) {
@@ -180,8 +191,9 @@ void main() {
     let e = 0;
     const band = FW * Math.round(FH / 2);
     for (let i = FW * FH - band; i < FW * FH; i++) e += fireGrid[i];
-    const light = ignite * (0.45 + Math.min(0.65, e / band * 1.4)) * (0.92 + 0.08 * Math.sin(t * 9.7) * Math.sin(t * 3.1));
-    const reach = 1 / (0.45 + 0.55 * fuel);
+    const embers = 0.1 + 0.04 * Math.sin(t * 1.7);
+    const light = Math.max(embers, ignite * (0.12 + 0.33 * Math.min(1, fuel) + Math.min(0.75, e / band * 1.4)) * (0.92 + 0.08 * Math.sin(t * 9.7) * Math.sin(t * 3.1)));
+    const reach = 1 / (0.4 + 0.5 * Math.max(fuel, 0.2));
 
     const n = cols * rows;
     for (let i = 0; i < n; i++) {
@@ -207,6 +219,8 @@ void main() {
     // the torch: an iron cup, a wooden handle and a bracket on the wall
     const put = (x, y, kind, lum, heat = 0) => { if (x >= 0 && y >= 0 && x < cols && y < rows) { const i = (y * cols + x) * 4; px[i] = Math.min(255, lum * 255); px[i + 1] = kind; px[i + 2] = Math.min(255, heat * 255); } };
     for (let y = fy + 1; y <= fy + 2; y++) for (let x = fx - 3 + (y - fy - 1); x <= fx + 3 - (y - fy - 1); x++) put(x, y, WOOD, 0.45 + light * 0.4);
+    // embers in the cup, glowing on their own when the fire is out
+    if (fuel < 0.05) for (let x = fx - 2; x <= fx + 2; x++) { const h = 0.25 + 0.2 * Math.sin(t * 2.1 + x * 1.7) + 0.1 * Math.random(); put(x, fy, FIRE, h, h); }
     for (let y = fy + 3; y <= fy + 12; y++) for (let x = fx - 1; x <= fx + 1; x++) put(x, y, WOOD, light * (x === fx - 1 ? 0.95 : 0.6) * (1 - (y - fy) / 22));
     for (let x = fx - 3; x <= fx + 3; x++) put(x, fy + 6, WOOD, light * 0.55);
     // the flame on top
@@ -221,7 +235,36 @@ void main() {
       if (s.life <= 0 || s.y < 0) { sparks.splice(k, 1); continue; }
       put(Math.floor(s.x / CW), Math.floor(s.y / CH), FIRE, s.life, s.life * 0.9);
     }
+    for (let k = smoke.length - 1; k >= 0; k--) {
+      const s = smoke[k];
+      s.x += (s.vx + Math.sin(t * 1.3 + s.seed) * 14 + blow * 60) * dt; s.y += s.vy * dt; s.life -= s.fade * dt;
+      if (s.life <= 0 || s.y < 0) { smoke.splice(k, 1); continue; }
+      const cx = Math.floor(s.x / CW), cy = Math.floor(s.y / CH);
+      if (cx >= 0 && cy >= 0 && cx < cols && cy < rows && px[(cy * cols + cx) * 4 + 1] !== DIGIT) put(cx, cy, SMOKE, s.life * 0.85);
+    }
+    listen(t);
     draw();
+  }
+
+  // the microphones are only wanted while the fire is out (for 5 minutes after the clock opens or the knob
+  // turns, so the wake word is not off for good) and for a few seconds after the last puff
+  function listen(t) {
+    if (blow > 0) {
+      fuel = Math.min(MAX_FUEL, fuel + blow * 0.9 / FPS);
+      blowAt = t;
+    }
+    const want = onCarThing && ((fuel < 0.05 && t - armedAt < 300) || t - blowAt < 6);
+    if (want && (!listening || t - listenSent > 4)) { blowPost(true); listenSent = t; }
+    else if (!want && listening) { blowPost(false); saveFuel(); }
+    listening = want;
+  }
+  function blowPost(on) {
+    fetch(PHONELINK + '/blow', { method: 'POST', body: JSON.stringify({ on }) }).catch(() => {});
+  }
+  function blowOpen() {
+    if (!onCarThing || blowES) return;
+    blowES = new EventSource(PHONELINK + '/blow/events');
+    blowES.onmessage = (e) => { blow = Math.max(0, Math.min(1, Number(e.data) || 0)); };
   }
 
   function draw() {
@@ -274,9 +317,16 @@ void main() {
       cancelAnimationFrame(raf);
       t0 = performance.now() / 1000; last = 0;
       setup();
+      armedAt = t0;
+      blowOpen();
       raf = requestAnimationFrame(frame);
     },
-    stop() { cancelAnimationFrame(raf); raf = 0; },
+    stop() {
+      cancelAnimationFrame(raf); raf = 0;
+      if (listening) { blowPost(false); saveFuel(); listening = false; }
+      if (blowES) { blowES.close(); blowES = null; }
+      blow = 0;
+    },
     // called when the minute changes (and once on start); the new digits catch fire
     time(hm, ap) {
       text = { hm, ap };
@@ -287,8 +337,10 @@ void main() {
     info() { if (W) markInfo(); },
     // the knob: feed the fire or let it die down
     fuel(step) {
-      fuel = Math.min(1.8, Math.max(0.3, Math.round((fuel + step * 0.1) * 10) / 10));
-      try { localStorage.setItem('torchFuel', String(fuel)); } catch {}
+      fuel = Math.min(MAX_FUEL, Math.max(0, Math.round((fuel + step * STEP) / STEP) * STEP));
+      if (fuel < 0.05) fuel = 0;
+      armedAt = performance.now() / 1000;
+      saveFuel();
     },
   };
 })();

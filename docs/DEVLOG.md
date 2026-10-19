@@ -750,7 +750,12 @@ Màn hình đồng hồ đã qua mấy bản:
 **Lửa.** Dùng thuật toán lửa cổ điển (lửa của Doom bản PSX):
 * hàng dưới cùng là nguồn nhiệt ở đầu đuốc;
 * mỗi khung, mỗi ô lấy nhiệt của ô bên dưới, trừ một lượng ngẫu nhiên, lệch trái hoặc phải theo "gió";
-* **vặn núm là thêm hoặc bớt củi** (từ 0,3 đến 1,8, có lưu lại). Lửa cao hơn và rộng hơn, ánh sáng đi xa hơn, tàn lửa bay nhiều hơn. Bấm núm, nút Back hoặc chạm thì thoát như cũ.
+* **vặn núm là thêm hoặc bớt củi**: 20 nấc từ tắt tới lửa lớn (0 đến 3, có lưu lại). Lửa cao hơn và rộng hơn, ánh sáng đi xa hơn, tàn lửa bay nhiều hơn. Bấm núm, nút Back hoặc chạm thì thoát như cũ.
+* **vặn về 0, lửa tắt**: chỉ còn than hồng le lói trong chén và một cột khói (các ký tự `.,'~:;()`, màu xám) bốc lên, uốn lượn.
+* **thổi vào Car Thing để nhóm lại lửa**, thổi càng mạnh và càng lâu thì lửa càng to; luồng thổi cũng làm lửa và khói nghiêng đi.
+  * phonelink (`blow.go`) đọc micro bằng `arecord`, mỗi 40 ms tính độ lớn (dB) so với tiếng ồn nền của phòng (tự học dần, khoảng -61 dB), rồi gửi **một con số 0..1** cho trang qua `/blow/events` trên `127.0.0.1`. Âm thanh không được ghi lại.
+  * Phải to hơn nền 25 dB (và trên -34 dB) liên tục 240 ms mới tính là thổi, để một tiếng nói hay tiếng gõ không làm lửa bùng. Log ghi độ lớn mỗi lần thổi để chỉnh ngưỡng.
+  * `nocturned` giữ micro cho từ khoá, nên phải tạm dừng nó, như lúc trang Mei ghi âm. Vì vậy micro chỉ mở khi lửa đã tắt (tối đa 5 phút sau khi mở đồng hồ hoặc vặn núm) và 6 giây sau lần thổi cuối. Trang phải nhắc lại mỗi 4 giây, nếu không 8 giây sau phonelink tự đóng micro và bật lại `nocturned`, kể cả khi phonelink bị tắt.
 
 **Ánh lửa.**
 * Độ sáng cả bức tường đi theo lượng lửa ở nửa dưới ngọn lửa, nên lửa bùng thì tường sáng lên.

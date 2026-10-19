@@ -198,6 +198,11 @@ func serve(addr, origin string) {
 		}
 		return fmt.Errorf("bad key")
 	})
+	post("/blow", func(v map[string]any) error {
+		on, _ := v["on"].(bool)
+		return blowListen(on)
+	})
+	mux.HandleFunc("/blow/events", blowEvents)
 	post("/call", func(v map[string]any) error {
 		switch v["action"] {
 		case "answer":
@@ -253,6 +258,7 @@ func main() {
 	log.SetFlags(log.LstdFlags)
 	takePidfile(*pidfile)
 
+	blowOnExit()
 	go broadcast()
 	go watchSignal()
 	go func() {
