@@ -729,45 +729,39 @@ Những thứ đã thử mà không giúp: rasterize bằng CPU thay vì GPU (11
 
 Phần còn lại: `nocturned` dùng khoảng 38% một lõi (nghe từ khoá như trước, và kết nối iAP2 với iPhone), và GPU một lõi.
 
-### Đồng hồ khi rảnh: nắng chiều trên bàn
+### Đồng hồ khi rảnh: ngọn đuốc vẽ bằng chấm
 
-Bản đầu theo phong cách vũ trụ (cực quang, sao, sao chổi). Người dùng không thích, nên giờ màn hình là **bức tường sau bàn lúc nắng chiều**:
+Màn hình đồng hồ đã qua ba bản. Bản đầu theo phong cách vũ trụ (cực quang, sao, sao chổi), bản thứ hai là nắng chiều qua rèm. Người dùng muốn kiểu **ảnh ASCII**, cụ thể là kiểu "DOTS" của các công cụ đổi ảnh thành chữ: mỗi ô terminal là một chấm, chấm to nhỏ theo độ sáng. Cảnh là **một ngọn đuốc cháy trong bóng tối**.
 
-* Mặt trời ở góc trên bên trái, tỏa sáng và "thở" chậm.
-* Vệt nắng xuyên qua rèm lá sách, trôi nhẹ.
-* Bóng một cành lá đung đưa trong nắng.
-* Bụi lấp lánh lơ lửng.
-* Lens flare.
-* Con số sáng ở cạnh trên trái, đổ bóng dài xuống dưới phải, thỉnh thoảng có ánh nắng lóe ngang qua. Chữ số đổi thì nghiêng và cuộn vào.
+* **Lưới:** ô 6×10 px như ô chữ terminal, khoảng 6.400 ô. Có 5 cỡ chấm (`.` `·` `•` `●` hoặc trống).
+* **Lửa:** thuật toán lửa cổ điển (lửa của Doom bản PSX). Hàng dưới cùng là nguồn nhiệt ở đầu đuốc. Mỗi khung, mỗi ô lấy nhiệt của ô bên dưới, trừ một lượng ngẫu nhiên, lệch sang trái/phải theo "gió".
+* **Ánh lửa:**
+  * Độ sáng của cả bức tường đi theo lượng lửa ở phần trên ngọn lửa, nên lửa bùng thì tường sáng lên, đúng kiểu đuốc chập chờn.
+  * Tường là gạch đá (hàng gạch so le, mạch vữa tối), sáng giảm theo khoảng cách tới ngọn lửa.
+  * Tàn lửa bay lên rồi tắt.
+* **Con số:** vẽ một lần mỗi phút lên canvas ẩn bằng font Bricolage, rồi lấy mẫu ở tâm từng ô thành một mặt nạ ô.
+  * Hai dấu chấm là than hồng, cháy âm ỉ.
+  * Khi đổi phút, lửa lan từ phía đuốc dọc theo con số: số cũ cháy rụi, số mới hiện ra đỏ rực rồi nguội dần.
+  * Khi vào màn hình, đuốc bén lửa trong 1,6 giây rồi con số mới cháy hiện ra.
+* **Ngày và thông tin:** chữ HTML kiểu terminal (`> …` và con trỏ nhấp nháy). Phần tường sau chữ được làm tối.
 
-Màu nắng theo giờ thật:
+Kiểu này không thể "vẽ một lần rồi để GPU dịch chuyển" như hai bản trước, vì chấm nào cũng đổi liên tục. Cách làm:
 
-| Giờ | Ánh sáng |
+* JS tính một giá trị cho mỗi ô, **30 lần mỗi giây** (không phải 60; với chấm thì 30 khung vẫn tự nhiên). Kết quả nằm trong một mảng `Uint8Array` RGBA: độ sáng, loại ô (tường, lửa, số, gỗ), nhiệt.
+* Mảng được đẩy lên GPU thành một texture nhỏ (`texSubImage2D`). Một shader WebGL vẽ cả màn hình trong một lượt, mỗi pixel tự biết mình thuộc ô nào và cách tâm chấm bao xa.
+* Không có WebGL thì vẽ chấm vuông bằng canvas 2D.
+
+Đo trên Car Thing:
+
+| Đo | Kết quả |
 |---|---|
-| 5–8 giờ | hồng nhạt |
-| 8–15 giờ | vàng sáng |
-| 15–19 giờ | cam đậm |
-| Buổi tối | không còn nắng: một quầng đèn bàn từ trên xuống, bụi bay trong quầng đèn |
+| Tốc độ | 30–33 khung/giây, khoảng 2% khung rớt |
+| JS | trung bình 1,2 ms mỗi khung, khoảng 7,5% một lõi |
+| CPU cả máy | 26% (gồm cả `nocturned`) |
+| Nhiệt độ | khoảng 50 °C |
+| Vòng chuyển trang | không đổi (7,1%) |
 
-Theo thời tiết:
-
-* Trời mây: nắng tắt dần rồi sáng lại.
-* Sương mù: nắng nhạt.
-* Mưa: không có nắng, giọt nước đọng trên kính rồi chảy xuống. Có giông thì thêm chớp.
-* Tuyết: tuyết rơi.
-
-Màn hình này không ai thao tác, nhưng nó chạy hàng giờ và là thứ duy nhất trên màn hình, nên giật là thấy ngay, còn chạy nặng thì Car Thing nóng. Mọi thứ được vẽ **một lần**, sau đó chỉ dịch chuyển hoặc đổi độ mờ (`transform`, `opacity`).
-
-Đo trên Car Thing bằng cách tắt từng lớp:
-
-| Thử | Khung rớt |
-|---|---|
-| Vệt nắng (`mask-image`) bọc các lớp đang chuyển động | 6–7,5%: mỗi khung GPU phải làm lại cả vệt nắng |
-| Thay mask bằng một lớp màu tường **tĩnh** phủ lên trên | 5–6% |
-| Rèm là một lớp lớn gần gấp đôi màn hình, vừa trượt vừa **xoay** 1° | xoay buộc GPU lấy mẫu lại cả màn hình mỗi khung |
-| Rèm chỉ trượt, lớp nhỏ lại (120%) | **1,2–2,4%** (buổi tối 1,8%) |
-
-Kết luận: số đo dao động nhiều, mỗi lần đo phải chạy 20–25 giây và lặp lại. Có lần tắt bóng lá cho ra 2 khung rớt, tưởng tìm ra thủ phạm, đo lại thì không phải. Vòng chuyển trang không đổi (6,8%).
+Bản nắng chiều, để tham khảo: rèm là một lớp lớn gần gấp đôi màn hình vừa trượt vừa xoay 1°, rớt 6–7% khung. Bỏ phần xoay thì còn 1,2–2,4%: xoay một lớp lớn như vậy buộc GPU lấy mẫu lại cả màn hình mỗi khung.
 
 ## 28. Bảng tổng hợp lỗi
 

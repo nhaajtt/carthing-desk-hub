@@ -1060,39 +1060,18 @@ function ambientCheck() {
     || (page === MUSIC && p && p.playing) || (S && S.voice && ['starting', 'listening', 'thinking', 'answer'].includes(S.voice.phase));
   const want = !!S && !busy && Date.now() - lastInput > AMBIENT_MS;
   if (want !== amb.classList.contains('on')) {
-    if (want) ambientSky();
+    amTimeKey = '';
     amb.classList.toggle('on', want);
+    if (want) window.deskTorch.start(); else window.deskTorch.stop();
   }
   if (want) renderAmbient();
 }
-// the room is set up once per visit: hour colours, weather, dust and raindrops; after that only CSS loops run
-let amDustDone = false, amTimeKey = '';
-function ambientSky() {
-  amTimeKey = ''; // rebuilt without the roll
-  const amb = $('ambient');
-  const h = Number(dtf('en-GB', { timeZone: tz(), hour: 'numeric', hourCycle: 'h23' }).format(new Date(now())));
-  amb.dataset.tod = h >= 5 && h < 8 ? 'dawn' : h >= 8 && h < 15 ? 'day' : h >= 15 && h < 19 ? 'dusk' : 'night';
-  const c = S.weather && S.weather.current ? S.weather.current.weather_code : 0;
-  amb.dataset.wx = c >= 95 ? 'storm' : c >= 71 && c <= 77 ? 'snow' : c >= 51 ? 'rain' : c === 45 || c === 48 ? 'fog' : c >= 2 ? 'cloudy' : 'clear';
-  if (amDustDone) return;
-  amDustDone = true;
-  const r = (a, b) => a + Math.random() * (b - a);
-  let dust = '';
-  for (let i = 0; i < 24; i++) {
-    dust += `<i style="left:${r(2, 80).toFixed(1)}%;top:${r(2, 80).toFixed(1)}%;--s:${r(3, 8).toFixed(1)}px;--a:amDust${1 + (i % 3)};--d:${r(14, 30).toFixed(1)}s;--dl:${(-r(0, 30)).toFixed(1)}s;--g:${r(3, 8).toFixed(1)}s"><b></b></i>`;
-  }
-  $('amDust').innerHTML = dust;
-  // a few still droplets on the glass (one dot and its shadows), and drops that hang a while, then run down
-  const dots = [];
-  for (let i = 0; i < 60; i++) dots.push(`${r(0, 100).toFixed(1)}vw ${r(0, 100).toFixed(1)}vh 0 ${r(0, 1.5).toFixed(1)}px rgba(255,255,255,${r(0.12, 0.35).toFixed(2)})`);
-  let drops = `<i class="am-dots" style="box-shadow:${dots.join(',')}"></i>`;
-  for (let i = 0; i < 16; i++) drops += `<i style="left:${r(2, 98).toFixed(1)}%;top:${r(-10, 60).toFixed(1)}%;--s:${r(6, 14).toFixed(0)}px;--d:${r(7, 16).toFixed(1)}s;--dl:${(-r(0, 16)).toFixed(1)}s"></i>`;
-  $('amGlass').innerHTML = drops;
-}
+let amTimeKey = '';
 function leaveAmbient() {
   const amb = $('ambient');
   if (!amb.classList.contains('on')) return false;
   amb.classList.remove('on');
+  window.deskTorch.stop();
   return true;
 }
 function renderAmbient() {
@@ -1101,14 +1080,7 @@ function renderAmbient() {
   const hm = parts.filter((p) => p.type === 'hour' || p.type === 'minute' || p.type === 'literal' && /[:.h]/.test(p.value)).map((p) => p.value).join('');
   const ap = (parts.find((p) => p.type === 'dayPeriod') || {}).value || '';
   const key = hm + ap;
-  if (amTimeKey !== key) {
-    // one span per character so only the digits that changed roll in
-    const prev = amTimeKey ? amTimeKey.slice(0, hm.length) : '';
-    const html = [...hm].map((ch, i) => `<span class="${/\d/.test(ch) ? (prev && prev[i] !== ch ? 'roll' : '') : 'co'}">${ch}</span>`).join('') + (ap ? `<span class="ap">${esc(ap)}</span>` : '');
-    amTimeKey = key;
-    $('amTime').innerHTML = html;
-    $('amShine').innerHTML = esc(hm) + (ap ? `<span class="ap">${esc(ap)}</span>` : '');
-  }
+  if (amTimeKey !== key) { amTimeKey = key; window.deskTorch.time(hm, ap); } // torch.js draws the digits
   setText($('amDate'), dtf(loc(), { timeZone: tz(), weekday: 'long', day: 'numeric', month: 'long' }).format(d));
   const bits = [];
   const w = S.weather && S.weather.current;
@@ -1119,7 +1091,8 @@ function renderAmbient() {
   const next = calEvents().filter((e) => !e.allDay && e.start > now()).sort((a, b) => a.start - b.start)[0];
   if (next) bits.push(`<span>📅 ${esc(next.title)} · ${untilText(next.start)}</span>`);
   if (PH.connected && PH.battery != null) bits.push(`<span>📱 ${PH.battery}%</span>`);
-  setHTML($('amRow'), bits.join(''));
+  const row = bits.join('');
+  if ($('amRow')._html !== row) { setHTML($('amRow'), row); window.deskTorch.info(); }
 }
 
 // immersive mode: after a few quiet seconds while music plays, the cover grows and the lyrics take the rest.

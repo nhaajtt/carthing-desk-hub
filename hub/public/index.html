@@ -208,14 +208,8 @@
   <!-- back at the desk: what the iPhone got while you were away -->
   <div class="digest" id="digest"><div class="dg-card" id="dgCard"></div></div>
   <!-- desk clock after 10 quiet minutes -->
-  <div class="ambient" id="ambient">
-    <div class="am-room"><i class="am-sun"></i>
-      <div class="am-beam"><i class="am-blinds"></i><i class="am-leaves"></i><div id="amDust"></div><i class="am-fade"></i><i class="am-cloud"></i></div>
-      <div class="am-flare"><i></i><i></i><i></i></div><div class="am-glass" id="amGlass"></div><i class="am-flash"></i></div>
-    <div class="am-body">
-      <div class="am-clock"><div class="am-time" id="amTime"></div><div class="am-shine" aria-hidden="true"><div class="am-shine-in" id="amShine"></div></div></div>
-      <div class="am-date" id="amDate"></div><div class="am-row" id="amRow"></div>
-    </div>
+  <div class="ambient" id="ambient"><canvas id="amCanvas"></canvas>
+    <div class="am-info" id="amInfo"><div class="am-date" id="amDate"></div><div class="am-row" id="amRow"></div></div>
   </div>
   <div class="alert-banner" id="alertBanner"></div>
   <div class="toast" id="toast"></div>
@@ -223,5 +217,6 @@
 <script src="/i18n.js"></script>
 <script src="/app.js"></script>
 <script src="/stage.js"></script>
+<script src="/torch.js"></script>
 </body>
 </html>

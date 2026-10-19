@@ -681,107 +681,18 @@ body:not(.portrait) .bar-right { gap: 8px; }
 .portrait #srvGrid { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) auto; }
 .portrait .ct-meters { grid-template-columns: 1fr; }
 
-/* ---------- desk clock after 10 quiet minutes: late sun through a blind onto the wall behind the desk.
-   Light comes from the top left. Nothing repaints while it runs: every loop moves or fades a layer that
-   was drawn once (transform and opacity only), so the compositor does all the work. */
-.ambient { position: absolute; inset: 0; z-index: 4; display: none; align-items: center; justify-content: center; overflow: hidden; color: #fff;
-  background: radial-gradient(120% 90% at 10% 0%, var(--wall-hi), var(--wall) 70%);
-  --wall: #2b170f; --wall-hi: #5a3018; --sun: 255, 158, 80; --tint: #ffd2a1; --shade: 40, 14, 0; }
-.ambient.on { display: flex; animation: fade 1.6s ease-out; }
-.ambient[data-tod="dawn"] { --wall: #241a26; --wall-hi: #5b3a45; --sun: 255, 192, 170; --tint: #ffe1d6; --shade: 40, 16, 30; }
-.ambient[data-tod="day"] { --wall: #4a3826; --wall-hi: #a8834f; --sun: 255, 232, 180; --tint: #fff3d9; --shade: 50, 30, 10; }
-.ambient[data-tod="night"] { --wall: #0f0b08; --wall-hi: #2a1d12; --sun: 255, 196, 128; --tint: #ffe0b8; --shade: 0, 0, 0; }
-.ambient[data-wx="rain"], .ambient[data-wx="storm"] { --wall: #161a20; --wall-hi: #2c333d; --sun: 200, 215, 235; --tint: #e6eef8; --shade: 0, 6, 16; }
-.ambient[data-wx="fog"] { --wall-hi: #57524c; --sun: 235, 228, 215; }
-
-.am-room { position: absolute; inset: 0; }
-.am-room i, .am-room b { position: absolute; display: block; }
-/* the sun itself, mostly off-screen at the top left, breathing slowly */
-.am-sun { left: -32vmax; top: -32vmax; width: 64vmax; height: 64vmax; border-radius: 50%; background: radial-gradient(closest-side, rgba(var(--sun), 0.75), rgba(var(--sun), 0.18) 45%, transparent); will-change: transform, opacity; animation: amSun 9s ease-in-out infinite alternate; }
-@keyframes amSun { from { opacity: 0.75; transform: scale(0.94); } to { opacity: 1; transform: scale(1.06); } }
-
-/* the beam: blind slats, leaf shadows and dust, faded towards the far corner by a still layer of wall
-   colour on top (a mask over moving layers would make the GPU redo the whole beam every frame) */
-.am-beam { position: absolute; inset: 0; }
-.am-fade { inset: 0; background: linear-gradient(150deg, transparent 6%, var(--wall) 90%); }
-.am-room .am-cloud { inset: 0; background: var(--wall); opacity: 0; display: none; will-change: opacity; }
-.am-blinds { left: -10%; top: -10%; width: 120%; height: 120%; will-change: transform;
-  background: repeating-linear-gradient(118deg, transparent 0 22px, rgba(var(--sun), 0.16) 30px, rgba(var(--sun), 0.34) 40px 58px, rgba(var(--sun), 0.16) 68px, transparent 76px 92px);
-  animation: amBlind 13s ease-in-out infinite alternate; }
-/* the slats only slide: a rotating layer this big costs the GPU a resample of the whole screen every frame */
-@keyframes amBlind { from { transform: translate3d(-10px, -4px, 0); } to { transform: translate3d(14px, 8px, 0); } }
-/* a branch outside the window: its shadow sways across the light */
-.am-leaves { left: -4%; top: -10%; width: 62vmin; height: 62vmin; opacity: 0.42; transform-origin: 0 0; will-change: transform;
-  background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 320'><filter id='b'><feGaussianBlur stdDeviation='3.5'/></filter><g filter='url(%23b)' fill='%23000'><path d='M-10 -8 C70 50 170 120 330 240' stroke='%23000' stroke-width='5' fill='none'/><path d='M120 86 C130 150 120 200 90 260' stroke='%23000' stroke-width='3' fill='none'/><ellipse cx='26' cy='50' rx='30' ry='11' transform='rotate(95 26 50)'/><ellipse cx='54' cy='10' rx='26' ry='10' transform='rotate(-25 54 10)'/><ellipse cx='66' cy='78' rx='34' ry='12' transform='rotate(100 66 78)'/><ellipse cx='94' cy='38' rx='30' ry='11' transform='rotate(-20 94 38)'/><ellipse cx='146' cy='132' rx='32' ry='12' transform='rotate(92 146 132)'/><ellipse cx='174' cy='92' rx='34' ry='12' transform='rotate(-30 174 92)'/><ellipse cx='186' cy='160' rx='30' ry='11' transform='rotate(105 186 160)'/><ellipse cx='214' cy='120' rx='28' ry='10' transform='rotate(-22 214 120)'/><ellipse cx='226' cy='190' rx='34' ry='12' transform='rotate(96 226 190)'/><ellipse cx='256' cy='150' rx='30' ry='11' transform='rotate(-28 256 150)'/><ellipse cx='292' cy='196' rx='26' ry='10' transform='rotate(-15 292 196)'/><ellipse cx='108' cy='176' rx='26' ry='10' transform='rotate(70 108 176)'/><ellipse cx='136' cy='206' rx='28' ry='10' transform='rotate(130 136 206)'/><ellipse cx='94' cy='246' rx='24' ry='9' transform='rotate(80 94 246)'/></g></svg>") 0 0 / 100% 100% no-repeat;
-  animation: amLeaf 5.5s ease-in-out infinite alternate; }
-@keyframes amLeaf { 0% { transform: rotate(-2.5deg) translate3d(0, 0, 0); } 60% { transform: rotate(1.5deg) translate3d(6px, 2px, 0); } 100% { transform: rotate(3deg) translate3d(10px, 6px, 0); } }
-/* dust motes: drift on long loops and catch the light now and then */
-#amDust i { width: var(--s); height: var(--s); margin: calc(var(--s) / -2) 0 0 calc(var(--s) / -2); will-change: transform; animation: var(--a) var(--d) ease-in-out var(--dl) infinite alternate; }
-#amDust b { inset: 0; border-radius: 50%; background: radial-gradient(circle, #fff 0 25%, rgba(var(--sun), 0.6) 45%, transparent 70%); opacity: 0.3; will-change: opacity; animation: amGlint var(--g) ease-in-out var(--dl) infinite; }
-@keyframes amDust1 { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(70px, -50px, 0); } }
-@keyframes amDust2 { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-50px, 40px, 0); } }
-@keyframes amDust3 { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(40px, 70px, 0); } }
-@keyframes amGlint { 0%, 100% { opacity: 0.15; } 40% { opacity: 0.35; } 50% { opacity: 1; } 58% { opacity: 0.3; } }
-
-/* lens flare: ghosts strung on the line from the sun through the middle of the screen */
-.am-flare i { border-radius: 50%; will-change: transform; animation: amFlare 13s ease-in-out infinite alternate; }
-.am-flare i:nth-child(1) { left: 34%; top: 30%; width: 46px; height: 46px; background: radial-gradient(closest-side, transparent 60%, rgba(var(--sun), 0.22) 85%, transparent); }
-.am-flare i:nth-child(2) { left: 58%; top: 58%; width: 22px; height: 22px; background: radial-gradient(closest-side, rgba(255, 255, 255, 0.16), transparent); animation-duration: 17s; }
-.am-flare i:nth-child(3) { left: 74%; top: 80%; width: 90px; height: 90px; background: radial-gradient(closest-side, rgba(var(--sun), 0.1), rgba(var(--sun), 0.18) 70%, transparent); animation-duration: 21s; }
-@keyframes amFlare { from { transform: translate3d(-8px, -6px, 0); } to { transform: translate3d(12px, 9px, 0); } }
-
-/* night: no sun, a desk lamp from above; the beam becomes its cone */
-.ambient[data-tod="night"] .am-sun { left: 50%; top: -46vmax; margin-left: -46vmax; width: 92vmax; height: 92vmax; background: radial-gradient(closest-side, rgba(var(--sun), 0.45), rgba(var(--sun), 0.1) 55%, transparent); animation-duration: 12s; }
-.ambient[data-tod="night"] .am-fade { background: radial-gradient(70% 85% at 50% 0%, transparent 20%, var(--wall) 80%); }
-.ambient[data-tod="night"] .am-blinds, .ambient[data-tod="night"] .am-leaves, .ambient[data-tod="night"] .am-flare { display: none; }
-/* clouds: the sun dims and comes back */
-.ambient[data-wx="cloudy"] .am-room .am-cloud, .ambient[data-wx="fog"] .am-room .am-cloud { display: block; animation: amCloud 29s ease-in-out infinite; }
-@keyframes amCloud { 0%, 100% { opacity: 0; } 35%, 55% { opacity: 0.65; } }
-.ambient[data-wx="fog"] .am-blinds { opacity: 0.5; }
-/* rain: no sun; drops on the glass slide down, and lightning in a storm */
-.ambient[data-wx="rain"] .am-blinds, .ambient[data-wx="rain"] .am-leaves, .ambient[data-wx="rain"] .am-flare,
-.ambient[data-wx="storm"] .am-blinds, .ambient[data-wx="storm"] .am-leaves, .ambient[data-wx="storm"] .am-flare { display: none; }
-.am-glass { position: absolute; inset: 0; display: none; }
-.ambient[data-wx="rain"] .am-glass, .ambient[data-wx="storm"] .am-glass, .ambient[data-wx="snow"] .am-glass { display: block; }
-.am-glass i { width: var(--s); height: calc(var(--s) * 1.25); border-radius: 50% 50% 46% 46%; will-change: transform;
-  background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.75) 0 12%, rgba(255, 255, 255, 0.12) 30%, rgba(255, 255, 255, 0.05) 60%, rgba(255, 255, 255, 0.35) 72%, transparent 76%);
-  animation: amDrop var(--d) cubic-bezier(.6, 0, .9, .6) var(--dl) infinite; }
-.am-glass .am-dots { left: 0; top: 0; width: 3px; height: 3px; border-radius: 50%; background: rgba(255, 255, 255, 0.25); animation: none; }
-.ambient[data-wx="snow"] .am-glass .am-dots { display: none; }
-@keyframes amDrop { 0%, 55% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(4px, 115vh, 0); } }
-.ambient[data-wx="snow"] .am-glass i { height: var(--s); border-radius: 50%; background: radial-gradient(circle, rgba(255, 255, 255, 0.95) 0 30%, transparent 70%); animation: amSnow var(--d) linear var(--dl) infinite; }
-@keyframes amSnow { from { transform: translate3d(0, -15vh, 0); } to { transform: translate3d(30px, 115vh, 0); } }
-.am-room .am-flash { inset: 0; background: #e8eeff; opacity: 0; display: none; }
-.ambient[data-wx="storm"] .am-room .am-flash { display: block; animation: amFlash 17s linear 6s infinite; }
-@keyframes amFlash { 0%, 60%, 61.4%, 62.6%, 100% { opacity: 0; } 61% { opacity: 0.4; } 62% { opacity: 0.25; } }
-
-/* the clock catches the light: lit from the top left, a long soft shadow down to the right, and a glint
-   that slides across now and then. The glint is a narrow window moving right while its copy of the
-   digits moves left by the same amount, so the copy stays put and only the bright band travels. */
-.am-body { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; animation: amDrift 240s ease-in-out infinite alternate; }
-@keyframes amDrift { from { transform: translate3d(-10px, -6px, 0); } to { transform: translate3d(10px, 6px, 0); } }
-.am-clock { position: relative; }
-.am-time, .am-shine-in { font: 800 150px/1 var(--display); letter-spacing: -3px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.am-time { position: relative; text-shadow: 10px 14px 22px rgba(var(--shade), 0.55); }
-.am-time span { display: inline-block; background: linear-gradient(135deg, #fff 25%, var(--tint) 75%); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.am-time .ap, .am-shine-in .ap { font-size: 34px; letter-spacing: 0; margin-left: 10px; vertical-align: 82px; }
-.am-time .co { animation: amCo 2s steps(1) infinite; will-change: opacity; }
-@keyframes amCo { 50% { opacity: 0.4; } }
-.am-time .roll { animation: amRoll 1s var(--spring) both; }
-@keyframes amRoll { from { opacity: 0; transform: translate3d(-12px, -40%, 0) rotate(-10deg); } }
-.am-shine { position: absolute; left: 0; top: 0; bottom: 0; width: 25%; overflow: hidden; pointer-events: none; opacity: 0.9;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 50%, transparent); mask-image: linear-gradient(90deg, transparent, #000 50%, transparent);
-  will-change: transform; animation: amSweep 11s ease-in-out 3s infinite; }
-.am-shine-in { width: 400%; color: #fff; text-shadow: 0 0 14px #fff, 0 0 36px rgb(var(--sun)); will-change: transform; animation: amSweepIn 11s ease-in-out 3s infinite; }
-@keyframes amSweep { 0% { transform: translate3d(-100%, 0, 0); } 24%, 100% { transform: translate3d(400%, 0, 0); } }
-@keyframes amSweepIn { 0% { transform: translate3d(25%, 0, 0); } 24%, 100% { transform: translate3d(-100%, 0, 0); } }
-
-.am-date { position: relative; font: 600 24px var(--display); color: rgba(255, 255, 255, 0.78); margin-top: 4px; text-shadow: 3px 4px 10px rgba(var(--shade), 0.5); }
-.am-row { position: relative; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 22px; margin-top: 18px; font-size: 19px; color: rgba(255, 255, 255, 0.92); text-shadow: 2px 3px 8px rgba(var(--shade), 0.5); }
+/* ---------- desk clock after 10 quiet minutes: a torch in the dark, drawn as dots on a canvas (torch.js) */
+.ambient { position: absolute; inset: 0; z-index: 4; display: none; overflow: hidden; background: #0e0b0a; }
+.ambient.on { display: block; animation: fade 0.6s ease-out; }
+#amCanvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.am-info { position: absolute; left: 33%; top: 70%; font: 15px/1.6 "DejaVu Sans Mono", "Liberation Mono", monospace; color: rgba(255, 214, 170, 0.82); }
+.am-date::before { content: '> '; color: rgba(255, 150, 60, 0.9); }
+.am-date::after { content: ''; display: inline-block; width: 0.6em; height: 1.05em; margin-left: 6px; vertical-align: -0.18em; background: rgba(255, 170, 90, 0.85); animation: amCur 1.1s steps(1) infinite; }
+@keyframes amCur { 50% { opacity: 0; } }
+.am-row { display: flex; flex-wrap: wrap; gap: 0 18px; padding-left: 2ch; color: rgba(255, 214, 170, 0.62); }
 .am-row:empty { display: none; }
-.portrait .am-time, .portrait .am-shine-in { font-size: 104px; }
-.portrait .am-time .ap, .portrait .am-shine-in .ap { font-size: 26px; vertical-align: 56px; }
-.portrait .am-row { flex-direction: column; align-items: center; }
+.portrait .am-info { left: 8%; right: 8%; top: auto; bottom: 4%; text-align: left; }
+.portrait .am-row { flex-direction: column; }
 
 /* ---------- price alert editor (Markets zoom), internet line, words page */
 .alert-edit { position: absolute; left: 14px; right: 14px; bottom: 12px; z-index: 8; display: none; flex-direction: column; gap: 3px; padding: 12px 16px; border-radius: 18px; background: rgba(27, 20, 64, 0.97); box-shadow: 0 0 0 2px var(--gold), 0 14px 40px rgba(0, 0, 0, 0.5); }
