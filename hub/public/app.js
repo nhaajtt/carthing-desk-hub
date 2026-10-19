@@ -1065,36 +1065,29 @@ function ambientCheck() {
   }
   if (want) renderAmbient();
 }
-// the sky is drawn once per visit: hour colours, weather, stars; after that only CSS loops run
-let amStarsDone = false, amTimeKey = '';
+// the room is set up once per visit: hour colours, weather, dust and raindrops; after that only CSS loops run
+let amDustDone = false, amTimeKey = '';
 function ambientSky() {
   amTimeKey = ''; // rebuilt without the roll
   const amb = $('ambient');
   const h = Number(dtf('en-GB', { timeZone: tz(), hour: 'numeric', hourCycle: 'h23' }).format(new Date(now())));
-  amb.dataset.tod = h >= 5 && h < 8 ? 'dawn' : h >= 8 && h < 17 ? 'day' : h >= 17 && h < 20 ? 'dusk' : 'night';
+  amb.dataset.tod = h >= 5 && h < 8 ? 'dawn' : h >= 8 && h < 15 ? 'day' : h >= 15 && h < 19 ? 'dusk' : 'night';
   const c = S.weather && S.weather.current ? S.weather.current.weather_code : 0;
-  amb.dataset.wx = c >= 95 ? 'storm' : c >= 71 && c <= 77 ? 'snow' : c >= 51 ? 'rain' : c === 45 || c === 48 ? 'fog' : 'clear';
-  if (!amStarsDone) {
-    amStarsDone = true;
-    const r = (a, b) => a + Math.random() * (b - a);
-    const stars = [];
-    for (let i = 0; i < 110; i++) stars.push(`${r(0, 100).toFixed(1)}vw ${r(0, 100).toFixed(1)}vh 0 ${Math.random() < 0.15 ? 1 : 0}px rgba(255,255,255,${r(0.2, 0.85).toFixed(2)})`);
-    $('amStars').style.boxShadow = stars.join(',');
-    let tw = '';
-    for (let i = 0; i < 16; i++) tw += `<i style="left:${r(3, 97).toFixed(1)}%;top:${r(3, 97).toFixed(1)}%;--s:${r(14, 34).toFixed(0)}px;--d:${r(3, 7).toFixed(1)}s;--dl:${(-r(0, 7)).toFixed(1)}s"></i>`;
-    $('amTw').innerHTML = tw;
-    // two copies of the streaks, one screen apart, so the falling layer loops without a seam
-    const fall = [];
-    for (let i = 0; i < 70; i++) { const x = r(0, 140).toFixed(1), y = r(0, 140); fall.push(`${x}vw ${y.toFixed(1)}vh`, `${x}vw ${(y - 140).toFixed(1)}vh`); }
-    $('amFall').style.boxShadow = fall.map((p) => `${p} 0 0 currentColor`).join(',');
+  amb.dataset.wx = c >= 95 ? 'storm' : c >= 71 && c <= 77 ? 'snow' : c >= 51 ? 'rain' : c === 45 || c === 48 ? 'fog' : c >= 2 ? 'cloudy' : 'clear';
+  if (amDustDone) return;
+  amDustDone = true;
+  const r = (a, b) => a + Math.random() * (b - a);
+  let dust = '';
+  for (let i = 0; i < 24; i++) {
+    dust += `<i style="left:${r(2, 80).toFixed(1)}%;top:${r(2, 80).toFixed(1)}%;--s:${r(3, 8).toFixed(1)}px;--a:amDust${1 + (i % 3)};--d:${r(14, 30).toFixed(1)}s;--dl:${(-r(0, 30)).toFixed(1)}s;--g:${r(3, 8).toFixed(1)}s"><b></b></i>`;
   }
-  // the comet's lap is the minute: x is at its left end at :45, y at its top at :00
-  const s = (now() / 1000) % 60;
-  [...$('amOrbit').children].forEach((ox, i) => {
-    const t = (s - i * 0.35 + 60) % 60;
-    ox.style.setProperty('--ox', `${-((t + 15) % 60)}s`);
-    ox.firstChild.style.setProperty('--oy', `${-t}s`);
-  });
+  $('amDust').innerHTML = dust;
+  // a few still droplets on the glass (one dot and its shadows), and drops that hang a while, then run down
+  const dots = [];
+  for (let i = 0; i < 60; i++) dots.push(`${r(0, 100).toFixed(1)}vw ${r(0, 100).toFixed(1)}vh 0 ${r(0, 1.5).toFixed(1)}px rgba(255,255,255,${r(0.12, 0.35).toFixed(2)})`);
+  let drops = `<i class="am-dots" style="box-shadow:${dots.join(',')}"></i>`;
+  for (let i = 0; i < 16; i++) drops += `<i style="left:${r(2, 98).toFixed(1)}%;top:${r(-10, 60).toFixed(1)}%;--s:${r(6, 14).toFixed(0)}px;--d:${r(7, 16).toFixed(1)}s;--dl:${(-r(0, 16)).toFixed(1)}s"></i>`;
+  $('amGlass').innerHTML = drops;
 }
 function leaveAmbient() {
   const amb = $('ambient');

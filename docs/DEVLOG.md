@@ -729,19 +729,45 @@ Những thứ đã thử mà không giúp: rasterize bằng CPU thay vì GPU (11
 
 Phần còn lại: `nocturned` dùng khoảng 38% một lõi (nghe từ khoá như trước, và kết nối iAP2 với iPhone), và GPU một lõi.
 
+### Đồng hồ khi rảnh: nắng chiều trên bàn
 
-### Đồng hồ khi rảnh, bản lấp lánh
+Bản đầu theo phong cách vũ trụ (cực quang, sao, sao chổi). Người dùng không thích, nên giờ màn hình là **bức tường sau bàn lúc nắng chiều**:
 
-Màn hình đồng hồ giờ có cực quang trôi (ba đám màu đổi theo giờ: đêm, bình minh, ngày, hoàng hôn), bầu trời sao, 16 ngôi sao lấp lánh, sao băng, mưa hoặc tuyết và chớp khi có bão (theo thời tiết hiện tại), quầng sáng "thở" sau con số, một vệt sáng quét qua con số, một sao chổi chạy một vòng mỗi phút (đỉnh là giây 00) và chữ số cuộn vào khi đổi phút.
+* Mặt trời ở góc trên bên trái, tỏa sáng và "thở" chậm.
+* Vệt nắng xuyên qua rèm lá sách, trôi nhẹ.
+* Bóng một cành lá đung đưa trong nắng.
+* Bụi lấp lánh lơ lửng.
+* Lens flare.
+* Con số sáng ở cạnh trên trái, đổ bóng dài xuống dưới phải, thỉnh thoảng có ánh nắng lóe ngang qua. Chữ số đổi thì nghiêng và cuộn vào.
 
-Màn hình này không ai thao tác, nhưng nó chạy hàng giờ và là thứ duy nhất trên màn hình, nên giật là thấy ngay và chạy nặng thì Car Thing nóng. Vì vậy mọi thứ đều được vẽ **một lần**, sau đó chỉ dịch chuyển hoặc đổi độ mờ (`transform`, `opacity`), để GPU tự làm mà luồng chính không phải vẽ lại:
+Màu nắng theo giờ thật:
 
-* Cực quang là `radial-gradient` (không dùng `filter: blur`, rất đắt trên Mali).
-* Sao, mưa, tuyết là `box-shadow` của một chấm: cả bầu trời là một lớp. Mưa có hai bản cách nhau một màn hình, nên lớp trượt xuống lặp lại không lộ đường nối.
-* Vệt sáng: một khung hẹp trượt sang phải, bên trong là bản sao con số trượt sang trái đúng bằng chừng đó, nên bản sao đứng yên và chỉ dải sáng di chuyển.
-* Sao chổi: trục x và trục y dao động theo đường gần hình sin, lệch nhau một phần tư vòng, nên vẽ ra hình elip. Lúc hiện, `animation-delay` được đặt theo giây hiện tại.
+| Giờ | Ánh sáng |
+|---|---|
+| 5–8 giờ | hồng nhạt |
+| 8–15 giờ | vàng sáng |
+| 15–19 giờ | cam đậm |
+| Buổi tối | không còn nắng: một quầng đèn bàn từ trên xuống, bụi bay trong quầng đèn |
 
-Đo trên Car Thing: 59 khung/giây, khoảng 3% khung rớt (cả khi có mưa), nhiệt độ 46 → 47,5 °C sau vài phút. Vòng chuyển trang không đổi (5,7%).
+Theo thời tiết:
+
+* Trời mây: nắng tắt dần rồi sáng lại.
+* Sương mù: nắng nhạt.
+* Mưa: không có nắng, giọt nước đọng trên kính rồi chảy xuống. Có giông thì thêm chớp.
+* Tuyết: tuyết rơi.
+
+Màn hình này không ai thao tác, nhưng nó chạy hàng giờ và là thứ duy nhất trên màn hình, nên giật là thấy ngay, còn chạy nặng thì Car Thing nóng. Mọi thứ được vẽ **một lần**, sau đó chỉ dịch chuyển hoặc đổi độ mờ (`transform`, `opacity`).
+
+Đo trên Car Thing bằng cách tắt từng lớp:
+
+| Thử | Khung rớt |
+|---|---|
+| Vệt nắng (`mask-image`) bọc các lớp đang chuyển động | 6–7,5%: mỗi khung GPU phải làm lại cả vệt nắng |
+| Thay mask bằng một lớp màu tường **tĩnh** phủ lên trên | 5–6% |
+| Rèm là một lớp lớn gần gấp đôi màn hình, vừa trượt vừa **xoay** 1° | xoay buộc GPU lấy mẫu lại cả màn hình mỗi khung |
+| Rèm chỉ trượt, lớp nhỏ lại (120%) | **1,2–2,4%** (buổi tối 1,8%) |
+
+Kết luận: số đo dao động nhiều, mỗi lần đo phải chạy 20–25 giây và lặp lại. Có lần tắt bóng lá cho ra 2 khung rớt, tưởng tìm ra thủ phạm, đo lại thì không phải. Vòng chuyển trang không đổi (6,8%).
 
 ## 28. Bảng tổng hợp lỗi
 
