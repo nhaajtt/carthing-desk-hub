@@ -2,8 +2,9 @@
 
 const $ = (id) => document.getElementById(id);
 const pages = [...document.querySelectorAll('.page')];
-// page order: News, Markets, Weather, Calendar, Music, Servers, Focus, Mei (Ask). Settings is a pop-up menu, not a page.
-const NEWS = 0, MARKETS = 1, WEATHER = 2, CALENDAR = 3, MUSIC = 4, SERVERS = 5, FOCUS = 6, PHONE = 7, WORDS = 8, ASK = 9;
+// page order: News, Markets, Weather, Calendar, Music, Servers, Focus, iPhone, Words, Mei (Ask), Car (car mode only).
+// Settings is a pop-up menu, not a page.
+const NEWS = 0, MARKETS = 1, WEATHER = 2, CALENDAR = 3, MUSIC = 4, SERVERS = 5, FOCUS = 6, PHONE = 7, WORDS = 8, ASK = 9, DRIVE = 10;
 let page = 0;
 let editing = false;
 let S = null;
@@ -11,11 +12,11 @@ const last = {};
 
 // Car mode: in the car there is no server 2, so the Car Thing shows its own copy of this page (phonelink serves
 // it on 127.0.0.1:5056) with what the iPhone brings over Bluetooth: Music, the iPhone page, calls and the desk
-// clock, plus Weather and Calendar from what the hub packed before the drive. Each copy moves to the other by
+// clock, plus Weather and Calendar from what the hub packed before the drive, and the Car page from an OBD reader. Each copy moves to the other by
 // itself when the hub comes or goes.
 const HUB_URL = 'http://10.42.1.6:8787/', CAR_URL = 'http://127.0.0.1:5056/';
 const CAR = location.port === '5056';
-const CAR_PAGES = [WEATHER, CALENDAR, MUSIC, PHONE];
+const CAR_PAGES = [WEATHER, CALENDAR, MUSIC, PHONE, DRIVE];
 const stored = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 if (CAR) {
   S = { car: true, tz: stored('tz') || undefined, display: { lang: stored('lang') === 'vi' ? 'vi' : 'en', brightness: 80 } };
@@ -319,6 +320,7 @@ function presetButton(n) {
   if (page === FOCUS) return pomoSet([15, 25, 45, 60][n - 1]);
   if (page === PHONE && n === 3) return togglePrivacy(); // 1 and 2 are held keys, see the keydown handler
   if (page === PHONE && n === 4) return replyBySiri();
+  if (page === DRIVE) return dashPreset(n);
   if (page === WORDS) return n === 1 ? wordGrade(true) : n === 2 ? wordGrade(false) : n === 3 ? wordsMore() : undefined;
 }
 
@@ -420,6 +422,210 @@ function driveTick() {
 function driveText() {
   const min = Math.floor((Date.now() - driveStart) / 60000);
   return min < 60 ? tr('{n} min', { n: min }) : tr('{h} h {m} min', { h: Math.floor(min / 60), m: min % 60 });
+}
+
+// ---------------------------------------------------------------- Car page: an OBD-II reader (phonelink, obd.go)
+
+// A cheap ELM327 Bluetooth reader in the car's OBD port gives speed, revs, temperatures, fuel, battery and the
+// fault codes behind the check-engine light. phonelink only looks for it while this car copy listens, so at the
+// desk nothing scans. Values arrive in metric units; the screen shows them in the Weather page's units.
+let OB = { state: 'none', v: {}, dtc: [] };
+let dashCodes = false, dashForget = 0;
+function obdConnect() {
+  if (!CAR || !onCarThing) return;
+  const es = new EventSource(PHONELINK + '/obd/events');
+  es.onmessage = (ev) => {
+    const prev = OB;
+    OB = JSON.parse(ev.data);
+    obdChanged(prev);
+    if (page === DRIVE && !slide) renderDash();
+  };
+  es.onerror = () => { es.close(); OB = { state: 'off', v: {}, dtc: [] }; if (page === DRIVE) renderDash(); setTimeout(obdConnect, 10000); };
+}
+const kmh = (v) => (wantF() ? v / 1.609 : v);
+const cdeg = (v) => (wantF() ? (v * 9) / 5 + 32 : v);
+
+// this drive's distance, engine time and fuel, kept across reloads; a new drive (driveTick) starts a new trip
+let trip = null, tripSaved = 0;
+function tripNow() {
+  if (!driveStart) return null;
+  if (!trip) try { trip = JSON.parse(stored('trip')); } catch {}
+  if (!trip || trip.start !== driveStart) trip = { start: driveStart, km: 0, sec: 0, l: 0 };
+  return trip;
+}
+function tripReset() {
+  if (!tripNow()) return;
+  trip = { start: driveStart, km: 0, sec: 0, l: 0 };
+  try { localStorage.setItem('trip', JSON.stringify(trip)); } catch {}
+  toast(tr('Trip reset'));
+  renderDash();
+}
+// litres an hour: the engine's own fuel rate when it reports one, else from the air it takes in (petrol, 14.7:1)
+const fuelRate = (v) => (v.fuelrate != null ? v.fuelrate : v.maf != null ? (v.maf * 3600) / (14.7 * 740) : null);
+
+let hotWarned = false, milWarned = false, lowWarned = false;
+function obdChanged(prev) {
+  const v = OB.v || {};
+  const t = tripNow();
+  if (t && OB.state === 'live' && prev.state === 'live' && OB.at > prev.at) {
+    const dt = (OB.at - prev.at) / 1000;
+    if (dt < 3) {
+      if (v.speed != null) t.km += (v.speed * dt) / 3600;
+      if (v.rpm > 300) t.sec += dt;
+      const lh = fuelRate(v);
+      if (lh != null && v.rpm > 300) t.l += (lh * dt) / 3600;
+    }
+    if (Date.now() - tripSaved > 10000) { tripSaved = Date.now(); try { localStorage.setItem('trip', JSON.stringify(t)); } catch {} }
+  }
+  // warnings on any page: once each, again only after the value has come back to normal
+  if (v.coolant >= 112 && !hotWarned) {
+    hotWarned = true;
+    showBanner('down', `🌡 ${tr('Engine hot: {t}. Pull over safely and switch it off.', { t: `${Math.round(cdeg(v.coolant))}${degSym()}` })}`, 60000);
+  } else if (v.coolant < 105) hotWarned = false;
+  if (OB.mil && !milWarned) {
+    milWarned = true;
+    showBanner('down', `⚠ ${tr('Check-engine light is on')}${OB.dtc && OB.dtc.length ? `: ${OB.dtc.join(', ')}` : ''}`, 30000);
+  }
+  const off = OB.state === 'noecu' || (OB.state === 'live' && !(v.rpm > 300));
+  if (off && OB.volts != null && OB.volts < 11.8 && !lowWarned) {
+    lowWarned = true;
+    showBanner('down', `🔋 ${tr('Car battery low: {v} V', { v: num(OB.volts, 1) })}`, 30000);
+  } else if (OB.volts >= 12.2) lowWarned = false;
+}
+
+// the rev counter: 56 ticks over 270°, 7 to each 1,000 rpm, the last 1,000 red
+const TICKS = 56, RPM_MAX = 8000;
+let dashLit = 0;
+function buildGauge() {
+  let ticks = '', nums = '';
+  for (let i = 0; i <= TICKS; i++) {
+    const a = ((135 + (270 * i) / TICKS) * Math.PI) / 180, major = i % 7 === 0;
+    const r0 = major ? 156 : 168, r1 = 188;
+    const red = i > TICKS - 7 ? ' red' : '';
+    ticks += `<line class="tk${major ? ' major' : ''}${red}" x1="${(200 + r0 * Math.cos(a)).toFixed(1)}" y1="${(200 + r0 * Math.sin(a)).toFixed(1)}" x2="${(200 + r1 * Math.cos(a)).toFixed(1)}" y2="${(200 + r1 * Math.sin(a)).toFixed(1)}"/>`;
+    if (major) nums += `<text x="${(200 + 141 * Math.cos(a)).toFixed(1)}" y="${(200 + 141 * Math.sin(a) + 5).toFixed(1)}">${i / 7}</text>`;
+  }
+  $('dgTicks').innerHTML = ticks;
+  $('dgNums').innerHTML = nums;
+}
+
+// a few plain words for the commonest codes; anything else gets its system
+const DTC_TEXT = {
+  P0101: 'Air-flow (MAF) sensor reads out of range', P0113: 'Intake air temperature sensor reads high',
+  P0128: 'Engine warms up too slowly (thermostat)', P0131: 'Front oxygen sensor reads low', P0133: 'Front oxygen sensor is slow',
+  P0135: 'Front oxygen sensor heater', P0141: 'Rear oxygen sensor heater', P0171: 'Engine running lean', P0172: 'Engine running rich',
+  P0300: 'Misfires on several cylinders', P0401: 'Too little exhaust gas recirculation (EGR)', P0420: 'Catalytic converter below efficiency',
+  P0440: 'Fuel vapour system (EVAP)', P0442: 'Small fuel vapour leak: check the fuel cap', P0455: 'Large fuel vapour leak: check the fuel cap',
+  P0456: 'Very small fuel vapour leak: check the fuel cap', P0500: 'Vehicle speed sensor', P0505: 'Idle speed control',
+  P0562: 'System voltage low', P0700: 'The gearbox reports a fault',
+};
+function dtcText(c) {
+  if (DTC_TEXT[c]) return tr(DTC_TEXT[c]);
+  const m = /^P030([1-8])$/.exec(c);
+  if (m) return tr('Misfire on cylinder {n}', { n: m[1] });
+  return tr({ P: c[1] === '0' ? 'Engine or gearbox (standard code)' : 'Engine or gearbox (maker’s own code)', C: 'Chassis', B: 'Body', U: 'Network between modules' }[c[0]] || 'Unknown');
+}
+
+function setGaugeBar(id, text, frac, cls) {
+  const el = $(id);
+  setText(el.querySelector('b'), text);
+  el.querySelector('s').style.transform = `scaleX(${frac == null ? 0 : Math.max(0.02, Math.min(1, frac)).toFixed(3)})`;
+  setClass(el, `ds${cls ? ` ${cls}` : ''}${frac == null ? ' none' : ''}`);
+}
+
+function renderDash() {
+  if (!$('dgTicks').firstChild) buildGauge();
+  const el = pages[DRIVE], st = OB.state, v = OB.v || {};
+  if (el.dataset.state !== st) el.dataset.state = st;
+  el.classList.toggle('codes', dashCodes);
+  const live = st === 'live';
+  if (live) {
+    setText($('dgSpeed'), v.speed == null ? '—' : String(Math.round(kmh(v.speed))));
+    setText($('dgUnit'), wantF() ? 'mph' : 'km/h');
+    setText($('dgRpm'), v.rpm == null ? '' : `${nf(0).format(Math.round(v.rpm / 10) * 10)} rpm`);
+    const lit = v.rpm == null ? 0 : Math.round((Math.min(v.rpm, RPM_MAX) / RPM_MAX) * TICKS) + 1;
+    if (lit !== dashLit) {
+      const ticks = $('dgTicks').children;
+      for (let i = Math.min(lit, dashLit); i < Math.max(lit, dashLit); i++) ticks[i].classList.toggle('on', i < lit);
+      dashLit = lit;
+    }
+    $('dgThr').style.strokeDasharray = `${Math.round(v.throttle || 0)} 100`;
+    const c = v.coolant;
+    setGaugeBar('dsCoolant', c == null ? '—' : `${Math.round(cdeg(c))}°`, c == null ? null : (c - 40) / 90, c == null ? '' : c >= 105 ? 'hot' : c < 60 ? 'cold' : 'ok');
+    const f = v.fuel;
+    setGaugeBar('dsFuel', f == null ? '—' : `${Math.round(f)}%`, f == null ? null : f / 100, f == null ? '' : f < 12 ? 'hot' : 'ok');
+    const b = OB.volts != null ? OB.volts : v.module;
+    setGaugeBar('dsVolts', b == null ? '—' : `${num(b, 1)} V`, b == null ? null : (b - 11) / 4, b == null ? '' : b < 12.2 ? 'hot' : b >= 13.2 && b <= 14.8 ? 'ok' : 'warm');
+    const milOn = !!OB.mil || (OB.dtc && OB.dtc.length > 0);
+    $('dgMil').classList.toggle('on', milOn);
+    setText($('dgMilText'), OB.dtc && OB.dtc.length ? OB.dtc[0] + (OB.dtc.length > 1 ? ` +${OB.dtc.length - 1}` : '') : '');
+    const t = tripNow();
+    if (t) {
+      const dist = wantF() ? t.km / 1.609 : t.km;
+      let eco = '';
+      if (t.l > 0.05 && t.km > 0.5) {
+        const l100 = (t.l / t.km) * 100;
+        eco = wantF() ? `${num(235.215 / l100, 1)} mpg` : `${num(l100, 1)} L/100 km`;
+      }
+      const min = Math.round(t.sec / 60);
+      setHTML($('dashTrip'), `<span>${tr('This trip')}</span><b>${num(dist, 1)} ${wantF() ? 'mi' : 'km'}</b>`
+        + `<em>${min < 60 ? tr('{n} min', { n: min }) : tr('{h} h {m} min', { h: Math.floor(min / 60), m: min % 60 })}${eco ? ` · ${eco}` : ''}</em>`);
+    }
+  } else {
+    dashLit = Math.min(dashLit, 0);
+    [...$('dgTicks').children].forEach((t) => t.classList.remove('on'));
+    setHTML($('dashWait'), dashWaitHTML(st));
+  }
+  setHTML($('dashCodes'), dashCodes ? dashCodesHTML() : '');
+  const keys = st === 'none' || st === 'off' ? `<span><i class="kb">●</i>${tr('Search for a reader')}</span>`
+    : st === 'search' ? ''
+    : `${live ? `<span><i class="kb">1</i>${tr('Reset trip')}</span>` : ''}<span><i class="kb">3</i>${tr('Fault codes')}</span>`
+      + `<span><i class="kb">4</i>${tr(Date.now() - dashForget < 4000 ? 'Press 4 again to forget' : 'Forget the reader')}</span>`;
+  setHTML($('dashKeys'), keys);
+}
+
+const OBD_PLUG = '<svg viewBox="0 0 96 64" class="dw-plug"><path d="M12 10h72l-8 44H20z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/>'
+  + '<g fill="currentColor">' + [0, 1, 2, 3, 4, 5, 6, 7].map((i) => `<circle cx="${25 + i * 6.6}" cy="24" r="2.6"/><circle cx="${27 + i * 6}" cy="40" r="2.6"/>`).join('') + '</g></svg>';
+function dashWaitHTML(st) {
+  const name = esc(OB.name || tr('the reader'));
+  if (st === 'off') return `<div class="dw">${OBD_PLUG}<b>${tr('The Bluetooth helper is not running')}</b></div>`;
+  if (st === 'none') {
+    return `<div class="dw">${OBD_PLUG}<b>${tr('Connect an OBD reader')}</b><ol>`
+      + `<li>${tr('Plug a Bluetooth LE (iPhone-compatible) OBD-II reader into the port under the steering wheel')}</li>`
+      + `<li>${tr('Switch the car on')}</li><li>${tr('Press the knob to search')}</li></ol>`
+      + `${OB.err === 'no reader found' ? `<em>${tr('No reader found. Is it plugged in and the car on?')}</em>` : ''}</div>`;
+  }
+  if (st === 'search') {
+    const left = Math.max(0, Math.round(((OB.until || 0) - Date.now()) / 1000));
+    return `<div class="dw"><div class="dw-radar"><i></i><i></i><i></i></div><b>${tr('Looking for the reader…')}</b>`
+      + `<span>${(OB.found || []).length ? esc(OB.found.join(' · ')) : tr('{n} s left', { n: left })}</span></div>`;
+  }
+  if (st === 'noecu') {
+    return `<div class="dw"><div class="dw-volts">${OB.volts != null ? `${num(OB.volts, 1)}<small>V</small>` : '—'}</div>`
+      + `<b>${tr('Engine off')}</b><span>${tr('Battery at the OBD port. Start the engine to see live data.')}</span></div>`;
+  }
+  const what = st === 'wait' ? tr('Looking for {name}', { name }) : tr('Connecting to {name}…', { name });
+  return `<div class="dw"><div class="dw-radar slow"><i></i><i></i><i></i></div><b>${what}</b>`
+    + `<span>${OB.err ? esc(tr(OB.err)) : tr('Switch the car on: the reader wakes up with it.')}</span></div>`;
+}
+function dashCodesHTML() {
+  const list = OB.dtc || [];
+  return `<div class="dc-card"><b>${tr(OB.mil ? 'Check-engine light is on' : 'Check-engine light is off')}</b>`
+    + (list.length
+      ? `<ul>${list.map((c) => `<li><em>${esc(c)}</em><span>${esc(dtcText(c))}</span></li>`).join('')}</ul>`
+      : `<p>${tr('No fault codes stored.')}</p>`)
+    + `<small>${tr('Codes are only read here, never cleared. Back to close.')}</small></div>`;
+}
+function dashPreset(n) {
+  if (n === 1) return tripReset();
+  if (n === 3) { dashCodes = !dashCodes; return renderDash(); }
+  if (n === 4 && OB.state !== 'none') {
+    if (Date.now() - dashForget < 4000) { dashForget = 0; phonePost('/obd/forget'); toast(tr('Reader forgotten')); }
+    else { dashForget = Date.now(); renderDash(); setTimeout(renderDash, 4100); }
+  }
+}
+function dashPress() {
+  if (OB.state === 'none') phonePost('/obd/search');
 }
 
 // ---------------------------------------------------------------- weather
@@ -1157,7 +1363,7 @@ function ambientCheck() {
   const amb = $('ambient');
   const p = musicPos();
   const busy = setMode || PH.call || PH.pairing || screenOff() || $('digest').classList.contains('on')
-    || (page === MUSIC && p && p.playing) || (S && S.voice && ['starting', 'listening', 'thinking', 'answer'].includes(S.voice.phase));
+    || (page === MUSIC && p && p.playing) || (page === DRIVE && OB.state !== 'none' && OB.state !== 'off') || (S && S.voice && ['starting', 'listening', 'thinking', 'answer'].includes(S.voice.phase));
   const want = !!S && (amForced ? !(PH.call || PH.pairing || screenOff()) : !busy && Date.now() - lastInput > AMBIENT_MS);
   if (amForced && !want) amForced = false; // a call or the screen going off ends it
   if (want !== amb.classList.contains('on')) {
@@ -2057,9 +2263,12 @@ function toast(msg) {
   toast.h = setTimeout(() => t.classList.remove('on'), 2500);
 }
 
-// the next page that is shown: all of them at the desk, Music and iPhone in the car
+// the next page that is shown: all but Car at the desk, the car's own list in the car
 function stepPage(step) {
-  if (!CAR) return setPage(page + step);
+  if (!CAR) {
+    const n = (page + step + pages.length) % pages.length;
+    return setPage(n === DRIVE ? n + step : n);
+  }
   const i = CAR_PAGES.indexOf(page);
   setPage(CAR_PAGES[((i < 0 ? 0 : i) + step + CAR_PAGES.length) % CAR_PAGES.length]);
 }
@@ -2082,6 +2291,7 @@ function back() {
   if (page === MARKETS && zoom) return marketZoom(zoom);
   if (page === NEWS && newsBack()) return;
   if (page === PHONE && ipBack()) return;
+  if (page === DRIVE && dashCodes) { dashCodes = false; return renderDash(); }
   if (page === ASK && S && ['answer', 'error'].includes(S.voice && S.voice.phase)) return void fetch('/api/voice/dismiss', { method: 'POST' }).catch(() => {});
   if (editing) setEditing(false); // Back only ever leaves a mode; the knob press enters one
 }
@@ -2094,6 +2304,7 @@ function press() {
   else if (page === MUSIC) setEditing(!editing); // volume mode; play/pause is button 2
   else if (page === FOCUS) pomoToggle();
   else if (page === PHONE) ipPress();
+  else if (page === DRIVE) dashPress();
   else if (page === WORDS) { wdFlip = !wdFlip; renderWords(); }
   else if (editing) setEditing(false);
 }
@@ -2237,6 +2448,7 @@ function tickClock() {
   if (S && page === ASK) renderAsk();
   if (S && page === CALENDAR && new Date().getSeconds() === 0) renderCalendar();
   if (CAR) { driveTick(); carReminders(); }
+  if (page === DRIVE && OB.state === 'search') renderDash(); // the search countdown
   tapsKeep();
   checkLink();
 }
@@ -2287,7 +2499,7 @@ function wordsMore() {
   fetch('/api/words/more', { method: 'POST' }).then((r) => toast(tr(r.ok ? 'Fetching 5 more words…' : 'Only the Car Thing can do this'))).catch(() => {});
 }
 
-const RENDER = { [WORDS]: renderWords, [FOCUS]: renderDesk, [NEWS]: renderNews, [MARKETS]: renderMarkets, [ASK]: renderAsk, [WEATHER]: renderWeather, [CALENDAR]: renderCalendar, [MUSIC]: renderMusic, [SERVERS]: renderServers, [PHONE]: renderIphone };
+const RENDER = { [WORDS]: renderWords, [FOCUS]: renderDesk, [NEWS]: renderNews, [MARKETS]: renderMarkets, [ASK]: renderAsk, [WEATHER]: renderWeather, [CALENDAR]: renderCalendar, [MUSIC]: renderMusic, [SERVERS]: renderServers, [PHONE]: renderIphone, [DRIVE]: renderDash };
 function render() {
   if (!S) return;
   if (CAR) carWeather();
@@ -2354,3 +2566,4 @@ setInterval(tickClock, 1000);
 setInterval(render, 15000);
 if (!CAR) connect(); else loadPack();
 phoneConnect();
+obdConnect();

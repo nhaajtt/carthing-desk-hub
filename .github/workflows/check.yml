@@ -35,6 +35,7 @@ jobs:
         run: |
           test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
           go vet ./...
+          go test ./...
           GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o /dev/null .
 
       - name: Shell syntax

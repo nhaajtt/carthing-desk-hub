@@ -2,7 +2,7 @@
 
 > Ghi lại toàn bộ quá trình biến một chiếc Spotify Car Thing đã "chết" thành màn hình để bàn: từ lúc lên ý tưởng, chọn hướng đi, thiết kế hệ thống, cho tới từng lỗi gặp phải và cách mình gỡ. Viết theo thứ tự thời gian, kèm số liệu đo thật trên thiết bị.
 >
-> Toàn bộ dự án làm trong ba ngày 16–18/10/2026.
+> Toàn bộ dự án làm từ 16 đến 20/10/2026, rồi đóng lại (mục 31).
 
 ## Mục lục
 
@@ -34,8 +34,12 @@
 25. [Điện thoại "đẳng cấp" hơn](#25-điện-thoại-đẳng-cấp-hơn)
 26. [Ngồi bàn, tìm điện thoại, nhắc việc](#26-ngồi-bàn-tìm-điện-thoại-nhắc-việc)
 27. [Trang mới, rồi làm mượt lại](#27-trang-mới-rồi-làm-mượt-lại)
-28. [Bảng tổng hợp lỗi](#28-bảng-tổng-hợp-lỗi)
-29. [Những điều rút ra](#29-những-điều-rút-ra)
+28. [Mang Car Thing lên xe](#28-mang-car-thing-lên-xe)
+29. [Gói dữ liệu cho xe, ban đêm, gõ bàn, lệnh nói](#29-gói-dữ-liệu-cho-xe-ban-đêm-gõ-bàn-lệnh-nói)
+30. [Đầu đọc OBD và trang Xe](#30-đầu-đọc-obd-và-trang-xe)
+31. [Đóng dự án (20/10/2026)](#31-đóng-dự-án-20102026)
+32. [Bảng tổng hợp lỗi](#32-bảng-tổng-hợp-lỗi)
+33. [Những điều rút ra](#33-những-điều-rút-ra)
 
 ---
 
@@ -861,7 +865,224 @@ Vậy trên xe hoàn toàn không có mạng. Mọi thứ phải tới từ iPho
 
 **Mạng qua Bluetooth (chưa xong).** iPhone có dịch vụ NAP (Personal Hotspot qua Bluetooth) và `bluetoothd` trên Car Thing có sẵn plugin network, chỉ thiếu BNEP trong nhân. Nhân không bật `MODVERSIONS`, `MODULE_SIG`, `RANDSTRUCT`, CFI hay LTO, nên một `bnep.ko` dựng từ mã Linux 7.0.2 gốc với cấu hình của máy (`/proc/config.gz`) và GCC 15.2 có vermagic khớp. Module đã dựng xong trên server 2 nhưng chưa nạp thử. Trước khi dùng mạng này cần giới hạn sshd vào `uncm0`: nhân không có netfilter, và sshd đang nghe trên mọi giao diện. Cách dựng lại, nạp và gỡ: [`carthing/bnep/README.md`](../carthing/bnep/README.md).
 
-## 30. Bảng tổng hợp lỗi
+## 30. Đầu đọc OBD và trang Xe
+
+**Mục tiêu.** Trên xe, Car Thing thành một mặt đồng hồ: tốc độ, vòng tua, nhiệt độ máy, xăng, ắc quy, quãng đường của chuyến, và đèn báo lỗi động cơ kèm mã lỗi. Dữ liệu lấy từ một đầu đọc OBD-II rẻ tiền (chip ELM327 hoặc tương thích) cắm vào cổng chẩn đoán dưới vô lăng.
+
+**Chọn loại đầu đọc.** Có hai loại:
+
+* Bluetooth Classic (cổng nối tiếp SPP), thường ghi "Android only".
+* Bluetooth LE, thường ghi "dùng được với iPhone".
+
+Chọn LE vì phonelink đã nói chuyện với BlueZ qua GATT. Bluetooth Classic trên Car Thing đang tắt hẳn (không hiện, không nhận kết nối, xem SECURITY), và không nên mở lại chỉ vì một cái đầu đọc.
+
+Chưa mua đầu đọc nào: việc mua cần hỏi trước. Vì vậy phần mềm được làm và thử theo ba cách: một đầu đọc giả trong test, một chuyến đi giả (`-obd-demo`) trên máy thật, và quét Bluetooth thật.
+
+**Car Thing làm hai vai cùng lúc.**
+
+* Với iPhone, Car Thing là thiết bị ngoại vi: nó quảng bá và có dịch vụ remote.
+* Với đầu đọc, Car Thing là máy trung tâm: nó quét, kết nối và gửi lệnh.
+
+BlueZ làm được cả hai trên cùng một radio. Vòng lặp tín hiệu D-Bus trong `bluez.go` dùng chung cho cả hai:
+
+* `obdValue` lấy riêng các thông báo đến từ đầu đọc.
+* `isOBD` chặn sự kiện của đầu đọc khỏi phần logic điện thoại. Không có nó, một đầu đọc kết nối trong lúc mở cửa sổ ghép đôi sẽ bị "mời ghép đôi" như một chiếc iPhone.
+
+**Chỉ chạy khi cần.** Chỉ bản trên xe của trang mở luồng `GET /obd/events`. phonelink quét và kết nối khi có trang đang nghe, cộng thêm 2 phút sau khi trang cuối cùng rời đi. Ở bàn, trang hub không bao giờ nghe, nên Car Thing không quét gì.
+
+Luồng này tách khỏi `/events`, tối đa 5 lần mỗi giây. Nhờ vậy trạng thái iPhone (thông báo, nhạc) không bị gửi lại theo mỗi con số của động cơ.
+
+**Giao thức ELM327 (`elm.go`).** Lệnh là chữ, kết thúc bằng `\r`; câu trả lời kết thúc bằng dấu `>`.
+
+* **Danh sách lệnh được phép**, kiểm tra ngay trong phonelink, dưới lớp HTTP:
+  * `ATZ`, `ATI`, `ATE0`, `ATL0`, `ATS0`, `ATH0`, `ATAT1`, `ATSP0`, `ATRV`, `ATDPN`;
+  * mode 01 (số liệu trực tiếp);
+  * mode 03 (mã lỗi đã lưu).
+
+  Không có lệnh nào xoá mã lỗi (mode 04), chạy thử nghiệm, đặt header hay ghi vào bộ nhớ đầu đọc. Một lỗi trong trang cũng không gửi được những lệnh đó.
+* **Câu trả lời của đầu đọc** được coi là dữ liệu không tin cậy:
+  * tối đa 4 KB;
+  * chỉ giữ ký tự in được;
+  * đọc như hex, có kiểm tra độ dài.
+
+  Đầu đọc gửi dồn dập thì phần thừa bị bỏ.
+* **Công thức các giá trị:** tải máy, nhiệt độ nước làm mát, vòng tua, tốc độ, nhiệt độ khí nạp, lưu lượng khí (MAF), bướm ga, thời gian chạy, mức xăng, điện áp, nhiệt độ ngoài trời, nhiệt độ dầu, lượng xăng tiêu thụ.
+* **Mã lỗi:**
+  * Trên CAN, khung đầu cho biết có bao nhiêu mã. Câu trả lời dài đến thành nhiều khung đánh số (`0:`, `1:`) sau một dòng độ dài.
+  * Bus cũ gửi 3 mã mỗi dòng, đệm số 0.
+  * Hai bit đầu chọn hệ thống: P (động cơ, hộp số), C (khung gầm), B (thân xe), U (mạng).
+
+**Vòng đọc.**
+
+1. Khởi động: `ATZ`, tắt echo, tắt xuống dòng, tắt khoảng trắng, tắt header; thời gian chờ tự điều chỉnh; giao thức tự dò.
+2. `ATRV` đo điện áp ắc quy ngay ở cổng, chạy được cả khi tắt máy. Nhờ vậy lúc chờ, trang hiện điện áp ắc quy thay vì một màn trống.
+3. `0100`, `0120`, `0140` cho biết xe có những giá trị nào. Lệnh đầu tiên còn bắt đầu việc dò giao thức, mất tới 20 s.
+4. Mỗi vòng hỏi tốc độ, vòng tua, bướm ga, tải, và thêm 3 giá trị chậm, lần lượt xoay vòng.
+   * Ắc quy: mỗi 3 s.
+   * Đèn báo lỗi và số mã (`0101`): mỗi 30 s.
+   * Mã lỗi (`03`): khi đèn báo hoặc số mã cho biết có lỗi.
+5. Ba vòng liền không có câu trả lời nghĩa là xe đã tắt máy. Trang về trạng thái `noecu`, và phonelink dò lại giao thức mỗi 10 s.
+
+**Giao diện.** Cả trang dựa vào một thứ duy nhất: vòng tua là 57 vạch quanh con số tốc độ, sáng dần lên như một dãy lồng đèn, hợp với "Mei's Night Market".
+
+* **Vòng tua:**
+  * 7 vạch cho mỗi 1.000 vòng/phút, vạch dài ở mỗi mốc nghìn;
+  * màu vàng mít;
+  * 1.000 vòng cuối màu đỏ sen.
+* **Tốc độ:** chữ Bricolage 800 cỡ 132 px, số cùng độ rộng nên không nhảy. Vòng tua viết nhỏ bên dưới.
+* **Bướm ga:** một cung mảnh màu ngọc bên trong vòng vạch.
+* **Bên phải là 3 thanh:**
+  * nhiệt độ máy: lạnh màu xanh trời, bình thường màu ngọc, từ 105 °C màu đỏ;
+  * xăng: đỏ khi dưới 12%;
+  * ắc quy: ngọc khi từ 13,2 V đến 14,8 V (đang sạc), đỏ khi dưới 12,2 V.
+* **Dưới cùng là chuyến này:** quãng đường, thời gian nổ máy, mức tiêu hao.
+* **Đèn báo lỗi:** biểu tượng động cơ màu vàng, nằm trong khoảng hở phía dưới vòng vạch, kèm mã đầu tiên.
+* **Các màn chờ:** mỗi trạng thái nói rõ việc cần làm tiếp:
+  * chưa có đầu đọc: 3 bước, bấm núm để tìm;
+  * đang tìm;
+  * đang chờ xe bật;
+  * tắt máy: điện áp ắc quy cỡ lớn.
+* **Nút:**
+  * 1: đặt lại chuyến;
+  * 3: danh sách mã lỗi, giải thích bằng lời thường cho khoảng 20 mã hay gặp; mã khác hiện tên hệ thống;
+  * 4 (bấm hai lần): quên đầu đọc.
+* **Đơn vị** theo trang Thời tiết: km/h và °C, hoặc mph và °F.
+* **Ban đêm:** đổi màu theo bảng màu đêm sẵn có.
+* **Đồng hồ đuốc** không chiếm màn hình khi đang ở trang Xe.
+
+Cách vẽ được chọn cho GPU Mali:
+
+* Mỗi lần cập nhật chỉ đổi class của những vạch vừa đổi.
+* Cung bướm ga là `stroke-dasharray` trên một path dài 100.
+* Các thanh dùng `scaleX`.
+* Không có hiệu ứng nào chạy liên tục.
+
+Đo trên máy thật với chuyến đi giả: 60 khung/giây, p95 16,8 ms, 1 khung quá 33 ms trong 8 s. CPU vẫn rảnh 83%.
+
+**Cảnh báo trên mọi trang.** Mỗi cảnh báo hiện một lần, và chỉ hiện lại sau khi giá trị đã về bình thường:
+
+* nhiệt độ nước làm mát từ 112 °C ("Máy nóng… tấp vào chỗ an toàn và tắt máy"), hiện lại sau khi về dưới 105 °C;
+* đèn báo lỗi động cơ sáng;
+* ắc quy dưới 11,8 V khi tắt máy, hiện lại sau khi lên 12,2 V.
+
+**Chuyến đi.**
+
+* Trang cộng dồn quãng đường từ tốc độ theo thời gian giữa hai lần nhận, bỏ những quãng hở quá 3 s.
+* Xăng lấy từ lượng tiêu thụ xe báo. Nếu xe không báo thì tính từ lưu lượng khí: chia 14,7 (tỉ lệ cho xăng) rồi chia 740 g/L.
+* Chuyến gắn với "giờ lái" sẵn có: một chuyến mới bắt đầu sau 10 phút trang không mở.
+
+**Thử thế nào khi chưa có đầu đọc.**
+
+* **`go test` (`elm_test.go`):** một đầu đọc giả cắt câu trả lời thành mẩu 7 byte, bật echo cho tới `ATE0`, trả `SEARCHING...`, có hai ECU cùng trả lời. Test kiểm tra:
+  * danh sách lệnh được phép (`04`, `ATSH`, `2E…` bị chặn);
+  * hết giờ, và câu trả lời đến muộn bị bỏ;
+  * gửi dồn dập;
+  * mọi kiểu mã lỗi;
+  * tên thiết bị;
+  * cả vòng đọc.
+
+  CI giờ chạy `go test`.
+* **`-obd-demo`:** chuyến đi giả trên chính luồng thật. Mình đã chụp màn hình trên Car Thing: ngang, dọc, ngày, đêm, tiếng Việt.
+* **Quét thật:** bấm tìm trên trang, 30 s.
+
+### Lỗi #36: lần quét thật đầu tiên chọn nhầm thiết bị của người khác
+
+**Triệu chứng.** Lần tìm đầu tiên chọn "LUNA 3" (-83 dBm) và còn liệt kê một thiết bị không tên. Không cái nào là đầu đọc OBD.
+
+**Nguyên nhân.**
+
+* Bản đầu nhận một thiết bị nếu tên **hoặc** dịch vụ của nó giống đầu đọc.
+* Các dịch vụ cổng nối tiếp `FFE0` và `FFF0` mà đầu đọc dùng cũng có trên rất nhiều đồ Bluetooth rẻ tiền khác.
+* Ngoài ra không có ngưỡng khoảng cách, nên một thiết bị ở xa cũng được chọn.
+
+**Chuyện gì đã xảy ra.**
+
+* phonelink thử kết nối. BlueZ huỷ (`le-connection-abort-by-local`) trước khi có gì được trao đổi.
+* Trong vòng một phút, mình đã quên thiết bị đó và xoá nó khỏi BlueZ.
+* Không có lệnh nào được gửi tới nó, và không có dữ liệu nào đi ra.
+
+**Sửa, theo ba lớp:**
+
+1. Chỉ xét **tên**.
+2. Bỏ qua thiết bị yếu hơn -80 dBm. Đầu đọc cắm dưới vô lăng luôn ở gần.
+3. Sau khi kết nối, đầu đọc phải trả lời `ATI` như một ELM327, nếu không thì bị quên ngay. Đây là lệnh đầu tiên được gửi.
+
+Có thêm test với các tên "LUNA 3", "Mi Band 7", "HMSoft", "BT05" và tên trống. Lần quét thật thứ hai: "Không thấy đầu đọc", không chọn gì.
+
+### Lỗi #37: không xoá được `~/kbuild`
+
+**Triệu chứng.** Lúc dọn dẹp, `rm -rf ~/kbuild` báo "Permission denied" hàng nghìn lần.
+
+**Nguyên nhân.** Container dựng `bnep.ko` chạy với quyền root, nên các tệp sinh ra thuộc root.
+
+**Sửa.** Xoá bằng chính loại container đó. `build-bnep.sh` giờ trả quyền sở hữu (`chown`) về cho người dùng ngay trong container, trước khi thoát.
+
+**Chưa thử với đầu đọc thật:**
+
+* đường kết nối, đăng ký thông báo và ghi lệnh qua BlueZ với một đầu đọc thật;
+* đầu đọc đòi ghép đôi: hiện bị từ chối;
+* giá trị và mã lỗi của một chiếc xe thật;
+* mức hao ắc quy khi để đầu đọc cắm qua đêm.
+
+Đầu đọc gợi ý mua nằm trong SETUP mục 14.
+
+## 31. Đóng dự án (20/10/2026)
+
+**Hiện trạng: cái gì chạy ở đâu.**
+
+| Ở đâu | Chạy gì |
+|---|---|
+| Car Thing (Nocturne 4.1.6) | Chromium kiosk trỏ tới hub; `phonelink` (iPhone, cảm biến ánh sáng, micro cho đuốc và gõ bàn, bản trang cho xe trên `127.0.0.1:5056`, đầu đọc OBD); `brightness-sync.sh`, `voice-agent.sh`, `kiosk-watch.sh`; tất cả trong `/var/lib/hub`, cấu hình trong `/etc` do `check-carthing.sh` giữ |
+| Server 2 | Container `carthing-hub`, `carthing-docker-status`, `carthing-whisper` (`~/carthing-hub`); công cụ trong `~/carthing-tools`; cron: `host-report.sh` (5 phút), `check-carthing.sh --json` (mỗi giờ), `carthing-stats.sh` (2 phút), `sync-carpack.sh` (5 phút) |
+| Server 1 | `hub-stats-agent` (chỉ đẩy dữ liệu đi) |
+| GitHub | Repo `carthing-desk-hub`, CI kiểm tra cú pháp, `gofmt`, `go vet`, `go test`, test của hub |
+
+**Đã kiểm chứng trên máy thật:** mọi trang ở bàn; chế độ xe khi chặn hub; gói dữ liệu cho xe; màu ban đêm; giờ từ iPhone; ngọn đuốc và Pomodoro; lệnh nói tiếng Anh (giọng máy); whisper không ra được internet; trang Xe với chuyến đi giả; quét Bluetooth thật.
+
+**Chưa kiểm chứng:**
+
+* gõ bàn bằng tiếng gõ thật;
+* lệnh nói bằng giọng thật, nhất là tiếng Việt;
+* chế độ xe trong một chiếc xe thật (sạc USB trên xe, cảm biến ánh sáng trong cabin);
+* đầu đọc OBD thật.
+
+**Bỏ ngỏ có chủ đích.**
+
+* **Đầu đọc OBD:** cần mua, khoảng 20–35 USD. Xem SETUP mục 14.
+* **Mạng của iPhone qua Bluetooth (BNEP):** module đã dựng và lưu ở `~/carthing-tools/bnep.ko` nhưng chưa nạp. Phải giới hạn SSH vào dây USB trước. Toàn bộ hướng dẫn ở [`carthing/bnep/README.md`](../carthing/bnep/README.md).
+* **Chữ to hơn trên xe ban đêm:** hiện chỉ đổi màu.
+
+**Dọn dẹp lúc đóng.**
+
+* **Server 2, đã xoá:**
+  * `~/kbuild`: 2,1 GB mã nhân và trình biên dịch; `build-bnep.sh` tải lại được;
+  * `~/amx`: ảnh chụp và công cụ thử; công cụ thử chế độ xe được giữ lại thành `tools/cartest.mjs`;
+  * `~/carthing-tools/superbird.config` thừa;
+  * image `debian:trixie` và `curlimages/curl` dùng để thử;
+  * đường hầm SSH tới DevTools.
+* **Server 2, giữ lại:**
+  * `bnep.ko`;
+  * model whisper;
+  * image `debian:bookworm-slim` (gốc để dựng whisper) và `golang:1.24-alpine` (để dựng phonelink);
+  * bộ đệm dựng mà image whisper đang dùng.
+* **Car Thing:**
+  * không còn tệp thử nào;
+  * thiết bị lạ ở lỗi #36 đã xoá khỏi BlueZ;
+  * phonelink chạy bình thường, không ở chế độ demo;
+  * kiosk ở trang hub;
+  * `check-carthing.sh` báo "Everything is in place".
+* **Không đụng tới:** những thứ không thuộc dự án này, gồm `~/carthing-hub/.env.bak-20261019` (bản sao `.env` có thêm `DASHBOARD_TOKEN`, quyền 600, từ việc khác) và image `hello-world`.
+* **Máy tính cá nhân:** không cài hay chạy gì. Chỉ sửa tệp trong repo, mọi việc dựng và thử đều chạy trên server 2.
+
+**Mở lại sau một thời gian dài.**
+
+1. `ssh nhaajtt@10.10.10.20 '~/carthing-tools/check-carthing.sh --check'`: cho biết Car Thing còn đúng như repo không. Sau một bản cập nhật Nocturne thì chạy không có `--check` để sửa.
+2. `docker compose ps` trong `~/carthing-hub`: ba container phải `Up`.
+3. Đọc lại `docs/SETUP.md`. Mỗi phần tuỳ chọn có lệnh riêng.
+4. Muốn đổi code phonelink: `tools/build-phonelink.sh` rồi `check-carthing.sh`. Muốn đổi trang: chép `hub/public` lên server 2; hub tự nạp lại, còn bản cho xe được chép khi chạy `check-carthing.sh`.
+5. Mỗi lần đẩy lên GitHub, CI phải xanh.
+
+## 32. Bảng tổng hợp lỗi
 
 | # | Triệu chứng | Nguyên nhân gốc | Cách sửa |
 |---|---|---|---|
@@ -903,8 +1124,10 @@ Vậy trên xe hoàn toàn không có mạng. Mọi thứ phải tới từ iPho
 | 33 | Rớt khung tăng lên 8–10% sau khi thêm trang | `pointer-events` kế thừa trên trang, quy tắc `*`, `setHTML` thay cả khối, `width` của thanh đo, flex | `z-index`, quy tắc hẹp, ghép markup, `scaleX`, khối thường |
 | 34 | Trang iPhone rớt 6–13 khung khi trượt vào | Ô bo góc có nền và nét đứt đắt trên GPU Mali một lõi | Chữ cái tô màu, đường liền |
 | 35 | Trang iPhone trống hàng giờ, nhạc từ iPhone cũng mất, dù vẫn "đã kết nối" | Ngay sau khi iPhone nối lại, đăng ký nhận thông báo bị từ chối một lần (ATT 0x0e); phonelink không thử lại cho tới lần nối sau | Thử lại sau 5, 10, 20, 40 giây, rồi mỗi phút; lần thử hỏng thì huỷ phần đã đăng ký, để giá trị đến trong lúc chờ vào lại hàng đợi phát lại |
+| 36 | Lần quét đầu đọc OBD thật đầu tiên chọn thiết bị của người khác | Nhận thiết bị theo dịch vụ cổng nối tiếp `FFE0`/`FFF0`, mà rất nhiều đồ Bluetooth rẻ tiền cũng có; không có ngưỡng khoảng cách | Chỉ xét tên, bỏ thiết bị yếu hơn -80 dBm, bắt trả lời `ATI` như ELM327 trước khi gửi gì khác |
+| 37 | Không xoá được `~/kbuild` | Container dựng module chạy root, tệp sinh ra thuộc root | Xoá bằng container; script `chown` lại trong container |
 
-## 31. Những điều rút ra
+## 33. Những điều rút ra
 
 1. **Đo trên thiết bị thật, không đoán.** Font, FPS, mức âm thanh của micro, giờ hệ thống: lần nào thiết bị thật cũng khác với giả định.
 2. **"Không tin mặc định" là công cụ thiết kế, không chỉ là bảo mật.** Nó quyết định Car Thing không giữ key, hub không cầm `docker.sock`, agent chỉ đẩy dữ liệu đi, và firewall nằm trên đúng máy.
@@ -915,3 +1138,5 @@ Vậy trên xe hoàn toàn không có mạng. Mọi thứ phải tới từ iPho
 7. **Hai chương trình dùng chung một radio thì phải nhường nhau.** Đọc log của chương trình kia trước: lỗi `In Progress` chỉ hiện ra khi cả hai cùng ghi.
 8. **Nền tảng đổi luật mà không báo.** iOS 18 ngừng liệt kê phụ kiện chỉ xin thông báo, và Spotify đổi nội dung trả về. Đường vòng (remote media, đọc lỏng tay hơn) rẻ hơn chờ họ đổi lại.
 9. **Đo từng lần chuyển trang, không chỉ cả vòng.** Con số tổng dao động 2–3 điểm giữa các lần đo; tách theo trang và tắt thử từng phần CSS mới chỉ ra đúng thủ phạm (một thuộc tính kế thừa, một nền bo góc).
+10. **Thử thật một lần, kể cả khi chưa có phần cứng.** Mọi test với đầu đọc giả đều qua; chỉ một lần quét Bluetooth thật trong 30 giây mới lộ ra rằng dịch vụ "cổng nối tiếp" của đầu đọc cũng là của cả trăm thứ đồ khác xung quanh.
+11. **Cái gì container tạo dưới quyền root thì trả quyền lại ngay trong container.** Nếu không, việc dọn dẹp về sau cần đúng quyền root mà lúc đầu đã cố tránh.

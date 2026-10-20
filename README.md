@@ -34,6 +34,7 @@ The Car Thing never touches the internet. It only talks to the hub, the hub only
 | 🕰 **Desk clock** | After 10 quiet minutes, or straight away from the Clock tile in the quick menu, the screen becomes ASCII art: a torch burning on a stone wall in the dark, its flickering light on the bricks, sparks rising, and the clock's digits catching fire when the minute changes. Turning the knob feeds the fire up to a blaze or lets it die down; all the way down it goes out and only smokes, and blowing into the Car Thing brings it back, the harder and longer the bigger. The date, weather, next event and phone battery sit underneath as terminal text. While the focus timer runs, the fire burns down with the time left and is out, only smoking, during the break. |
 | ⏱ **Focus** | A Pomodoro timer: buttons 1–4 set 15, 25, 45 or 60 minutes. Below it, **time at the desk** today and over the week, counted from the iPhone's presence, with a nudge to stand up after an hour without a break. |
 | 🚗 **Car mode** | Away from server 2 (in the car, on a USB charger) the Car Thing shows its own copy of the page with what the iPhone brings over Bluetooth: Music (the iPhone's player; press play to resume the last music app), the iPhone page, calls and the desk clock. While it sits at the desk, the hub **packs** what the car will want: covers and lyrics of the songs the iPhone played, four days of weather, the calendar and Mei's reminders, so the car has Weather and Calendar pages, covers and lyrics without any internet. When the cabin is dark the page turns to warm, dim **night colours**; it counts how long you have been driving and suggests a **break** after 2 hours. It takes its time from the iPhone and lets the light sensor set the brightness. Back at the desk it returns to the full hub by itself. No news, markets or Mei in the car. |
+| 🛞 **Car page (OBD)** | In car mode, a cheap Bluetooth LE OBD-II reader in the car's diagnostic port turns the Car Thing into an instrument: speed, a rev counter whose ticks light up one by one, throttle, engine temperature, fuel level and battery voltage, this trip's distance, engine time and fuel economy. Banners on any page if the engine runs hot, the check-engine light comes on or the battery is low; button 3 lists the stored fault codes in plain words. Only read: nothing is ever cleared or changed in the car. Find the reader once from the page; from then on only that reader is used. With the engine off it shows the battery voltage. |
 | 👏 **Tap control** | Switched on from the quick menu: knock twice on the desk (or clap twice) to play or pause the music, three times to switch the screen off or on. Off by default, desk only. |
 | ⚙️ **Quick menu** | The round button opens screen brightness, restart, shut down, rotate (each press turns the screen another 90°), language, iPhone (pair, or forget the paired one), the desk clock and tap control. |
 | 🇻🇳 **English / Tiếng Việt** | The language tile switches the whole screen: pages, hints, dates and the clock, the banners the hub raises, and Mei's morning briefing. |
@@ -66,8 +67,11 @@ The Car Thing never touches the internet. It only talks to the hub, the hub only
 | iPhone | Siri (hold) | Camera shutter | Hide / show messages | Reply with Siri |
 | Words | Knew it | Not yet | 5 more words | |
 | Mei | Today's briefing | | | |
+| Car (car mode) | Reset trip | | Fault codes | Forget the reader (press twice) |
 
 Upside down, the preset buttons sit along the bottom edge in reverse order, so the hub swaps them: the one on your left is always 1.
+
+On **Car** with no reader chosen yet, press the knob to search for one (30 s).
 
 On **News**: press the knob to highlight a story, turn to move, press again (or just tap the story) for its summary. While a summary is open, turning the knob flips to the next story. Turn to Mei (the last page) with the summary still open and ask her about it.
 
@@ -82,6 +86,7 @@ On **News**: press the knob to highlight a story, turn to move, press again (or 
 | <img src="docs/screenshots/17-calendar.png" width="400"><br>**Calendar** (sample events) | <img src="docs/screenshots/19-mei-briefing.png" width="400"><br>**Mei's morning briefing** |
 | <img src="docs/screenshots/10-weather.png" width="400"><br>**Weather** | <img src="docs/screenshots/12-servers.png" width="400"><br>**Servers** |
 | <img src="docs/screenshots/11-music.png" width="400"><br>**Music** | <img src="docs/screenshots/14-quick-menu.png" width="400"><br>**Quick menu** (round button) |
+| <img src="docs/screenshots/25-car-obd.png" width="400"><br>**Car page** in car mode (an OBD reader's demo drive) | <img src="docs/screenshots/26-car-obd-setup.png" width="400"><br>**Car page** before a reader is chosen |
 
 <details>
 <summary><b>Portrait mode</b> (rotate from the quick menu)</summary>
@@ -118,6 +123,7 @@ flowchart LR
     IP["iPhone<br/>notifications · media · battery"]
     IP <-- "Bluetooth LE<br/>paired with a code, encrypted" --> CT
   end
+  OBD["OBD-II reader<br/>in the car (car mode)"] -- "Bluetooth LE<br/>read-only commands" --> CT
   subgraph s2["Server 2 (the brain)"]
     HUB["carthing-hub<br/>Node 22, read-only container"]
     DS2["docker-status<br/>read-only sidecar"]
@@ -139,7 +145,7 @@ flowchart LR
   HUB -- "outbound HTTPS only" --> NET
 ```
 
-* **The Car Thing is a screen, not a computer you trust.** It runs Chromium in kiosk mode pointed at the hub, plus three tiny shell helpers (one applies the brightness you pick and switches the backlight off at night, one records the microphones when you talk to Mei, one reloads the kiosk if it gets stuck) and `phonelink`, a small Go program that talks to the paired iPhone over Bluetooth and serves only the kiosk page, on loopback. It has no route to the LAN or the internet. After a Nocturne update, `check-carthing.sh` on server 2 checks all of that and puts back whatever the update reset.
+* **The Car Thing is a screen, not a computer you trust.** It runs Chromium in kiosk mode pointed at the hub, plus three tiny shell helpers (one applies the brightness you pick and switches the backlight off at night, one records the microphones when you talk to Mei, one reloads the kiosk if it gets stuck) and `phonelink`, a small Go program that talks to the paired iPhone over Bluetooth (and, in the car, reads an OBD reader) and serves only the kiosk page, on loopback. It has no route to the LAN or the internet. After a Nocturne update, `check-carthing.sh` on server 2 checks all of that and puts back whatever the update reset.
 * **Security data without new privileges.** A small cron script on each server (run as the normal user, which can read the journal) writes failed SSH logins, firewall blocks, open ports and pending updates to a JSON file. The hub reads server 2's file through a read-only mount; server 1's agent sends its file along with the stats. Image update checks are anonymous `HEAD` requests to the registries.
 * **The hub is the brain.** One Node.js process with no dependencies gathers every data source, keeps all keys, and streams state to the screen over Server-Sent Events. It runs in a read-only container with every capability dropped and no `docker.sock`.
 * **Everything is free.** No paid API is required. The two optional extras that would cost money (Google Search grounding for Mei, and paid Gemini tiers) are off by default. When the main Gemini model runs out of its free daily quota, Mei switches to Flash-Lite on her own.
@@ -158,7 +164,8 @@ hub/            the brain: Node 22 server, UI, config, compose file
                 style.css + theme.css, fonts/ (Bricolage Grotesque, OFL)
 agent/          server-1 stats agent (push only) + its compose file
 carthing/       files that live on the Car Thing: helpers, kiosk override and watcher, sshd, NTP, watchdog;
-  phonelink/    the iPhone link over Bluetooth (Go, built on the brain by tools/build-phonelink.sh)
+  phonelink/    the iPhone link and the OBD reader over Bluetooth (Go, built on the brain by tools/build-phonelink.sh)
+  bnep/         notes and config for the iPhone's hotspot over Bluetooth (built, not in use)
 host/           server-2 host config: netplan, UFW / DOCKER-USER rules, sysctl, chrony; host-report.sh (cron)
 tools/          setup scripts for secrets, check-carthing.sh (run after Nocturne updates), DevTools helpers (screenshots, the GIF, error capture)
 docs/           SETUP, ARCHITECTURE, SECURITY, DEVLOG, screenshots

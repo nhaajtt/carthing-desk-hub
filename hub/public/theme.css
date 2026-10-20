@@ -735,7 +735,8 @@ body:not(.portrait) .tab { padding: 5px 6px; font-size: 13px; }
 .car-tag { display: none; font: 600 13px var(--display); color: var(--gold); padding: 2px 9px; border-radius: 999px; box-shadow: inset 0 0 0 1.5px rgba(255, 194, 61, 0.55); }
 body.car .car-tag { display: inline-block; }
 body.car #conn { display: none; }
-body.car .tab:not(:nth-child(3)):not(:nth-child(4)):not(:nth-child(5)):not(:nth-child(8)) { display: none; }
+body.car .tab:not(:nth-child(3)):not(:nth-child(4)):not(:nth-child(5)):not(:nth-child(8)):not(:nth-child(11)) { display: none; }
+body:not(.car) .tab:nth-child(11) { display: none; }
 /* night driving (the light sensor says the cabin is dark): warm, dim colours that do not dazzle; only variables
    change, so nothing extra is drawn per frame */
 body.car.night, body.car.night[data-sky] {
@@ -748,3 +749,88 @@ body.car.night #mArt { opacity: 0.75; }
 /* no air quality in the car: it is not packed (it changes too fast to be worth showing hours later) */
 body.car .wx-now .aqi { display: none; }
 body.car .ov-tile[data-i="0"], body.car .ov-tile[data-i="1"], body.car .ov-tile[data-i="2"], body.car .ov-tile[data-i="7"], body.car #ovSlider { display: none; }
+
+/* ---------- Car page (car mode): live data from an OBD reader. One instrument carries the page: the rev counter's
+   ticks light up one by one like a row of lanterns. Everything around it stays quiet. Values change at most five
+   times a second and only classes, text and transforms change, so the gauge never animates on its own. */
+.dash { flex-direction: column; padding: 4px 22px 8px 14px; }
+.dash-live { display: none; flex: 1; min-height: 0; align-items: center; gap: 26px; }
+.dash[data-state="live"] .dash-live { display: flex; }
+.dash[data-state="live"] .dash-wait { display: none; }
+.dash-gauge { position: relative; width: 392px; height: 392px; flex: none; margin: -16px 0 -34px; }
+.dash-gauge::before { content: ''; position: absolute; inset: 40px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 194, 61, 0.09), transparent); }
+.dash-gauge > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.tk { stroke: var(--dim); stroke-width: 4; stroke-linecap: round; opacity: 0.5; }
+.tk.major { stroke-width: 5.5; opacity: 0.85; }
+.tk.red { stroke: var(--down); opacity: 0.3; }
+.tk.on { stroke: var(--gold); opacity: 1; }
+.tk.red.on { stroke: var(--down); }
+.dg-nums text { fill: var(--muted); font: 600 15px var(--display); text-anchor: middle; }
+.dg-thr-track, .dg-thr { fill: none; stroke-width: 5; }
+.dg-thr-track { stroke: var(--line); }
+.dg-thr { stroke: var(--up); stroke-dasharray: 0 100; opacity: 0.75; }
+.dg-read { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-top: 6px; }
+.dg-read b { font: 800 132px/0.86 var(--display); letter-spacing: -5px; font-variant-numeric: tabular-nums; }
+.dg-read span { font: 600 17px var(--display); color: var(--muted); margin-top: 6px; }
+.dg-read em { font: 600 16px var(--display); font-style: normal; color: var(--gold); margin-top: 12px; font-variant-numeric: tabular-nums; }
+.dg-mil { position: absolute; left: 50%; bottom: 52px; transform: translateX(-50%); display: none; align-items: center; gap: 7px; color: var(--gold); font: 800 15px var(--display); white-space: nowrap; }
+.dg-mil.on { display: flex; }
+.dg-mil svg { width: 30px; height: 22px; }
+
+.dash-side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
+.ds { display: grid; grid-template-columns: 1fr auto; align-items: baseline; row-gap: 8px; }
+.ds span, .dash-trip span { font: 600 14px var(--display); color: var(--muted); }
+.ds b, .dash-trip b { font: 800 30px/1 var(--display); font-variant-numeric: tabular-nums; }
+.ds i { grid-column: 1 / -1; height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.ds s { display: block; height: 100%; background: var(--gold); transform-origin: 0 50%; transform: scaleX(0); transition: transform 0.6s var(--ease); }
+.ds.ok s { background: var(--up); }
+.ds.cold s { background: var(--sky); }
+.ds.hot s { background: var(--down); }
+.ds.hot b { color: var(--down); }
+.ds.none b { color: var(--dim); }
+.dash-trip { margin-top: 4px; padding-top: 18px; border-top: 1px solid var(--line); display: grid; grid-template-columns: 1fr auto; align-items: baseline; row-gap: 6px; }
+.dash-trip em { grid-column: 1 / -1; font-style: normal; font-size: 14px; color: var(--muted); }
+.dash-keys { justify-content: center; min-height: 18px; }
+
+.dash-wait { flex: 1; display: grid; place-items: center; }
+.dw { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; max-width: 540px; }
+.dw b { font: 800 28px/1.15 var(--display); }
+.dw span, .dw em { font-size: 15px; font-style: normal; color: var(--muted); }
+.dw em { color: var(--gold); }
+.dw ol { text-align: left; margin: 6px 0 0; padding-left: 24px; font-size: 16px; line-height: 1.55; color: var(--muted); }
+.dw ol li::marker { color: var(--gold); font: 800 16px var(--display); }
+.dw-plug { width: 96px; height: 64px; color: var(--gold); margin-bottom: 4px; }
+.dw-volts { font: 800 112px/1 var(--display); letter-spacing: -3px; font-variant-numeric: tabular-nums; }
+.dw-volts small { font-size: 34px; letter-spacing: 0; color: var(--muted); margin-left: 6px; }
+.dw-radar { position: relative; width: 96px; height: 96px; margin-bottom: 6px; }
+.dw-radar::after { content: ''; position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px; border-radius: 50%; background: var(--gold); }
+.dw-radar i { position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 0 0 0 3px var(--gold); opacity: 0; animation: radar 2.4s var(--ease) infinite; }
+.dw-radar i:nth-child(2) { animation-delay: 0.8s; }
+.dw-radar i:nth-child(3) { animation-delay: 1.6s; }
+.dw-radar.slow i { animation-duration: 3.6s; }
+.dw-radar.slow i:nth-child(2) { animation-delay: 1.2s; }
+.dw-radar.slow i:nth-child(3) { animation-delay: 2.4s; }
+@keyframes radar { from { transform: scale(0.2); opacity: 0.9; } to { transform: scale(1); opacity: 0; } }
+.page:not(.on) .dw-radar i { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) { .dw-radar i { animation: none; opacity: 0.4; } }
+
+.dash-codes { position: absolute; inset: 0; z-index: 3; display: none; place-items: center; background: var(--bg); }
+.dash.codes .dash-codes { display: grid; }
+.dc-card { width: 580px; max-height: 400px; overflow: hidden; display: flex; flex-direction: column; gap: 14px; padding: 24px 28px; border-radius: 18px; background: var(--panel); }
+.dc-card b { font: 800 24px var(--display); }
+.dc-card ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.dc-card li { display: grid; grid-template-columns: 84px 1fr; gap: 14px; align-items: baseline; }
+.dc-card li em { font: 800 19px var(--display); font-style: normal; color: var(--gold); font-variant-numeric: tabular-nums; }
+.dc-card li span { font-size: 16px; line-height: 1.35; }
+.dc-card p { margin: 0; font-size: 16px; color: var(--muted); }
+.dc-card small { font-size: 13px; color: var(--dim); }
+
+.portrait .dash { padding: 4px 14px 8px; }
+.portrait .dash-live { flex-direction: column; gap: 10px; }
+.portrait .dash-gauge { width: 432px; height: 432px; margin: -8px 0 -40px; }
+.portrait .dash-side { width: 100%; flex: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px 20px; }
+.portrait .ds { grid-template-columns: 1fr; }
+.portrait .ds b { font-size: 28px; }
+.portrait .dash-trip { grid-column: 1 / -1; margin-top: 0; }
+.portrait .dc-card { width: 440px; max-height: 640px; }
+.portrait .dash-keys { flex-wrap: wrap; gap: 6px 14px; }

@@ -203,13 +203,30 @@ cd ~/carthing-hub && docker compose up -d --build whisper && docker compose up -
 
 Without it, everything still goes to Gemini as before.
 
-## 14. Not finished: the iPhone's hotspot over Bluetooth
+## 14. Optional: an OBD reader in the car
+
+The Car page in car mode reads a Bluetooth **LE** OBD-II reader (an ELM327 or compatible). Buy one sold as working with iPhones: those are BLE. "Bluetooth 2.0 / Android only" readers use Classic Bluetooth (serial port profile), which phonelink does not speak. Readers known to use BLE and a name phonelink recognises:
+
+| Reader | Name it usually advertises | Rough price |
+|---|---|---|
+| Vgate iCar Pro BLE 4.0 | `IOS-Vlink`, `V-LINK` or `Vgate iCar Pro` | 20–30 USD |
+| Veepeak OBDCheck BLE / BLE+ | `VEEPEAK` or `OBDBLE` | 20–35 USD |
+| OBDLink CX | `OBDLink CX` | about 80 USD |
+| Unbranded "ELM327 BLE 4.0" | usually `OBDII` or `OBDBLE` | 10–15 USD |
+
+Names vary between batches. If a search finds nothing with the car on, a BLE scanner on a laptop shows what yours calls itself. Readers without a sleep mode slowly drain the car battery: pick one that sleeps (the Vgate and OBDLink do), or unplug it when the car stands for days.
+
+Plug it into the OBD port (under the steering wheel), switch the car on, go to the **Car** page in car mode and press the knob. phonelink looks for 30 s, keeps the nearest reader whose name matches, asks it what it is, and from then on connects to that one only. If yours advertises another name, add it to `obdName` in `carthing/phonelink/obd.go` and rebuild (section 11).
+
+To work on the page without a car, run phonelink with `-obd-demo` instead of its usual line (stop the running one first): it serves a made-up drive on the same stream.
+
+## 15. Not finished: the iPhone's hotspot over Bluetooth
 
 The Car Thing's kernel has no BNEP, so it cannot use the iPhone's Personal Hotspot over Bluetooth. A matching `bnep.ko` can be built on the brain (`tools/build-bnep.sh`); it has been built but never loaded. Restricting SSH to the USB link comes first. The steps, the config files and how to undo it are in [`carthing/bnep/README.md`](../carthing/bnep/README.md).
 
 ## Development helpers
 
-`tools/` holds the scripts used while building: `cdp.mjs` (screenshot / eval over DevTools), `steps.mjs` (a list of key presses, evals and screenshots, printing every exception), `errors.mjs` / `errors2.mjs` (reload and print exceptions), `shoot*.mjs` (the README screenshots; `demo-calendar.js` supplies sample events), `record.mjs` (frames for the README GIF). Open the tunnel first:
+`tools/` holds the scripts used while building: `cdp.mjs` (screenshot / eval over DevTools), `steps.mjs` (a list of key presses, evals and screenshots, printing every exception), `errors.mjs` / `errors2.mjs` (reload and print exceptions), `shoot*.mjs` (the README screenshots; `demo-calendar.js` supplies sample events), `record.mjs` (frames for the README GIF), `cartest.mjs` (the car copy of the page with the hub blocked for that page only, so car mode can be tried without pulling the cable). Open the tunnel first:
 
 ```bash
 ssh -i ~/.ssh/carthing_ed25519 -f -N -L 127.0.0.1:19223:127.0.0.1:9223 root@10.42.1.2

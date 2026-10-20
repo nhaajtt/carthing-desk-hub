@@ -146,6 +146,35 @@
       <div class="ask-foot"><div class="ask-meter"><div id="askMeter"></div></div><div class="ask-hint" id="askHint"></div></div>
     </section>
 
+    <!-- 11. Car (car mode only): live data from an OBD-II reader over Bluetooth, read by phonelink (obd.go) -->
+    <section class="page dash" data-name="Car" data-state="none">
+      <div class="dash-live">
+        <div class="dash-gauge">
+          <svg viewBox="0 0 400 400" aria-hidden="true">
+            <path class="dg-thr-track" d="M113.7 286.3A122 122 0 1 1 286.3 286.3"/>
+            <path class="dg-thr" id="dgThr" d="M113.7 286.3A122 122 0 1 1 286.3 286.3" pathLength="100"/>
+            <g id="dgTicks"></g>
+            <g id="dgNums" class="dg-nums"></g>
+          </svg>
+          <div class="dg-read">
+            <b id="dgSpeed">0</b>
+            <span id="dgUnit">km/h</span>
+            <em id="dgRpm"></em>
+          </div>
+          <div class="dg-mil" id="dgMil"><svg viewBox="0 0 32 24"><path d="M6 8h4V5h9v3h3l3 3h2V8h3v11h-3v-3h-2l-3 3H10l-2-3H4v4H1V9h3v3h2z" fill="currentColor"/></svg><span id="dgMilText"></span></div>
+        </div>
+        <div class="dash-side">
+          <div class="ds" id="dsCoolant"><span data-t="Engine temp">Engine temp</span><b></b><i><s></s></i></div>
+          <div class="ds" id="dsFuel"><span data-t="Fuel">Fuel</span><b></b><i><s></s></i></div>
+          <div class="ds" id="dsVolts"><span data-t="Car battery">Car battery</span><b></b><i><s></s></i></div>
+          <div class="dash-trip" id="dashTrip"></div>
+        </div>
+      </div>
+      <div class="dash-wait" id="dashWait"></div>
+      <div class="dash-codes" id="dashCodes"></div>
+      <div class="ip-keys dash-keys" id="dashKeys"></div>
+    </section>
+
   </main>
   <!-- quick menu: the round settings button (top right) opens it over any page -->
   <div class="overlay" id="overlay">

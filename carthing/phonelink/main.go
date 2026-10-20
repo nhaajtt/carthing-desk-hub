@@ -1,6 +1,6 @@
 // phonelink links the Car Thing to one iPhone over Bluetooth Low Energy, with nothing installed on the phone.
 // It only uses what every iPhone offers to accessories: ANCS (notifications and incoming calls), AMS (what is
-// playing, in any app) and the battery level.
+// playing, in any app) and the battery level. In the car it also reads an OBD-II reader (obd.go).
 //
 // Everything stays on the Car Thing. The screen reads it from http://127.0.0.1:5055 (loopback only, and only
 // for the hub's page and its car copy); nothing is logged or saved except the paired phone's address.
@@ -211,6 +211,9 @@ func serve(addr string, origins []string) {
 		on, _ := v["on"].(bool)
 		return clapListen(on)
 	})
+	mux.HandleFunc("/obd/events", obdEvents)
+	post("/obd/search", func(map[string]any) error { return obdStartSearch() })
+	post("/obd/forget", func(map[string]any) error { return obdForget() })
 	post("/call", func(v map[string]any) error {
 		switch v["action"] {
 		case "answer":
@@ -263,6 +266,8 @@ func main() {
 	pack := flag.String("pack", "/var/lib/hub/pack", "folder with what the hub packed for the car (covers, lyrics, weather), served under /pack/")
 	flag.StringVar(&savePath, "state", "/var/lib/hub/phonelink.json", "where the paired phone's address is kept")
 	pidfile := flag.String("pidfile", "/run/hub-phone.pid", "")
+	flag.StringVar(&obdSave, "obd", "/var/lib/hub/obd.json", "where the chosen OBD reader's address is kept")
+	flag.BoolVar(&obdDemo, "obd-demo", false, "show a made-up drive instead of a real OBD reader (for working on the screen)")
 	flag.IntVar(&nearDBm, "near", -62, "signal strength (dBm) above which the phone counts as at the desk")
 	flag.IntVar(&farDBm, "far", -78, "signal strength (dBm) below which the phone counts as away")
 	flag.Parse()
@@ -274,6 +279,13 @@ func main() {
 	go watchSignal()
 	go watchLight()
 	go micKeeper()
+	go obdBroadcast()
+	if obdDemo {
+		go obdDemoLoop()
+	} else {
+		obdLoad()
+		go obdLoop()
+	}
 	go func() {
 		for {
 			if err := runBluetooth(); err != nil {

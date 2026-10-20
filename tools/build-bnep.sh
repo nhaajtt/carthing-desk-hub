@@ -56,6 +56,8 @@ diff <(grep -v "^#" /k/superbird.config | sort) <(grep -v "^#" .config | sort) |
 make \$X -j\$(nproc) modules_prepare >/dev/null
 make \$X KBUILD_MODPOST_WARN=1 M=net/bluetooth/bnep modules
 modinfo -F vermagic net/bluetooth/bnep/bnep.ko > /k/vermagic
+# the container runs as root: hand the tree back, so a plain rm -rf ~/kbuild works afterwards
+chown -R $(id -u):$(id -g) /k/linux-$KVER /k/vermagic
 EOF
 docker run --rm -v "$WORK":/k debian:trixie bash /k/build-bnep.sh
 

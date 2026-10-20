@@ -511,6 +511,9 @@ func runBluetooth() error {
 				changed, _ := s.Body[1].(map[string]dbus.Variant)
 				switch iface {
 				case ifChar:
+					if b, ok := changed["Value"].Value().([]byte); ok && obdValue(s.Path, b) {
+						continue
+					}
 					if v, ok := changed["Value"]; ok {
 						mu.Lock()
 						f := onValue[s.Path]
@@ -524,6 +527,9 @@ func runBluetooth() error {
 						}
 					}
 				case ifDevice:
+					if isOBD(s.Path) {
+						continue // the OBD reader (obd.go), not a phone
+					}
 					if p, ok := changed["Paired"]; ok && p.Value() == true && pairingOpen() {
 						go adopt(s.Path)
 						continue

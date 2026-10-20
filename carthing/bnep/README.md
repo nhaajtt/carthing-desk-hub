@@ -16,7 +16,7 @@ Module nạp ngoài được vì nhân này không bật `MODVERSIONS`, `MODULE_
 |---|---|---|
 | `tools/build-bnep.sh` | server 2, `~/carthing-tools/` | Dựng `bnep.ko` trong container Debian bỏ đi sau khi xong |
 | `~/carthing-tools/bnep.ko` | server 2 (không nằm trong repo) | Bản đã dựng, SHA-256 `40f67b24ac0a69c39e1567f2d76189b760aa79fc3546a040d2eeb3114cf56604` |
-| `~/kbuild/` | server 2 | Mã nhân, trình biên dịch, log dựng (`build.log`); xóa được, script tự tải lại |
+| `~/kbuild/` | server 2 | Mã nhân và trình biên dịch khi dựng. Đã xoá lúc đóng dự án (20/10/2026); script tự tải lại và kiểm tra checksum |
 | `sshd-usb-only.conf` | Car Thing `/etc/systemd/system/sshd.socket.d/10-usb-only.conf` | SSH chỉ nghe trên dây USB |
 | `resolved-no-llmnr.conf` | Car Thing `/etc/systemd/resolved.conf.d/10-no-llmnr.conf` | Tắt LLMNR/mDNS đang nghe ở mọi mạng |
 | `80-bnep.network` | Car Thing `/etc/systemd/network/80-bnep.network` | Lấy địa chỉ và DNS từ iPhone cho `bnep0` |
