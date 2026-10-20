@@ -859,7 +859,7 @@ Vậy trên xe hoàn toàn không có mạng. Mọi thứ phải tới từ iPho
 
 **Lệnh nói trên server 2.** whisper.cpp (model small, lượng tử hoá q5_1) chạy trong container riêng, chỉ trên mạng Docker `internal`. Clip được chuyển thành chữ trước; nếu là lệnh ngắn (tối đa 7 từ, khớp một mẫu tiếng Anh hoặc tiếng Việt) thì hub làm ngay, không gọi Gemini. Nhạc trên iPhone chỉ điều khiển được từ Car Thing, nên hub gửi lệnh trong `voice.action` và trang thực hiện; hẹn giờ thì hub tự đặt lời nhắc.
 
-**Mạng qua Bluetooth (chưa xong).** iPhone có dịch vụ NAP (Personal Hotspot qua Bluetooth) và `bluetoothd` trên Car Thing có sẵn plugin network, chỉ thiếu BNEP trong nhân. Nhân không bật `MODVERSIONS`, `MODULE_SIG`, `RANDSTRUCT`, CFI hay LTO, nên một `bnep.ko` dựng từ mã Linux 7.0.2 gốc với cấu hình của máy (`/proc/config.gz`) và GCC 15.2 có vermagic khớp. Module đã dựng xong trên server 2 nhưng chưa nạp thử. Trước khi dùng mạng này cần giới hạn sshd vào `uncm0`: nhân không có netfilter, và sshd đang nghe trên mọi giao diện.
+**Mạng qua Bluetooth (chưa xong).** iPhone có dịch vụ NAP (Personal Hotspot qua Bluetooth) và `bluetoothd` trên Car Thing có sẵn plugin network, chỉ thiếu BNEP trong nhân. Nhân không bật `MODVERSIONS`, `MODULE_SIG`, `RANDSTRUCT`, CFI hay LTO, nên một `bnep.ko` dựng từ mã Linux 7.0.2 gốc với cấu hình của máy (`/proc/config.gz`) và GCC 15.2 có vermagic khớp. Module đã dựng xong trên server 2 nhưng chưa nạp thử. Trước khi dùng mạng này cần giới hạn sshd vào `uncm0`: nhân không có netfilter, và sshd đang nghe trên mọi giao diện. Cách dựng lại, nạp và gỡ: [`carthing/bnep/README.md`](../carthing/bnep/README.md).
 
 ## 30. Bảng tổng hợp lỗi
 

@@ -203,6 +203,10 @@ cd ~/carthing-hub && docker compose up -d --build whisper && docker compose up -
 
 Without it, everything still goes to Gemini as before.
 
+## 14. Not finished: the iPhone's hotspot over Bluetooth
+
+The Car Thing's kernel has no BNEP, so it cannot use the iPhone's Personal Hotspot over Bluetooth. A matching `bnep.ko` can be built on the brain (`tools/build-bnep.sh`); it has been built but never loaded. Restricting SSH to the USB link comes first. The steps, the config files and how to undo it are in [`carthing/bnep/README.md`](../carthing/bnep/README.md).
+
 ## Development helpers
 
 `tools/` holds the scripts used while building: `cdp.mjs` (screenshot / eval over DevTools), `steps.mjs` (a list of key presses, evals and screenshots, printing every exception), `errors.mjs` / `errors2.mjs` (reload and print exceptions), `shoot*.mjs` (the README screenshots; `demo-calendar.js` supplies sample events), `record.mjs` (frames for the README GIF). Open the tunnel first:

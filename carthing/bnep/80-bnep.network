@@ -1,0 +1,16 @@
+# /etc/systemd/network/80-bnep.network on the Car Thing.
+# The iPhone's hotspot over Bluetooth: an address and DNS from the phone, nothing offered back.
+[Match]
+Name=bnep*
+
+[Network]
+DHCP=ipv4
+LinkLocalAddressing=no
+IPv6AcceptRA=no
+LLMNR=no
+MulticastDNS=no
+EmitLLDP=no
+
+[DHCPv4]
+UseDNS=yes
+UseNTP=yes
